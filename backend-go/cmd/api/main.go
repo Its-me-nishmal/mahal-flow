@@ -59,7 +59,8 @@ func main() {
 	app.Use(recover.New())
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: "*",
-		AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-Tenant-ID, X-Correlation-ID, X-Idempotency-Key",
+		AllowMethods: "GET,POST,PUT,DELETE,PATCH,HEAD,OPTIONS",
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-Tenant-ID, X-Correlation-ID, X-Idempotency-Key, X-HTTP-Method-Override",
 	}))
 	app.Use(api.CorrelationIDMiddleware())
 
@@ -98,10 +99,12 @@ func main() {
 	v1.Post("/autopay/mandate/create", handler.CreateAutoPayMandate)
 	v1.Get("/autopay/mandate/status", handler.GetAutoPayStatus)
 
-	// Admin Routes
+	// Admin Routes (Supports standard GET & Structured Query Engine)
 	v1.Get("/admin/dashboard", handler.GetAdminDashboard)
 	v1.Get("/admin/members", handler.GetAdminMembers)
+	v1.Post("/admin/members/query", handler.QueryAdminMembers) // RFC 10008 Query Engine
 	v1.Get("/admin/reports/financial", handler.GetFinancialReports)
+	v1.Post("/admin/reports/financial/query", handler.QueryFinancialReports) // RFC 10008 Query Engine
 	v1.Get("/admin/gateways", handler.GetGateways)
 	v1.Get("/admin/audit-logs", handler.GetAuditLogs)
 	v1.Get("/admin/alerts", handler.GetAlerts)

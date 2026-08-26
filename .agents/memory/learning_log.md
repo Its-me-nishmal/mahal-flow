@@ -31,6 +31,10 @@
 - **Context**: Adding new routes or changing schemas must be testable in 1 second with a single command.
 - **Rule**: Run `.\scripts\test_all_apis.ps1` (or `go run cmd/test-api/main.go`). It automatically validates HTTP status codes, security guards, response models, and latency across all endpoints. Whenever a developer adds a new route, add a test case to `backend-go/cmd/test-api/main.go`.
 
+### Entry 022: RFC 10008 Structured Query Engine
+- **Context**: Complex multi-field filtering and report aggregations need structured JSON bodies without leaking PII in URL search params or breaking browser caching.
+- **Rule**: Use the RFC 10008 Query pattern (`POST /api/v1/.../query` with `X-HTTP-Method-Override: QUERY`). Fiber routes this to dedicated query handlers returning standardized structured query payloads.
+
 ---
 
 ## 3. Frontend (Flutter Mobile & Next.js Web) Learnings

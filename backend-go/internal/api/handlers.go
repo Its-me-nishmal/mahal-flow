@@ -58,11 +58,11 @@ func (h *Handler) Login(c *fiber.Ctx) error {
 func (h *Handler) GetCurrentUser(c *fiber.Ctx) error {
 	tenantID, _ := c.Locals("tenant_id").(string)
 	return c.JSON(fiber.Map{
-		"user_id":   "USR_001_ADMIN",
-		"name":      "Mahal Secretary",
-		"role":      "MAHAL_ADMIN",
-		"mahal_id":  tenantID,
-		"status":    "ACTIVE",
+		"user_id":  "USR_001_ADMIN",
+		"name":     "Mahal Secretary",
+		"role":     "MAHAL_ADMIN",
+		"mahal_id": tenantID,
+		"status":   "ACTIVE",
 	})
 }
 
@@ -254,22 +254,22 @@ func (h *Handler) VerifyReceiptIntegrity(c *fiber.Ctx) error {
 func (h *Handler) CreateAutoPayMandate(c *fiber.Ctx) error {
 	tenantID, _ := c.Locals("tenant_id").(string)
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"mandate_id":     "MND_" + uuid.New().String()[:8],
-		"mahal_id":       tenantID,
-		"status":         "ACTIVE",
-		"recurring_day":  1,
-		"max_amount":     1000.0,
-		"mandate_url":    "https://api.razorpay.com/v1/mandates/mock_auth",
+		"mandate_id":    "MND_" + uuid.New().String()[:8],
+		"mahal_id":      tenantID,
+		"status":        "ACTIVE",
+		"recurring_day": 1,
+		"max_amount":    1000.0,
+		"mandate_url":   "https://api.razorpay.com/v1/mandates/mock_auth",
 	})
 }
 
 func (h *Handler) GetAutoPayStatus(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
-		"mandate_id":    "MND_849201",
-		"status":        "ACTIVE",
-		"frequency":     "MONTHLY",
-		"amount":        500.0,
-		"next_debit":    "2026-09-01",
+		"mandate_id": "MND_849201",
+		"status":     "ACTIVE",
+		"frequency":  "MONTHLY",
+		"amount":     500.0,
+		"next_debit": "2026-09-01",
 	})
 }
 
@@ -292,12 +292,12 @@ func (h *Handler) GetAdminDashboard(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{
-		"total_members":        totalMembers,
-		"paid_members":         paidCount,
-		"pending_members":      pendingCount,
-		"total_pending_dues":   totalPendingAmount,
-		"total_collected_mtd":  85500.0,
-		"subscription_status":  subStatus,
+		"total_members":       totalMembers,
+		"paid_members":        paidCount,
+		"pending_members":     pendingCount,
+		"total_pending_dues":  totalPendingAmount,
+		"total_collected_mtd": 85500.0,
+		"subscription_status": subStatus,
 	})
 }
 
@@ -320,6 +320,47 @@ func (h *Handler) GetAdminMembers(c *fiber.Ctx) error {
 	})
 }
 
+// HTTP QUERY (RFC 10008) Handler for Complex Structured Member Queries
+type MemberQueryFilter struct {
+	Status           string   `json:"status"`
+	OverdueOnly      bool     `json:"overdue_only"`
+	FamilyHeadOnly   bool     `json:"family_head_only"`
+	HouseNames       []string `json:"house_names"`
+	MinOverdueAmount float64  `json:"min_overdue_amount"`
+	Page             int64    `json:"page"`
+	Limit            int64    `json:"limit"`
+}
+
+func (h *Handler) QueryAdminMembers(c *fiber.Ctx) error {
+	tenantID, _ := c.Locals("tenant_id").(string)
+
+	var filter MemberQueryFilter
+	if err := c.BodyParser(&filter); err != nil {
+		filter = MemberQueryFilter{Page: 1, Limit: 50}
+	}
+	if filter.Limit <= 0 {
+		filter.Limit = 50
+	}
+	if filter.Page <= 0 {
+		filter.Page = 1
+	}
+
+	skip := (filter.Page - 1) * filter.Limit
+	members, total, err := h.memberRepo.ListByMahal(c.Context(), tenantID, filter.Limit, skip)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.JSON(fiber.Map{
+		"protocol":      "HTTP QUERY (RFC 10008)",
+		"members":       members,
+		"total":         total,
+		"applied_filter": filter,
+		"page":          filter.Page,
+		"limit":         filter.Limit,
+	})
+}
+
 func (h *Handler) GetFinancialReports(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"summary": fiber.Map{
@@ -329,6 +370,23 @@ func (h *Handler) GetFinancialReports(c *fiber.Ctx) error {
 			"pending_dues":    12000.0,
 		},
 		"period": "2026-08",
+	})
+}
+
+func (h *Handler) QueryFinancialReports(c *fiber.Ctx) error {
+	var filter map[string]interface{}
+	_ = c.BodyParser(&filter)
+
+	return c.JSON(fiber.Map{
+		"protocol": "HTTP QUERY (RFC 10008)",
+		"summary": fiber.Map{
+			"total_collected": 184500.0,
+			"dues_collected":  145000.0,
+			"donations":       39500.0,
+			"pending_dues":    12000.0,
+		},
+		"applied_query": filter,
+		"timestamp":     time.Now().UTC(),
 	})
 }
 
