@@ -17,6 +17,7 @@ type MemberRepository interface {
 	ApplyPaidMonths(ctx context.Context, memberID string, paidMonths []string, amount float64) error
 	GetMemberStats(ctx context.Context, mahalID string) (totalMembers int64, paidCount int64, pendingCount int64, totalPendingAmount float64, err error)
 	UpdateProfile(ctx context.Context, mahalID, memberID string, updates bson.M) error
+	GetOverdueMembers(ctx context.Context, mahalID string) ([]domain.Member, error)
 }
 
 type mongoMemberRepo struct {
@@ -131,3 +132,22 @@ func (r *mongoMemberRepo) UpdateProfile(ctx context.Context, mahalID, memberID s
 	)
 	return err
 }
+
+func (r *mongoMemberRepo) GetOverdueMembers(ctx context.Context, mahalID string) ([]domain.Member, error) {
+	filter := bson.M{
+		"mahal_id":            mahalID,
+		"outstanding_balance": bson.M{"$gt": 0.0},
+		"status":              "ACTIVE",
+	}
+	cursor, err := r.coll.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var members []domain.Member
+	if err := cursor.All(ctx, &members); err != nil {
+		return nil, err
+	}
+	return members, nil
+}
+

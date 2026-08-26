@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/mahalflow/backend-go/internal/agent/memory"
+	"github.com/mahalflow/backend-go/internal/domain"
 	"github.com/mahalflow/backend-go/internal/logger"
 	"github.com/mahalflow/backend-go/internal/repository"
 	"github.com/rs/zerolog/log"
@@ -19,10 +20,10 @@ const (
 type DunningLanguage string
 
 const (
-	LangEnglish  DunningLanguage = "en"
+	LangEnglish   DunningLanguage = "en"
 	LangMalayalam DunningLanguage = "ml"
-	LangUrdu     DunningLanguage = "ur"
-	LangTamil    DunningLanguage = "ta"
+	LangUrdu      DunningLanguage = "ur"
+	LangTamil     DunningLanguage = "ta"
 )
 
 type DunningTemplate struct {
@@ -59,7 +60,7 @@ func (a *DunningAgent) Interval() time.Duration { return dunningInterval }
 func (a *DunningAgent) Run(ctx context.Context) error {
 	log.Info().Str("agent", string(a.Name())).Msg("Starting dunning cycle scan")
 
-	mahals, err := a.listAllMahals(ctx)
+	mahals, err := a.mahalRepo.ListAll(ctx)
 	if err != nil {
 		return err
 	}
@@ -90,7 +91,7 @@ func (a *DunningAgent) Run(ctx context.Context) error {
 	return nil
 }
 
-func (a *DunningAgent) processMember(ctx context.Context, mahalID string, member repository.MemberDocument, preferredLangs []string) {
+func (a *DunningAgent) processMember(ctx context.Context, mahalID string, member domain.Member, preferredLangs []string) {
 	lang := a.selectLanguage(member, preferredLangs)
 	template := a.buildTemplate(member, lang)
 
@@ -119,14 +120,14 @@ func (a *DunningAgent) processMember(ctx context.Context, mahalID string, member
 	a.recordFeedback(ctx, mahalID, member.ID, template, deliveryTime)
 }
 
-func (a *DunningAgent) selectLanguage(member repository.MemberDocument, preferredLangs []string) DunningLanguage {
+func (a *DunningAgent) selectLanguage(member domain.Member, preferredLangs []string) DunningLanguage {
 	if len(preferredLangs) > 0 {
 		return DunningLanguage(preferredLangs[0])
 	}
 	return LangEnglish
 }
 
-func (a *DunningAgent) buildTemplate(member repository.MemberDocument, lang DunningLanguage) DunningTemplate {
+func (a *DunningAgent) buildTemplate(member domain.Member, lang DunningLanguage) DunningTemplate {
 	switch lang {
 	case LangMalayalam:
 		return DunningTemplate{

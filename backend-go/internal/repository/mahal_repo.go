@@ -11,6 +11,7 @@ import (
 type MahalRepository interface {
 	GetByID(ctx context.Context, id string) (*domain.Mahal, error)
 	Create(ctx context.Context, mahal *domain.Mahal) error
+	ListAll(ctx context.Context) ([]domain.Mahal, error)
 }
 
 type mongoMahalRepo struct {
@@ -33,4 +34,17 @@ func (r *mongoMahalRepo) GetByID(ctx context.Context, id string) (*domain.Mahal,
 func (r *mongoMahalRepo) Create(ctx context.Context, mahal *domain.Mahal) error {
 	_, err := r.coll.InsertOne(ctx, mahal)
 	return err
+}
+
+func (r *mongoMahalRepo) ListAll(ctx context.Context) ([]domain.Mahal, error) {
+	cursor, err := r.coll.Find(ctx, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var mahals []domain.Mahal
+	if err := cursor.All(ctx, &mahals); err != nil {
+		return nil, err
+	}
+	return mahals, nil
 }
