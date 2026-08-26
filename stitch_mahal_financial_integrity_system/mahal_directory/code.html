@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>MahalFlow - Mahal Directory</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "info": "#3478B8",
+                      "tertiary": "#3f4a48",
+                      "error-container": "#ffdad6",
+                      "success-bg": "#EAF7EF",
+                      "secondary": "#2d685b",
+                      "surface-container-high": "#e6e9e6",
+                      "surface-bright": "#f7faf7",
+                      "surface-variant": "#e0e3e0",
+                      "on-primary-container": "#9bead4",
+                      "inverse-surface": "#2d3130",
+                      "surface-container-highest": "#e0e3e0",
+                      "warning": "#B77900",
+                      "outline-variant": "#bec9c4",
+                      "on-error-container": "#93000a",
+                      "primary": "#005244",
+                      "surface-container-low": "#f1f4f1",
+                      "outline": "#6f7975",
+                      "error": "#C93B3B",
+                      "on-surface-variant": "#3f4945",
+                      "on-secondary-fixed-variant": "#0f5044",
+                      "secondary-container": "#b2efde",
+                      "secondary-fixed": "#b2efde",
+                      "text-muted": "#8A9390",
+                      "on-error": "#ffffff",
+                      "on-secondary": "#ffffff",
+                      "warning-bg": "#FFF5DC",
+                      "info-bg": "#EAF3FB",
+                      "border-base": "#E3E8E6",
+                      "on-tertiary-container": "#d1ddda",
+                      "on-secondary-fixed": "#00201a",
+                      "on-primary-fixed-variant": "#005143",
+                      "primary-container": "#146c5b",
+                      "on-secondary-container": "#346e61",
+                      "bg-app": "#F7F9F8",
+                      "tertiary-container": "#576260",
+                      "tertiary-fixed-dim": "#bdc9c6",
+                      "on-tertiary-fixed-variant": "#3e4947",
+                      "error-bg": "#FDECEC",
+                      "on-tertiary": "#ffffff",
+                      "primary-fixed": "#a3f2dc",
+                      "tertiary-fixed": "#d9e5e2",
+                      "inverse-primary": "#87d5c0",
+                      "surface-container": "#ebefec",
+                      "on-primary": "#ffffff",
+                      "on-primary-fixed": "#00201a",
+                      "surface-dim": "#d7dbd8",
+                      "secondary-fixed-dim": "#97d2c2",
+                      "on-surface": "#181c1b",
+                      "text-primary": "#17201D",
+                      "on-tertiary-fixed": "#131e1c",
+                      "on-background": "#181c1b",
+                      "surface-container-lowest": "#ffffff",
+                      "surface-tint": "#116a5a",
+                      "text-secondary": "#5E6864",
+                      "success": "#16834B",
+                      "inverse-on-surface": "#eef1ee",
+                      "primary-fixed-dim": "#87d5c0",
+                      "surface": "#FFFFFF",
+                      "background": "#f7faf7"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "xl": "32px",
+                      "xxl": "48px",
+                      "sm": "8px",
+                      "xs": "4px",
+                      "gutter": "16px",
+                      "margin-desktop": "32px",
+                      "lg": "24px",
+                      "margin-mobile": "16px",
+                      "md": "16px",
+                      "margin-tablet": "24px"
+              },
+              "fontFamily": {
+                      "button": ["Inter"],
+                      "small": ["Inter"],
+                      "body": ["Inter"],
+                      "section-title": ["Inter"],
+                      "page-title": ["Inter"],
+                      "amount-lg": ["Inter"],
+                      "display": ["Inter"],
+                      "card-title": ["Inter"]
+              },
+              "fontSize": {
+                      "button": ["14px", {"lineHeight": "20px", "fontWeight": "600"}],
+                      "small": ["12px", {"lineHeight": "18px", "fontWeight": "400"}],
+                      "body": ["14px", {"lineHeight": "22px", "fontWeight": "400"}],
+                      "section-title": ["18px", {"lineHeight": "26px", "fontWeight": "600"}],
+                      "page-title": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                      "amount-lg": ["28px", {"lineHeight": "36px", "fontWeight": "700"}],
+                      "display": ["32px", {"lineHeight": "40px", "fontWeight": "700"}],
+                      "card-title": ["16px", {"lineHeight": "24px", "fontWeight": "600"}]
+              }
+            },
+          },
+        }
+    </script>
+</head>
+<body class="bg-app text-text-primary font-body antialiased min-h-screen flex">
+<!-- Side Nav Bar (Desktop) -->
+<aside class="bg-surface border-r border-border-base h-screen w-64 fixed left-0 top-0 flex flex-col p-md gap-xs hidden md:flex z-50">
+<div class="mb-lg px-sm">
+<h1 class="font-section-title text-section-title text-primary">MahalFlow</h1>
+<p class="font-small text-small text-text-secondary">Super Admin Portal</p>
+</div>
+<nav class="flex-1 overflow-y-auto space-y-sm">
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-text-secondary hover:bg-surface-container-low transition-all cursor-pointer active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-button text-button">Dashboard</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm bg-primary-fixed text-on-primary-fixed-variant font-bold rounded-lg cursor-pointer active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="location_city">location_city</span>
+<span class="font-button text-button">Mahals</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-text-secondary hover:bg-surface-container-low transition-all cursor-pointer active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-button text-button">Members</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-text-secondary hover:bg-surface-container-low transition-all cursor-pointer active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-button text-button">Payments</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-text-secondary hover:bg-surface-container-low transition-all cursor-pointer active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="card_membership">card_membership</span>
+<span class="font-button text-button">Subscriptions</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-text-secondary hover:bg-surface-container-low transition-all cursor-pointer active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span class="font-button text-button">Gateways</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-text-secondary hover:bg-surface-container-low transition-all cursor-pointer active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="undo">undo</span>
+<span class="font-button text-button">Refunds</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-text-secondary hover:bg-surface-container-low transition-all cursor-pointer active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="assessment">assessment</span>
+<span class="font-button text-button">Reports</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-text-secondary hover:bg-surface-container-low transition-all cursor-pointer active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="history_edu">history_edu</span>
+<span class="font-button text-button">Audit Logs</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-text-secondary hover:bg-surface-container-low transition-all cursor-pointer active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-button text-button">Settings</span>
+</a>
+</nav>
+<div class="mt-auto">
+<button class="w-full flex items-center justify-center gap-sm bg-primary-container text-white py-sm rounded-lg font-button text-button hover:opacity-90 transition-opacity mb-sm">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                New Report
+            </button>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-text-secondary hover:bg-surface-container-low transition-all cursor-pointer active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span class="font-button text-button">Log Out</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 md:ml-64 flex flex-col min-h-screen">
+<!-- Top App Bar (Mobile) -->
+<header class="md:hidden sticky top-0 z-40 flex justify-between items-center px-margin-mobile w-full h-16 bg-surface border-b border-border-base">
+<div class="font-page-title text-page-title text-primary">MahalFlow</div>
+<div class="flex items-center gap-sm">
+<button class="p-xs text-text-secondary hover:bg-surface-container-low rounded-full transition-colors cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-xs text-text-secondary hover:bg-surface-container-low rounded-full transition-colors cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+</button>
+<img alt="Super Admin Avatar" class="w-8 h-8 rounded-full border border-border-base object-cover ml-xs" data-alt="A small circular avatar placeholder image showing a generic user silhouette in a professional light-mode UI context." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC3Ja5hdt-J5feflWjVIa-sE9yd-UNTGxGN6nI0iPES_vPDIC9F-ndg6YatewCv0oUafszyKA2rglw3O4WeHpFYFxMShPm-g9CFZqPgL-cqhZ3aG8bMoMvAPcjGMNkD91OjWplb9avzp4W5Z8dsfiGBFK-7yQMYvEDny05lEod-o6U-ousGC1LRnHqCwYEA7dhhLqsRIbXzKMu_9KZLcyccDPpZNfMXSiKbZta28KJzh4CkKKA5O7uh"/>
+</div>
+</header>
+<!-- Top Nav Bar (Desktop Equivalent / Actions Row) -->
+<header class="hidden md:flex sticky top-0 z-40 justify-between items-center px-margin-desktop py-lg w-full bg-app bg-opacity-90 backdrop-blur-sm">
+<div class="flex-1">
+<h2 class="font-page-title text-page-title text-text-primary">Mahal Directory</h2>
+<p class="font-body text-body text-text-secondary mt-xs">Manage and monitor all registered Mahals.</p>
+</div>
+<div class="flex items-center gap-lg">
+<div class="relative w-64">
+<span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-text-muted">search</span>
+<input class="w-full h-11 pl-xl pr-md rounded-[10px] border border-border-base bg-surface focus:ring-2 focus:ring-primary focus:border-primary outline-none font-body text-body" placeholder="Search Mahals..." type="text"/>
+</div>
+<button class="p-sm rounded-lg border border-border-base bg-surface text-text-secondary hover:bg-surface-container-low transition-colors flex items-center gap-xs h-11">
+<span class="material-symbols-outlined" data-icon="filter_list">filter_list</span>
+<span class="font-button text-button">Filter</span>
+</button>
+<button class="h-11 px-lg bg-primary-container text-white rounded-lg font-button text-button hover:opacity-90 transition-opacity flex items-center gap-sm shadow-sm">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                    Add New Mahal
+                </button>
+</div>
+</header>
+<!-- Mobile Action Row -->
+<div class="md:hidden px-margin-mobile py-md space-y-md bg-app">
+<h2 class="font-section-title text-section-title text-text-primary">Mahal Directory</h2>
+<div class="flex gap-sm">
+<div class="relative flex-1">
+<span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-text-muted">search</span>
+<input class="w-full h-11 pl-xl pr-md rounded-[10px] border border-border-base bg-surface focus:ring-2 focus:ring-primary focus:border-primary outline-none font-body text-body" placeholder="Search..." type="text"/>
+</div>
+<button class="p-sm rounded-lg border border-border-base bg-surface text-text-secondary hover:bg-surface-container-low transition-colors h-11 w-11 flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="filter_list">filter_list</span>
+</button>
+</div>
+<button class="w-full h-11 bg-primary-container text-white rounded-lg font-button text-button hover:opacity-90 transition-opacity flex items-center justify-center gap-sm">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                Add New Mahal
+            </button>
+</div>
+<!-- Content Canvas -->
+<div class="flex-1 p-margin-mobile md:p-margin-desktop overflow-x-auto">
+<!-- Data Table Card -->
+<div class="bg-surface border border-border-base rounded-xl overflow-hidden shadow-sm">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse min-w-[800px]">
+<thead>
+<tr class="bg-surface-container-low border-b border-border-base font-button text-button text-text-secondary">
+<th class="p-md font-semibold">Mahal Name</th>
+<th class="p-md font-semibold">Location</th>
+<th class="p-md font-semibold">Status</th>
+<th class="p-md font-semibold text-right">Members</th>
+<th class="p-md font-semibold">Subscription Plan</th>
+<th class="p-md font-semibold text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-border-base font-body text-body">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-bright transition-colors group">
+<td class="p-md">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-lg bg-primary-fixed-dim text-primary flex items-center justify-center font-bold">KM</div>
+<div>
+<div class="font-card-title text-card-title text-text-primary">Kerala Muslim Jamaat</div>
+<div class="font-small text-small text-text-muted">ID: MHL-001</div>
+</div>
+</div>
+</td>
+<td class="p-md text-text-secondary">Kochi, Kerala</td>
+<td class="p-md">
+<span class="inline-flex items-center px-2 py-1 rounded-full text-[12px] font-semibold bg-success-bg text-success border border-success/20">
+                                        Active
+                                    </span>
+</td>
+<td class="p-md text-right font-medium text-text-primary">1,245</td>
+<td class="p-md">
+<div class="flex items-center gap-xs text-text-secondary">
+<span class="material-symbols-outlined text-[16px] text-info">diamond</span>
+                                        Premium Annual
+                                    </div>
+</td>
+<td class="p-md text-right">
+<button class="p-xs text-text-muted hover:text-primary transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-bright transition-colors group">
+<td class="p-md">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-lg bg-secondary-container text-on-secondary-container flex items-center justify-center font-bold">SM</div>
+<div>
+<div class="font-card-title text-card-title text-text-primary">Sunni Mahal Federation</div>
+<div class="font-small text-small text-text-muted">ID: MHL-002</div>
+</div>
+</div>
+</td>
+<td class="p-md text-text-secondary">Calicut, Kerala</td>
+<td class="p-md">
+<span class="inline-flex items-center px-2 py-1 rounded-full text-[12px] font-semibold bg-success-bg text-success border border-success/20">
+                                        Active
+                                    </span>
+</td>
+<td class="p-md text-right font-medium text-text-primary">850</td>
+<td class="p-md">
+<div class="flex items-center gap-xs text-text-secondary">
+<span class="material-symbols-outlined text-[16px] text-text-muted">verified</span>
+                                        Standard Monthly
+                                    </div>
+</td>
+<td class="p-md text-right">
+<button class="p-xs text-text-muted hover:text-primary transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-bright transition-colors group">
+<td class="p-md">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-lg bg-surface-container-high text-text-secondary flex items-center justify-center font-bold">DM</div>
+<div>
+<div class="font-card-title text-card-title text-text-primary">Dubai Markaz</div>
+<div class="font-small text-small text-text-muted">ID: MHL-003</div>
+</div>
+</div>
+</td>
+<td class="p-md text-text-secondary">Deira, Dubai</td>
+<td class="p-md">
+<span class="inline-flex items-center px-2 py-1 rounded-full text-[12px] font-semibold bg-warning-bg text-warning border border-warning/20">
+                                        Grace Period
+                                    </span>
+</td>
+<td class="p-md text-right font-medium text-text-primary">3,120</td>
+<td class="p-md">
+<div class="flex items-center gap-xs text-text-secondary">
+<span class="material-symbols-outlined text-[16px] text-info">diamond</span>
+                                        Enterprise
+                                    </div>
+</td>
+<td class="p-md text-right">
+<button class="p-xs text-text-muted hover:text-primary transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-surface-bright transition-colors group">
+<td class="p-md">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-lg bg-error-bg text-error flex items-center justify-center font-bold">TV</div>
+<div>
+<div class="font-card-title text-card-title text-text-primary">Trivandrum Valiya Palli</div>
+<div class="font-small text-small text-text-muted">ID: MHL-004</div>
+</div>
+</div>
+</td>
+<td class="p-md text-text-secondary">Trivandrum, Kerala</td>
+<td class="p-md">
+<span class="inline-flex items-center px-2 py-1 rounded-full text-[12px] font-semibold bg-error-bg text-error border border-error/20">
+                                        Suspended
+                                    </span>
+</td>
+<td class="p-md text-right font-medium text-text-primary">450</td>
+<td class="p-md">
+<div class="flex items-center gap-xs text-text-secondary">
+<span class="material-symbols-outlined text-[16px] text-text-muted">verified</span>
+                                        Standard Annual
+                                    </div>
+</td>
+<td class="p-md text-right">
+<button class="p-xs text-text-muted hover:text-primary transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination Footer -->
+<div class="p-md border-t border-border-base flex items-center justify-between bg-surface">
+<div class="font-small text-small text-text-secondary">
+                        Showing 1 to 4 of 48 entries
+                    </div>
+<div class="flex gap-xs">
+<button class="p-xs rounded border border-border-base text-text-muted hover:bg-surface-container-low disabled:opacity-50" disabled="">
+<span class="material-symbols-outlined text-[20px]">chevron_left</span>
+</button>
+<button class="w-8 h-8 rounded bg-primary-container text-white font-button text-button flex items-center justify-center">1</button>
+<button class="w-8 h-8 rounded border border-border-base text-text-secondary hover:bg-surface-container-low font-button text-button flex items-center justify-center">2</button>
+<button class="w-8 h-8 rounded border border-border-base text-text-secondary hover:bg-surface-container-low font-button text-button flex items-center justify-center">3</button>
+<button class="p-xs rounded border border-border-base text-text-secondary hover:bg-surface-container-low">
+<span class="material-symbols-outlined text-[20px]">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

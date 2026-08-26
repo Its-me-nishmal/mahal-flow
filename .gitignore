@@ -1,0 +1,86 @@
+# ==========================================
+# MahalFlow Root .gitignore
+# ==========================================
+
+# Operating System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Environment and Secrets (CRITICAL: NEVER COMMIT)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.crt
+id_rsa
+secrets/
+config/credentials.json
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# Go (Backend)
+backend-go/bin/
+backend-go/dist/
+backend-go/tmp/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+backend-go/coverage.out
+backend-go/coverage.html
+backend-go/vendor/
+
+# Node / Next.js (Web Admin)
+web-admin/node_modules/
+web-admin/.next/
+web-admin/out/
+web-admin/build/
+web-admin/.turbo/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Flutter / Dart (Mobile App)
+mobile-flutter/.dart_tool/
+mobile-flutter/.flutter-plugins
+mobile-flutter/.flutter-plugins-dependencies
+mobile-flutter/.packages
+mobile-flutter/.pub-cache/
+mobile-flutter/.pub/
+mobile-flutter/build/
+mobile-flutter/ios/Pods/
+mobile-flutter/ios/.symlinks/
+mobile-flutter/ios/Flutter/Flutter.framework
+mobile-flutter/ios/Flutter/Flutter.podspec
+mobile-flutter/android/.gradle/
+mobile-flutter/android/captures/
+mobile-flutter/android/gradlew
+mobile-flutter/android/gradlew.bat
+mobile-flutter/android/local.properties
+mobile-flutter/android/key.properties
+*.keystore
+*.jks
+
+# Logs & Temporary Files
+logs/
+*.log
+scratch/
+tmp/
+temp/

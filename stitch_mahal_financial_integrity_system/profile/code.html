@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Profile - MahalFlow</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary": "#3f4a48",
+                        "surface-variant": "#e0e3e0",
+                        "surface-tint": "#116a5a",
+                        "on-secondary-fixed": "#00201a",
+                        "error-bg": "#FDECEC",
+                        "success": "#16834B",
+                        "tertiary-fixed-dim": "#bdc9c6",
+                        "secondary-fixed-dim": "#97d2c2",
+                        "error-container": "#ffdad6",
+                        "surface-container-lowest": "#ffffff",
+                        "text-secondary": "#5E6864",
+                        "info": "#3478B8",
+                        "surface": "#FFFFFF",
+                        "surface-container": "#ebefec",
+                        "on-tertiary-container": "#d1ddda",
+                        "on-tertiary-fixed": "#131e1c",
+                        "on-error-container": "#93000a",
+                        "on-tertiary-fixed-variant": "#3e4947",
+                        "border-base": "#E3E8E6",
+                        "outline-variant": "#bec9c4",
+                        "surface-container-high": "#e6e9e6",
+                        "surface-container-highest": "#e0e3e0",
+                        "primary-fixed": "#a3f2dc",
+                        "text-primary": "#17201D",
+                        "background": "#f7faf7",
+                        "error": "#C93B3B",
+                        "secondary-fixed": "#b2efde",
+                        "outline": "#6f7975",
+                        "inverse-primary": "#87d5c0",
+                        "text-muted": "#8A9390",
+                        "on-background": "#181c1b",
+                        "tertiary-container": "#576260",
+                        "tertiary-fixed": "#d9e5e2",
+                        "success-bg": "#EAF7EF",
+                        "on-secondary-fixed-variant": "#0f5044",
+                        "inverse-surface": "#2d3130",
+                        "primary": "#005244",
+                        "secondary-container": "#b2efde",
+                        "warning": "#B77900",
+                        "primary-fixed-dim": "#87d5c0",
+                        "surface-bright": "#f7faf7",
+                        "inverse-on-surface": "#eef1ee",
+                        "on-error": "#ffffff",
+                        "primary-container": "#146c5b",
+                        "on-primary-fixed-variant": "#005143",
+                        "on-primary-container": "#9bead4",
+                        "on-secondary": "#ffffff",
+                        "secondary": "#2d685b",
+                        "surface-container-low": "#f1f4f1",
+                        "on-primary": "#ffffff",
+                        "on-surface-variant": "#3f4945",
+                        "on-surface": "#181c1b",
+                        "surface-dim": "#d7dbd8",
+                        "on-secondary-container": "#346e61",
+                        "warning-bg": "#FFF5DC",
+                        "info-bg": "#EAF3FB",
+                        "on-tertiary": "#ffffff",
+                        "bg-app": "#F7F9F8",
+                        "on-primary-fixed": "#00201a"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xxl": "48px",
+                        "margin-mobile": "16px",
+                        "xl": "32px",
+                        "sm": "8px",
+                        "lg": "24px",
+                        "margin-tablet": "24px",
+                        "md": "16px",
+                        "xs": "4px",
+                        "gutter": "16px",
+                        "margin-desktop": "32px"
+                    },
+                    "fontFamily": {
+                        "card-title": ["Inter"],
+                        "page-title": ["Inter"],
+                        "section-title": ["Inter"],
+                        "amount-lg": ["Inter"],
+                        "button": ["Inter"],
+                        "small": ["Inter"],
+                        "body": ["Inter"],
+                        "display": ["Inter"]
+                    },
+                    "fontSize": {
+                        "card-title": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "page-title": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "section-title": ["18px", { "lineHeight": "26px", "fontWeight": "600" }],
+                        "amount-lg": ["28px", { "lineHeight": "36px", "fontWeight": "700" }],
+                        "button": ["14px", { "lineHeight": "20px", "fontWeight": "600" }],
+                        "small": ["12px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "body": ["14px", { "lineHeight": "22px", "fontWeight": "400" }],
+                        "display": ["32px", { "lineHeight": "40px", "fontWeight": "700" }]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: theme('colors.bg-app');
+            color: theme('colors.text-primary');
+            font-family: theme('fontFamily.body');
+            -webkit-font-smoothing: antialiased;
+        }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom, 16px); }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid theme('colors.border-base');
+        }
+        
+        /* Interactive States */
+        .interactive-row {
+            transition: background-color 0.2s ease, transform 0.1s ease;
+        }
+        .interactive-row:active {
+            background-color: theme('colors.surface-container-low');
+            transform: scale(0.99);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="min-h-screen flex flex-col pt-16 pb-24 md:pb-0">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-surface dark:bg-on-background border-b border-border-base dark:border-outline-variant flat no shadows transition-colors duration-200">
+<div class="flex justify-between items-center px-margin-mobile h-16 w-full max-w-screen-xl mx-auto">
+<div class="flex items-center gap-md">
+<img alt="Avatar" class="w-10 h-10 rounded-full object-cover border border-border-base" data-alt="A professional headshot of a young Indian man with a neat beard, wearing a light blue button-down shirt, standing outdoors in natural daylight. The image has a clean, modern aesthetic suitable for a corporate or fintech app profile avatar, shot with a shallow depth of field." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAE5RC4kxcwU3USkTv95d5iwjm9uTCB7bIuESKRxoTTajlpIUGqzaPXfSJjyRzuLzTEiPH4R0uvx_D_o8hGYrQLx_BDxq1MrE3k6eekM257zWcmC89APVRb6sIjmgx6XZdJBfFruZJYX7ryBKJkCNcmwmfu6CgOVhpzOmt_xVhxrjL-DYigU9URqQ8aoPJxR30SxNhJy6zdm8CwATMjd7f0xJg-gpXvy8s67hXXWnVGLxvailP5aOZJ"/>
+<span class="font-page-title text-page-title text-primary dark:text-primary-fixed">MahalFlow</span>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full text-primary dark:text-primary-fixed hover:bg-surface-variant/50 dark:hover:bg-surface-variant/10 transition-colors duration-200">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+</button>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-grow w-full max-w-screen-md mx-auto px-margin-mobile md:px-margin-desktop py-lg space-y-lg">
+<!-- Profile Header Section (Bento style) -->
+<section class="glass-card rounded-xl p-lg flex flex-col items-center text-center shadow-sm relative overflow-hidden">
+<div class="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none"></div>
+<div class="relative w-24 h-24 mb-md">
+<img alt="Muhammed Avatar" class="w-full h-full rounded-full object-cover border-4 border-surface shadow-sm z-10 relative" data-alt="A professional headshot of a young Indian man with a neat beard, wearing a light blue button-down shirt, standing outdoors in natural daylight. The image has a clean, modern aesthetic suitable for a corporate or fintech app profile avatar, shot with a shallow depth of field." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD7n_05i0D2N_6eJjWdcG_myxCdPIWMHkxuJAqB0SM9Hsmq2nvBq60DXay4ks5wWNEk11sBbd1st44oMPLLwXcawhp6IrdxddgNF-FEE2uq9rZ1J9ekNckVVMIO_k2CVK88Z2sNsqkNWEgYHXCnj0g_4MGUTczW1uLcgZVC3J5RsOZDOtB5EMvmV3FlM_YJJGjh8lC3A2EsW9Lif389elLRftrDm0gVwFYZAk2N3yKGdFG-Bs9JkRFE"/>
+<button class="absolute bottom-0 right-0 w-8 h-8 bg-surface border border-border-base rounded-full flex items-center justify-center text-primary shadow-sm hover:bg-surface-container transition-colors z-20">
+<span class="material-symbols-outlined text-[18px]">edit</span>
+</button>
+</div>
+<h1 class="font-page-title text-page-title text-text-primary mb-xs relative z-10">Muhammed</h1>
+<p class="font-body text-body text-text-secondary mb-md relative z-10">+91 98765 43210</p>
+<span class="inline-flex items-center gap-xs px-3 py-1 bg-success-bg text-success rounded-full font-small text-small relative z-10">
+<span class="material-symbols-outlined text-[16px]">verified</span>
+                Verified Member
+            </span>
+</section>
+<!-- Bento Grid for Details -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-md">
+<!-- Mahal Membership -->
+<section class="glass-card rounded-xl p-md flex flex-col justify-between hover:shadow-md transition-shadow">
+<div class="flex items-center justify-between mb-lg">
+<div class="flex items-center gap-sm text-primary">
+<span class="material-symbols-outlined bg-surface-container-low p-2 rounded-lg">mosque</span>
+<h2 class="font-section-title text-section-title text-text-primary">Mahal Membership</h2>
+</div>
+</div>
+<div>
+<p class="font-card-title text-card-title text-text-primary mb-xs">Central Juma Masjid Mahal</p>
+<p class="font-small text-small text-text-secondary">Member ID: MH-2023-4829</p>
+<div class="mt-md pt-md border-t border-border-base flex justify-between items-center">
+<span class="font-small text-small text-text-secondary">Status</span>
+<span class="font-small text-small text-success font-semibold">Active</span>
+</div>
+</div>
+</section>
+<!-- Personal Details -->
+<section class="glass-card rounded-xl p-md flex flex-col justify-between hover:shadow-md transition-shadow interactive-row cursor-pointer group">
+<div class="flex items-center justify-between mb-lg">
+<div class="flex items-center gap-sm text-primary">
+<span class="material-symbols-outlined bg-surface-container-low p-2 rounded-lg">person_book</span>
+<h2 class="font-section-title text-section-title text-text-primary">Personal Details</h2>
+</div>
+<span class="material-symbols-outlined text-text-muted group-hover:text-primary transition-colors">chevron_right</span>
+</div>
+<div>
+<div class="space-y-sm">
+<div class="flex justify-between">
+<span class="font-body text-body text-text-secondary">Email</span>
+<span class="font-body text-body text-text-primary truncate ml-md">muhammed@example.com</span>
+</div>
+<div class="flex justify-between">
+<span class="font-body text-body text-text-secondary">Address</span>
+<span class="font-body text-body text-text-primary text-right">123, Palm Grove,<br/>Kerala, India</span>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- Settings List -->
+<section class="glass-card rounded-xl overflow-hidden shadow-sm">
+<!-- Payment Settings -->
+<a class="flex items-center justify-between p-md border-b border-border-base interactive-row group" href="#">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-info-bg text-info flex items-center justify-center group-hover:bg-info group-hover:text-surface transition-colors">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+</div>
+<div>
+<h3 class="font-card-title text-card-title text-text-primary">Payment Settings</h3>
+<p class="font-small text-small text-text-secondary">Manage AutoPay and payment methods</p>
+</div>
+</div>
+<div class="flex items-center gap-sm">
+<span class="px-2 py-1 bg-surface-container-low text-primary text-[10px] font-semibold rounded uppercase tracking-wide">AutoPay On</span>
+<span class="material-symbols-outlined text-text-muted">chevron_right</span>
+</div>
+</a>
+<!-- Security -->
+<a class="flex items-center justify-between p-md border-b border-border-base interactive-row group" href="#">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-surface-container-high text-tertiary flex items-center justify-center group-hover:bg-tertiary group-hover:text-surface transition-colors">
+<span class="material-symbols-outlined">security</span>
+</div>
+<div>
+<h3 class="font-card-title text-card-title text-text-primary">Security</h3>
+<p class="font-small text-small text-text-secondary">PIN, Biometrics, and Login history</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-text-muted">chevron_right</span>
+</a>
+<!-- Notification Preferences -->
+<a class="flex items-center justify-between p-md interactive-row group" href="#">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-surface-container-high text-tertiary flex items-center justify-center group-hover:bg-tertiary group-hover:text-surface transition-colors">
+<span class="material-symbols-outlined">notifications_active</span>
+</div>
+<div>
+<h3 class="font-card-title text-card-title text-text-primary">Notifications</h3>
+<p class="font-small text-small text-text-secondary">Alerts, receipts, and announcements</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-text-muted">chevron_right</span>
+</a>
+</section>
+<!-- Logout Action -->
+<div class="pt-md pb-xl">
+<button class="w-full flex items-center justify-center gap-sm py-3 px-4 border border-error text-error rounded-lg font-button text-button hover:bg-error-bg transition-colors active:scale-95 duration-150">
+<span class="material-symbols-outlined text-[20px]">logout</span>
+                Logout
+            </button>
+<p class="text-center font-small text-small text-text-muted mt-md">App Version 2.1.0 (Build 402)</p>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 bg-surface dark:bg-on-background border-t border-border-base dark:border-outline-variant flat no shadows md:hidden block">
+<div class="flex justify-around items-center h-16 w-full px-2 pb-safe">
+<a class="flex flex-col items-center justify-center text-text-secondary dark:text-text-muted hover:bg-surface-container-low dark:hover:bg-surface-container-highest active:scale-95 transition-transform duration-150 w-full h-full rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-small text-small mt-xs">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-text-secondary dark:text-text-muted hover:bg-surface-container-low dark:hover:bg-surface-container-highest active:scale-95 transition-transform duration-150 w-full h-full rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-small text-small mt-xs">Payments</span>
+</a>
+<a class="flex flex-col items-center justify-center text-text-secondary dark:text-text-muted hover:bg-surface-container-low dark:hover:bg-surface-container-highest active:scale-95 transition-transform duration-150 w-full h-full rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="receipt_long">receipt_long</span>
+<span class="font-small text-small mt-xs">Receipts</span>
+</a>
+<a class="flex flex-col items-center justify-center text-text-secondary dark:text-text-muted hover:bg-surface-container-low dark:hover:bg-surface-container-highest active:scale-95 transition-transform duration-150 w-full h-full rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="font-small text-small mt-xs">Alerts</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary dark:text-primary-fixed font-semibold hover:bg-surface-container-low dark:hover:bg-surface-container-highest active:scale-95 transition-transform duration-150 w-full h-full rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="person" data-weight="fill">person</span>
+<span class="font-small text-small mt-xs">Profile</span>
+</a>
+</div>
+</nav>
+</body></html>

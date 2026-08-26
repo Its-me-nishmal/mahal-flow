@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>MahalFlow - Login</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts (Inter) -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Config -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-fixed": "#d9e5e2",
+                        "surface-container-high": "#e6e9e6",
+                        "surface-container-low": "#f1f4f1",
+                        "primary": "#005244",
+                        "surface-variant": "#e0e3e0",
+                        "on-secondary-fixed": "#00201a",
+                        "error": "#C93B3B",
+                        "surface-tint": "#116a5a",
+                        "secondary": "#2d685b",
+                        "inverse-surface": "#2d3130",
+                        "on-primary-fixed": "#00201a",
+                        "on-tertiary-fixed": "#131e1c",
+                        "warning-bg": "#FFF5DC",
+                        "on-secondary-container": "#346e61",
+                        "surface-container-highest": "#e0e3e0",
+                        "secondary-container": "#b2efde",
+                        "error-container": "#ffdad6",
+                        "inverse-primary": "#87d5c0",
+                        "text-primary": "#17201D",
+                        "info-bg": "#EAF3FB",
+                        "on-error-container": "#93000a",
+                        "inverse-on-surface": "#eef1ee",
+                        "success-bg": "#EAF7EF",
+                        "background": "#f7faf7",
+                        "surface-bright": "#f7faf7",
+                        "success": "#16834B",
+                        "tertiary-container": "#576260",
+                        "on-primary-container": "#9bead4",
+                        "on-tertiary": "#ffffff",
+                        "surface": "#FFFFFF",
+                        "on-primary-fixed-variant": "#005143",
+                        "on-secondary": "#ffffff",
+                        "border-base": "#E3E8E6",
+                        "warning": "#B77900",
+                        "primary-container": "#146c5b",
+                        "error-bg": "#FDECEC",
+                        "tertiary-fixed-dim": "#bdc9c6",
+                        "primary-fixed": "#a3f2dc",
+                        "on-tertiary-fixed-variant": "#3e4947",
+                        "text-secondary": "#5E6864",
+                        "on-primary": "#ffffff",
+                        "primary-fixed-dim": "#87d5c0",
+                        "info": "#3478B8",
+                        "on-secondary-fixed-variant": "#0f5044",
+                        "surface-dim": "#d7dbd8",
+                        "on-surface": "#181c1b",
+                        "on-error": "#ffffff",
+                        "outline-variant": "#bec9c4",
+                        "on-tertiary-container": "#d1ddda",
+                        "secondary-fixed": "#b2efde",
+                        "on-surface-variant": "#3f4945",
+                        "bg-app": "#F7F9F8",
+                        "surface-container": "#ebefec",
+                        "outline": "#6f7975",
+                        "secondary-fixed-dim": "#97d2c2",
+                        "surface-container-lowest": "#ffffff",
+                        "tertiary": "#3f4a48",
+                        "text-muted": "#8A9390",
+                        "on-background": "#181c1b"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "margin-tablet": "24px",
+                        "xs": "4px",
+                        "xl": "32px",
+                        "sm": "8px",
+                        "margin-mobile": "16px",
+                        "xxl": "48px",
+                        "gutter": "16px",
+                        "margin-desktop": "32px",
+                        "lg": "24px",
+                        "md": "16px"
+                    },
+                    "fontFamily": {
+                        "amount-lg": ["Inter"],
+                        "display": ["Inter"],
+                        "card-title": ["Inter"],
+                        "small": ["Inter"],
+                        "button": ["Inter"],
+                        "section-title": ["Inter"],
+                        "body": ["Inter"],
+                        "page-title": ["Inter"]
+                    },
+                    "fontSize": {
+                        "amount-lg": ["28px", { "lineHeight": "36px", "fontWeight": "700" }],
+                        "display": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "card-title": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "small": ["12px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "button": ["14px", { "lineHeight": "20px", "fontWeight": "600" }],
+                        "section-title": ["18px", { "lineHeight": "26px", "fontWeight": "600" }],
+                        "body": ["14px", { "lineHeight": "22px", "fontWeight": "400" }],
+                        "page-title": ["24px", { "lineHeight": "32px", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background min-h-screen flex flex-col font-body text-text-primary antialiased">
+<!-- Main Content Area -->
+<main class="flex-grow flex flex-col justify-center items-center p-margin-mobile md:p-margin-desktop">
+<div class="w-full max-w-[400px] bg-surface border border-border-base rounded-xl shadow-[0_2px_8px_rgba(23,32,29,0.08)] overflow-hidden">
+<div class="p-xl flex flex-col items-center text-center border-b border-border-base">
+<h1 class="font-display text-display text-primary-container tracking-tight mb-2">MahalFlow</h1>
+<p class="font-body text-body text-text-secondary">Welcome back</p>
+</div>
+<div class="p-xl flex flex-col gap-lg">
+<form class="flex flex-col gap-lg">
+<div class="flex flex-col gap-sm">
+<label class="font-card-title text-card-title text-text-primary" for="mobile-number">Mobile Number</label>
+<div class="relative">
+<span class="absolute inset-y-0 left-0 flex items-center pl-md text-text-muted material-symbols-outlined pointer-events-none">phone_iphone</span>
+<input class="w-full h-12 pl-[44px] pr-md rounded-lg border border-border-base bg-surface-container-lowest text-text-primary font-body text-body focus:outline-none focus:ring-2 focus:ring-primary-container focus:border-transparent transition-shadow placeholder:text-text-muted" id="mobile-number" placeholder="Enter your mobile number" type="tel"/>
+</div>
+</div>
+<button class="w-full h-12 bg-primary-container text-on-primary font-button text-button rounded-lg hover:bg-on-primary-fixed-variant transition-colors flex items-center justify-center gap-2" type="submit">
+                        Continue
+                        <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+</form>
+<div class="relative flex py-2 items-center">
+<div class="flex-grow border-t border-border-base"></div>
+<span class="flex-shrink-0 mx-4 font-small text-small text-text-muted">or</span>
+<div class="flex-grow border-t border-border-base"></div>
+</div>
+<button class="w-full h-12 bg-surface text-primary-container border border-primary-container font-button text-button rounded-lg hover:bg-surface-container-low transition-colors flex items-center justify-center gap-2" type="button">
+<svg class="w-5 h-5" fill="none" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"></path>
+<path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"></path>
+<path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"></path>
+<path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"></path>
+</svg>
+                    Continue with Google
+                </button>
+</div>
+<div class="bg-surface-container-low p-md text-center border-t border-border-base">
+<p class="font-small text-small text-text-muted">By continuing, you agree to our <a class="text-primary-container hover:underline" href="#">Terms of Service</a> &amp; <a class="text-primary-container hover:underline" href="#">Privacy Policy</a>.</p>
+</div>
+</div>
+</main>
+</body></html>

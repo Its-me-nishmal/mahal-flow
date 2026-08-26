@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>MahalFlow Admin - Members</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "text-muted": "#8A9390",
+                        "on-secondary-container": "#346e61",
+                        "error": "#C93B3B",
+                        "text-primary": "#17201D",
+                        "on-error-container": "#93000a",
+                        "on-tertiary-fixed": "#131e1c",
+                        "surface-container": "#ebefec",
+                        "success-bg": "#EAF7EF",
+                        "primary-container": "#146c5b",
+                        "on-surface-variant": "#3f4945",
+                        "warning": "#B77900",
+                        "on-primary-fixed-variant": "#005143",
+                        "primary-fixed": "#a3f2dc",
+                        "secondary-fixed-dim": "#97d2c2",
+                        "error-bg": "#FDECEC",
+                        "error-container": "#ffdad6",
+                        "on-secondary": "#ffffff",
+                        "surface-container-highest": "#e0e3e0",
+                        "on-tertiary-fixed-variant": "#3e4947",
+                        "warning-bg": "#FFF5DC",
+                        "on-secondary-fixed-variant": "#0f5044",
+                        "tertiary": "#3f4a48",
+                        "secondary-container": "#b2efde",
+                        "on-primary-fixed": "#00201a",
+                        "on-secondary-fixed": "#00201a",
+                        "text-secondary": "#5E6864",
+                        "on-error": "#ffffff",
+                        "inverse-surface": "#2d3130",
+                        "surface": "#FFFFFF",
+                        "on-tertiary-container": "#d1ddda",
+                        "on-primary": "#ffffff",
+                        "inverse-on-surface": "#eef1ee",
+                        "surface-container-high": "#e6e9e6",
+                        "surface-bright": "#f7faf7",
+                        "success": "#16834B",
+                        "border-base": "#E3E8E6",
+                        "tertiary-container": "#576260",
+                        "outline-variant": "#bec9c4",
+                        "on-surface": "#181c1b",
+                        "primary": "#005244",
+                        "surface-container-low": "#f1f4f1",
+                        "tertiary-fixed": "#d9e5e2",
+                        "primary-fixed-dim": "#87d5c0",
+                        "surface-variant": "#e0e3e0",
+                        "on-tertiary": "#ffffff",
+                        "info": "#3478B8",
+                        "surface-dim": "#d7dbd8",
+                        "tertiary-fixed-dim": "#bdc9c6",
+                        "bg-app": "#F7F9F8",
+                        "on-primary-container": "#9bead4",
+                        "secondary": "#2d685b",
+                        "surface-container-lowest": "#ffffff",
+                        "outline": "#6f7975",
+                        "info-bg": "#EAF3FB",
+                        "secondary-fixed": "#b2efde",
+                        "inverse-primary": "#87d5c0",
+                        "background": "#f7faf7",
+                        "on-background": "#181c1b",
+                        "surface-tint": "#116a5a"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "16px",
+                        "xs": "4px",
+                        "margin-desktop": "32px",
+                        "margin-mobile": "16px",
+                        "md": "16px",
+                        "sm": "8px",
+                        "xxl": "48px",
+                        "margin-tablet": "24px",
+                        "lg": "24px",
+                        "xl": "32px"
+                    },
+                    "fontFamily": {
+                        "page-title": ["Inter"],
+                        "body": ["Inter"],
+                        "amount-lg": ["Inter"],
+                        "card-title": ["Inter"],
+                        "button": ["Inter"],
+                        "section-title": ["Inter"],
+                        "small": ["Inter"],
+                        "display": ["Inter"]
+                    },
+                    "fontSize": {
+                        "page-title": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "body": ["14px", { "lineHeight": "22px", "fontWeight": "400" }],
+                        "amount-lg": ["28px", { "lineHeight": "36px", "fontWeight": "700" }],
+                        "card-title": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "button": ["14px", { "lineHeight": "20px", "fontWeight": "600" }],
+                        "section-title": ["18px", { "lineHeight": "26px", "fontWeight": "600" }],
+                        "small": ["12px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "display": ["32px", { "lineHeight": "40px", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { background-color: #F7F9F8; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="text-on-surface antialiased">
+<!-- TopAppBar -->
+<header class="bg-surface dark:bg-on-tertiary-fixed fixed top-0 w-full z-50 border-b border-border-base dark:border-outline-variant flat no shadows">
+<div class="flex items-center justify-between px-margin-mobile md:px-margin-desktop h-16 w-full">
+<div class="flex items-center gap-sm md:hidden">
+<button class="p-2 text-primary dark:text-primary-fixed hover:bg-surface-container-low dark:hover:bg-surface-container-highest transition-colors active:opacity-80 rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+</div>
+<div class="flex-1 md:flex-none flex justify-center md:justify-start">
+<h1 class="font-page-title text-page-title text-primary dark:text-primary-fixed">MahalFlow Admin</h1>
+</div>
+<div class="flex items-center">
+<button class="w-8 h-8 rounded-full overflow-hidden hover:opacity-80 transition-opacity">
+<img alt="Admin Profile Picture" class="w-full h-full object-cover" data-alt="A small, professional portrait photograph of an administrator. The subject is facing forward with a neutral, approachable expression, set against a clean, light-mode compliant white or very light grey background. The lighting is soft and even, typical of a modern corporate headshot. The image is cropped closely to the face and shoulders, conveying a sense of professional reliability and trust." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAZrFKoJFUehFVo7z0JCAUVlPLP2X0-hl8W6rpUwWje1y-qCvDiwwLJQS0kbq62lvEaeK782NUYi8zkm05LEuHqo_QoNxSilWO95vuY6XJGdgVAZ_0o1I6Osx1LD_NLKJTf6QgMURQHKhALaaIANiP2NWw6uwva5hy0WTIhagQpYFOPQZjuvBtgHuI6FXTSlyXjvDKtmZYw4ZWZ9BFLq-Ik55yRnBBxFFNjxSRq-MGYa5DXZUr8r5QU"/>
+</button>
+</div>
+</div>
+</header>
+<!-- NavigationDrawer -->
+<nav class="hidden lg:flex flex-col fixed left-0 top-0 h-full py-6 w-72 rounded-r-xl border-r border-border-base dark:border-outline-variant shadow-sm dark:shadow-none bg-surface dark:bg-on-tertiary-fixed z-40 pt-24">
+<div class="px-lg mb-8 flex items-center gap-md">
+<div class="w-12 h-12 rounded-full overflow-hidden">
+<img alt="Admin User" class="w-full h-full object-cover" data-alt="A professional headshot of an administrator, similar to the top app bar avatar but slightly larger. The subject appears competent and welcoming, set against a pristine white background. Soft, diffused lighting enhances the modern, trustworthy corporate aesthetic of the interface. The image is crisp and perfectly suited for a light-mode admin panel profile section." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBOuAVUikl43aqg1j09H07QiMND-SE9CQBaJK3mArDhDSfMVDt3Gauo7egT4TwV_bs2qDOL1wOuWhPNMEjXm2SdajLqP9cNM5OhTyOzEYAYOJEw1cgd6u_4IbG9NEnl7es79qZ4WHOAfCnzQJNozJi8ROJD8m3DiaG7CvGN5Wx3mGN5O_rvQpUfY2rUSN6H6j_epk13UFNo1MGBdkltGw8SySs7RGLPQI1nZBNjN8CZhP8aoV4djQlM"/>
+</div>
+<div>
+<h2 class="font-card-title text-card-title text-primary dark:text-primary-fixed">Mahal Admin</h2>
+<p class="font-small text-small text-text-secondary">System Administrator</p>
+</div>
+</div>
+<ul class="flex-1 flex flex-col gap-xs">
+<li>
+<a class="flex items-center gap-sm px-4 py-3 mx-2 rounded-lg text-text-secondary dark:text-text-muted hover:bg-surface-container mx-2 rounded-lg hover:bg-surface-container-high dark:hover:bg-surface-variant active:scale-95 transition-transform font-body text-body" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+                    Dashboard
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-sm px-4 py-3 mx-2 rounded-lg bg-secondary-container text-on-secondary-container dark:bg-primary-container dark:text-on-primary-container font-semibold rounded-lg mx-2 active:scale-95 transition-transform font-body text-body" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+                    Members
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-sm px-4 py-3 mx-2 rounded-lg text-text-secondary dark:text-text-muted hover:bg-surface-container mx-2 rounded-lg hover:bg-surface-container-high dark:hover:bg-surface-variant active:scale-95 transition-transform font-body text-body" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+                    Payments
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-sm px-4 py-3 mx-2 rounded-lg text-text-secondary dark:text-text-muted hover:bg-surface-container mx-2 rounded-lg hover:bg-surface-container-high dark:hover:bg-surface-variant active:scale-95 transition-transform font-body text-body" href="#">
+<span class="material-symbols-outlined" data-icon="event_repeat">event_repeat</span>
+                    Subscriptions
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-sm px-4 py-3 mx-2 rounded-lg text-text-secondary dark:text-text-muted hover:bg-surface-container mx-2 rounded-lg hover:bg-surface-container-high dark:hover:bg-surface-variant active:scale-95 transition-transform font-body text-body" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+                    Settings
+                </a>
+</li>
+</ul>
+<div class="px-lg mt-auto pb-4">
+<span class="font-small text-small text-text-secondary">v1.2.0</span>
+</div>
+</nav>
+<!-- Main Content -->
+<main class="pt-16 pb-20 lg:pl-72 min-h-screen">
+<div class="px-margin-mobile md:px-margin-desktop py-lg max-w-7xl mx-auto">
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row md:items-center justify-between mb-lg gap-md">
+<div>
+<h2 class="font-display text-display text-text-primary">Members</h2>
+<p class="font-body text-body text-text-secondary mt-1">Manage and view all registered Mahal members.</p>
+</div>
+<!-- Search & Filter Controls (Desktop mostly, mobile reflow) -->
+<div class="flex flex-col sm:flex-row gap-sm w-full md:w-auto">
+<div class="relative w-full sm:w-64">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" data-icon="search">search</span>
+<input class="w-full h-12 pl-10 pr-4 rounded-[10px] border border-border-base bg-surface focus:border-primary focus:ring-1 focus:ring-primary font-body text-body text-text-primary placeholder:text-text-muted" placeholder="Search members..." type="text"/>
+</div>
+<div class="flex gap-sm overflow-x-auto hide-scrollbar pb-1 sm:pb-0">
+<button class="px-4 h-12 rounded-[10px] bg-primary text-on-primary font-button text-button whitespace-nowrap active:scale-95 transition-transform">All</button>
+<button class="px-4 h-12 rounded-[10px] bg-surface border border-border-base text-text-primary hover:bg-surface-container-low font-button text-button whitespace-nowrap active:scale-95 transition-transform">Active</button>
+<button class="px-4 h-12 rounded-[10px] bg-surface border border-border-base text-text-primary hover:bg-surface-container-low font-button text-button whitespace-nowrap active:scale-95 transition-transform">Pending</button>
+<button class="px-4 h-12 rounded-[10px] bg-surface border border-border-base text-text-primary hover:bg-surface-container-low font-button text-button whitespace-nowrap active:scale-95 transition-transform">Suspended</button>
+</div>
+</div>
+</div>
+<!-- Member List Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-md">
+<!-- Active Member Card -->
+<div class="bg-surface border border-border-base rounded-lg p-lg hover:shadow-sm hover:border-primary-fixed-dim transition-all cursor-pointer flex flex-col justify-between">
+<div class="flex justify-between items-start mb-md">
+<div class="flex items-center gap-md">
+<div class="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center text-primary font-card-title text-card-title">
+                                AM
+                            </div>
+<div>
+<h3 class="font-card-title text-card-title text-text-primary">Abdul Malik</h3>
+<p class="font-body text-body text-text-secondary">+91 98765 43210</p>
+</div>
+</div>
+<span class="px-2 py-1 rounded bg-success-bg text-success font-small text-small font-semibold">Active</span>
+</div>
+<div class="pt-md border-t border-border-base flex justify-between items-center">
+<div class="flex flex-col">
+<span class="font-small text-small text-text-secondary">Monthly Due</span>
+<span class="font-button text-button text-text-primary">₹500</span>
+</div>
+<button class="text-primary hover:bg-primary-container/10 p-2 rounded-full transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+</div>
+<!-- Pending Member Card -->
+<div class="bg-surface border border-border-base rounded-lg p-lg hover:shadow-sm hover:border-primary-fixed-dim transition-all cursor-pointer flex flex-col justify-between">
+<div class="flex justify-between items-start mb-md">
+<div class="flex items-center gap-md">
+<div class="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center text-primary font-card-title text-card-title">
+                                FK
+                            </div>
+<div>
+<h3 class="font-card-title text-card-title text-text-primary">Fatima Khan</h3>
+<p class="font-body text-body text-text-secondary">+91 91234 56789</p>
+</div>
+</div>
+<span class="px-2 py-1 rounded bg-warning-bg text-warning font-small text-small font-semibold">Pending</span>
+</div>
+<div class="pt-md border-t border-border-base flex justify-between items-center">
+<div class="flex flex-col">
+<span class="font-small text-small text-text-secondary">Monthly Due</span>
+<span class="font-button text-button text-text-primary">₹500</span>
+</div>
+<button class="text-primary hover:bg-primary-container/10 p-2 rounded-full transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+</div>
+<!-- Suspended Member Card -->
+<div class="bg-surface border border-border-base rounded-lg p-lg hover:shadow-sm hover:border-primary-fixed-dim transition-all cursor-pointer flex flex-col justify-between opacity-80">
+<div class="flex justify-between items-start mb-md">
+<div class="flex items-center gap-md">
+<div class="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center text-primary font-card-title text-card-title">
+                                MR
+                            </div>
+<div>
+<h3 class="font-card-title text-card-title text-text-primary">Mohammed Raza</h3>
+<p class="font-body text-body text-text-secondary">+91 99887 76655</p>
+</div>
+</div>
+<span class="px-2 py-1 rounded bg-error-bg text-error font-small text-small font-semibold">Suspended</span>
+</div>
+<div class="pt-md border-t border-border-base flex justify-between items-center">
+<div class="flex flex-col">
+<span class="font-small text-small text-text-secondary">Monthly Due</span>
+<span class="font-button text-button text-text-primary">₹500</span>
+</div>
+<button class="text-primary hover:bg-primary-container/10 p-2 rounded-full transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+</div>
+<!-- Active Member Card -->
+<div class="bg-surface border border-border-base rounded-lg p-lg hover:shadow-sm hover:border-primary-fixed-dim transition-all cursor-pointer flex flex-col justify-between">
+<div class="flex justify-between items-start mb-md">
+<div class="flex items-center gap-md">
+<div class="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center text-primary font-card-title text-card-title">
+                                SA
+                            </div>
+<div>
+<h3 class="font-card-title text-card-title text-text-primary">Syed Ali</h3>
+<p class="font-body text-body text-text-secondary">+91 94444 33333</p>
+</div>
+</div>
+<span class="px-2 py-1 rounded bg-success-bg text-success font-small text-small font-semibold">Active</span>
+</div>
+<div class="pt-md border-t border-border-base flex justify-between items-center">
+<div class="flex flex-col">
+<span class="font-small text-small text-text-secondary">Monthly Due</span>
+<span class="font-button text-button text-text-primary">₹500</span>
+</div>
+<button class="text-primary hover:bg-primary-container/10 p-2 rounded-full transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Empty State / Load More (Contextual) -->
+<div class="mt-xl flex justify-center w-full">
+<button class="bg-surface border border-primary text-primary px-lg h-[44px] rounded-[10px] font-button text-button hover:bg-surface-container-low transition-colors active:scale-95">Load More Members</button>
+</div>
+</div>
+</main>
+<!-- Floating Action Button (FAB) -->
+<button aria-label="Add Member" class="fixed bottom-24 lg:bottom-8 right-margin-mobile lg:right-margin-desktop w-14 h-14 bg-primary-container text-on-primary-container rounded-full shadow-[0_2px_8px_rgba(23,32,29,0.2)] flex items-center justify-center hover:bg-primary-container/90 active:scale-95 transition-all z-40 group">
+<span class="material-symbols-outlined group-hover:rotate-90 transition-transform duration-300" data-icon="add" data-weight="fill" style="font-variation-settings: 'FILL' 1;">add</span>
+</button>
+<!-- BottomNavBar -->
+<nav class="lg:hidden fixed bottom-0 left-0 w-full flex justify-around items-center h-16 px-4 bg-surface dark:bg-on-tertiary-fixed border-t border-border-base dark:border-outline-variant shadow-sm z-50 tap-highlight-transparent">
+<a class="flex flex-col items-center justify-center text-text-muted dark:text-outline active:bg-surface-container-low w-full h-full" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="home">home</span>
+<span class="font-small text-small">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary dark:text-primary-fixed font-semibold active:bg-surface-container-low w-full h-full" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="group" data-weight="fill" style="font-variation-settings: 'FILL' 1;">group</span>
+<span class="font-small text-small">Members</span>
+</a>
+<a class="flex flex-col items-center justify-center text-text-muted dark:text-outline active:bg-surface-container-low w-full h-full" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="receipt_long">receipt_long</span>
+<span class="font-small text-small">Payments</span>
+</a>
+<a class="flex flex-col items-center justify-center text-text-muted dark:text-outline active:bg-surface-container-low w-full h-full" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="person">person</span>
+<span class="font-small text-small">Profile</span>
+</a>
+</nav>
+</body></html>

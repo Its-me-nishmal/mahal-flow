@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>Receipt Details - MahalFlow</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-secondary-container": "#346e61",
+                      "surface-dim": "#d7dbd8",
+                      "surface-container-lowest": "#ffffff",
+                      "error-container": "#ffdad6",
+                      "tertiary": "#3f4a48",
+                      "on-tertiary-fixed-variant": "#3e4947",
+                      "inverse-on-surface": "#eef1ee",
+                      "outline": "#6f7975",
+                      "secondary": "#2d685b",
+                      "background": "#f7faf7",
+                      "warning": "#B77900",
+                      "success-bg": "#EAF7EF",
+                      "on-error-container": "#93000a",
+                      "on-secondary-fixed-variant": "#0f5044",
+                      "border-base": "#E3E8E6",
+                      "outline-variant": "#bec9c4",
+                      "on-primary": "#ffffff",
+                      "tertiary-container": "#576260",
+                      "surface-container-high": "#e6e9e6",
+                      "surface": "#FFFFFF",
+                      "surface-tint": "#116a5a",
+                      "on-primary-fixed": "#00201a",
+                      "on-tertiary-fixed": "#131e1c",
+                      "on-primary-fixed-variant": "#005143",
+                      "on-secondary": "#ffffff",
+                      "on-surface-variant": "#3f4945",
+                      "primary-fixed": "#a3f2dc",
+                      "on-primary-container": "#9bead4",
+                      "text-secondary": "#5E6864",
+                      "primary": "#005244",
+                      "bg-app": "#F7F9F8",
+                      "info": "#3478B8",
+                      "inverse-surface": "#2d3130",
+                      "surface-container-highest": "#e0e3e0",
+                      "surface-variant": "#e0e3e0",
+                      "text-muted": "#8A9390",
+                      "tertiary-fixed-dim": "#bdc9c6",
+                      "inverse-primary": "#87d5c0",
+                      "on-tertiary": "#ffffff",
+                      "surface-bright": "#f7faf7",
+                      "primary-fixed-dim": "#87d5c0",
+                      "on-error": "#ffffff",
+                      "on-background": "#181c1b",
+                      "warning-bg": "#FFF5DC",
+                      "on-secondary-fixed": "#00201a",
+                      "secondary-container": "#b2efde",
+                      "on-tertiary-container": "#d1ddda",
+                      "secondary-fixed": "#b2efde",
+                      "primary-container": "#146c5b",
+                      "success": "#16834B",
+                      "error": "#C93B3B",
+                      "info-bg": "#EAF3FB",
+                      "tertiary-fixed": "#d9e5e2",
+                      "surface-container-low": "#f1f4f1",
+                      "error-bg": "#FDECEC",
+                      "secondary-fixed-dim": "#97d2c2",
+                      "on-surface": "#181c1b",
+                      "text-primary": "#17201D",
+                      "surface-container": "#ebefec"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "sm": "8px",
+                      "md": "16px",
+                      "lg": "24px",
+                      "gutter": "16px",
+                      "xs": "4px",
+                      "xl": "32px",
+                      "margin-desktop": "32px",
+                      "margin-mobile": "16px",
+                      "xxl": "48px",
+                      "margin-tablet": "24px"
+              },
+              "fontFamily": {
+                      "section-title": [
+                              "Inter"
+                      ],
+                      "card-title": [
+                              "Inter"
+                      ],
+                      "small": [
+                              "Inter"
+                      ],
+                      "amount-lg": [
+                              "Inter"
+                      ],
+                      "body": [
+                              "Inter"
+                      ],
+                      "button": [
+                              "Inter"
+                      ],
+                      "page-title": [
+                              "Inter"
+                      ],
+                      "display": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "section-title": [
+                              "18px",
+                              {
+                                      "lineHeight": "26px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "card-title": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "small": [
+                              "12px",
+                              {
+                                      "lineHeight": "18px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "amount-lg": [
+                              "28px",
+                              {
+                                      "lineHeight": "36px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body": [
+                              "14px",
+                              {
+                                      "lineHeight": "22px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "button": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "page-title": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "display": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "fontWeight": "700"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+<style>
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        .dashed-border-y {
+            border-top: 1px dashed #bec9c4;
+            border-bottom: 1px dashed #bec9c4;
+        }
+      </style>
+</head>
+<body class="bg-bg-app text-text-primary font-body antialiased selection:bg-primary-container selection:text-on-primary">
+<!-- TopAppBar (Suppressed navigation, focus on content return) -->
+<header class="fixed top-0 w-full z-50 bg-surface dark:bg-on-background flat no shadows transition-colors duration-200">
+<div class="flex justify-between items-center px-margin-mobile h-16 w-full max-w-screen-xl mx-auto">
+<button class="flex items-center justify-center p-2 rounded-full hover:bg-surface-variant/50 dark:hover:bg-surface-variant/10 text-primary dark:text-primary-fixed">
+<span class="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
+</button>
+<h1 class="font-page-title text-page-title text-primary dark:text-primary-fixed">Receipt</h1>
+<div class="w-10"></div> <!-- Placeholder for balance -->
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="pt-20 pb-24 px-margin-mobile md:px-margin-desktop max-w-2xl mx-auto w-full min-h-screen flex flex-col items-center">
+<!-- Receipt Card -->
+<div class="bg-surface w-full rounded-xl border border-border-base shadow-[0_2px_8px_rgba(23,32,29,0.08)] overflow-hidden flex flex-col relative mt-4">
+<!-- Receipt Header / Branding -->
+<div class="p-lg flex flex-col items-center text-center pb-md">
+<div class="w-16 h-16 bg-success-bg rounded-full flex items-center justify-center mb-sm">
+<span class="material-symbols-outlined text-success" data-icon="check_circle" style="font-size: 32px; font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<h2 class="font-card-title text-card-title text-text-primary">Payment Successful</h2>
+<p class="font-amount-lg text-amount-lg text-text-primary mt-sm">₹1,500</p>
+<p class="font-small text-small text-text-secondary mt-xs">15 Aug 2026 • 10:24 AM</p>
+</div>
+<!-- Receipt Details -->
+<div class="px-lg py-md dashed-border-y bg-surface-bright flex flex-col gap-md">
+<div class="flex justify-between items-start">
+<span class="font-small text-small text-text-secondary">Receipt Number</span>
+<span class="font-body text-body text-text-primary text-right font-semibold">GV1MH00120260803R00002</span>
+</div>
+<div class="flex justify-between items-start">
+<span class="font-small text-small text-text-secondary">Member Name</span>
+<span class="font-body text-body text-text-primary text-right">Muhammed</span>
+</div>
+<div class="flex justify-between items-start">
+<span class="font-small text-small text-text-secondary">Payment Type</span>
+<span class="font-body text-body text-text-primary text-right">Monthly Dues</span>
+</div>
+<div class="flex justify-between items-start">
+<span class="font-small text-small text-text-secondary">Months Covered</span>
+<span class="font-body text-body text-text-primary text-right">Jun, Jul, Aug 2026</span>
+</div>
+<div class="flex justify-between items-start">
+<span class="font-small text-small text-text-secondary">Payment Method</span>
+<span class="font-body text-body text-text-primary text-right">UPI</span>
+</div>
+</div>
+<!-- Receipt Footer / Organization Info -->
+<div class="p-lg flex flex-col items-center text-center">
+<h3 class="font-section-title text-section-title text-primary-container mb-xs">MahalFlow</h3>
+<p class="font-small text-small text-text-secondary max-w-[200px]">Thank you for your contribution. This is a computer-generated receipt.</p>
+</div>
+<!-- Decorative cutouts for authentic receipt feel -->
+<div class="absolute left-[-12px] top-[180px] w-6 h-6 bg-bg-app rounded-full border-r border-border-base"></div>
+<div class="absolute right-[-12px] top-[180px] w-6 h-6 bg-bg-app rounded-full border-l border-border-base"></div>
+</div>
+<!-- Action Buttons -->
+<div class="w-full mt-xl flex flex-col gap-md">
+<button class="w-full h-12 bg-primary-container text-on-primary font-button text-button rounded-lg flex items-center justify-center gap-sm active:scale-95 transition-transform duration-150 shadow-[0_2px_8px_rgba(23,32,29,0.08)]">
+<span class="material-symbols-outlined" data-icon="download">download</span>
+                Download PDF
+            </button>
+<button class="w-full h-12 bg-surface border border-primary-container text-primary-container font-button text-button rounded-lg flex items-center justify-center gap-sm active:scale-95 transition-transform duration-150">
+<span class="material-symbols-outlined" data-icon="share">share</span>
+                Share Receipt
+            </button>
+</div>
+</main>
+</body></html>

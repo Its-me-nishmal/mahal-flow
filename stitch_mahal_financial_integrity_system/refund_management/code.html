@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Refund Management - MahalFlow</title>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind Config injected from system prompt -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-lowest": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "primary": "#005244",
+                        "on-primary-fixed": "#00201a",
+                        "secondary-container": "#b2efde",
+                        "on-tertiary-fixed": "#131e1c",
+                        "surface": "#FFFFFF",
+                        "on-primary-container": "#9bead4",
+                        "secondary-fixed-dim": "#97d2c2",
+                        "secondary": "#2d685b",
+                        "surface-tint": "#116a5a",
+                        "surface-container-low": "#f1f4f1",
+                        "inverse-surface": "#2d3130",
+                        "on-surface-variant": "#3f4945",
+                        "on-tertiary-fixed-variant": "#3e4947",
+                        "tertiary": "#3f4a48",
+                        "inverse-primary": "#87d5c0",
+                        "primary-container": "#146c5b",
+                        "on-primary-fixed-variant": "#005143",
+                        "success-bg": "#EAF7EF",
+                        "surface-container": "#ebefec",
+                        "on-secondary-fixed": "#00201a",
+                        "primary-fixed": "#a3f2dc",
+                        "text-muted": "#8A9390",
+                        "on-error-container": "#93000a",
+                        "outline": "#6f7975",
+                        "warning-bg": "#FFF5DC",
+                        "surface-container-highest": "#e0e3e0",
+                        "on-primary": "#ffffff",
+                        "surface-dim": "#d7dbd8",
+                        "success": "#16834B",
+                        "tertiary-fixed-dim": "#bdc9c6",
+                        "bg-app": "#F7F9F8",
+                        "on-surface": "#181c1b",
+                        "surface-container-high": "#e6e9e6",
+                        "tertiary-fixed": "#d9e5e2",
+                        "on-error": "#ffffff",
+                        "error-bg": "#FDECEC",
+                        "on-secondary-container": "#346e61",
+                        "warning": "#B77900",
+                        "outline-variant": "#bec9c4",
+                        "surface-bright": "#f7faf7",
+                        "primary-fixed-dim": "#87d5c0",
+                        "on-tertiary-container": "#d1ddda",
+                        "secondary-fixed": "#b2efde",
+                        "info": "#3478B8",
+                        "border-base": "#E3E8E6",
+                        "background": "#f7faf7",
+                        "on-tertiary": "#ffffff",
+                        "text-primary": "#17201D",
+                        "tertiary-container": "#576260",
+                        "info-bg": "#EAF3FB",
+                        "on-background": "#181c1b",
+                        "inverse-on-surface": "#eef1ee",
+                        "text-secondary": "#5E6864",
+                        "surface-variant": "#e0e3e0",
+                        "error-container": "#ffdad6",
+                        "on-secondary-fixed-variant": "#0f5044",
+                        "error": "#C93B3B"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xxl": "48px",
+                        "sm": "8px",
+                        "xl": "32px",
+                        "lg": "24px",
+                        "margin-mobile": "16px",
+                        "md": "16px",
+                        "xs": "4px",
+                        "margin-tablet": "24px",
+                        "margin-desktop": "32px",
+                        "gutter": "16px"
+                    },
+                    "fontFamily": {
+                        "card-title": ["Inter", "sans-serif"],
+                        "page-title": ["Inter", "sans-serif"],
+                        "section-title": ["Inter", "sans-serif"],
+                        "button": ["Inter", "sans-serif"],
+                        "small": ["Inter", "sans-serif"],
+                        "display": ["Inter", "sans-serif"],
+                        "amount-lg": ["Inter", "sans-serif"],
+                        "body": ["Inter", "sans-serif"]
+                    },
+                    "fontSize": {
+                        "card-title": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "page-title": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "section-title": ["18px", { "lineHeight": "26px", "fontWeight": "600" }],
+                        "button": ["14px", { "lineHeight": "20px", "fontWeight": "600" }],
+                        "small": ["12px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "display": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "amount-lg": ["28px", { "lineHeight": "36px", "fontWeight": "700" }],
+                        "body": ["14px", { "lineHeight": "22px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-bg-app text-text-primary font-body antialiased min-h-screen flex">
+<!-- Desktop Sidebar (Hidden on Mobile) -->
+<aside class="hidden md:flex flex-col h-screen w-64 fixed left-0 top-0 bg-surface dark:bg-inverse-surface border-r border-border-base dark:border-outline-variant p-md gap-xs z-30">
+<!-- Brand Header -->
+<div class="px-md py-sm mb-lg flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary font-bold">M</div>
+<div>
+<h1 class="font-section-title text-section-title text-primary dark:text-primary-fixed">MahalFlow</h1>
+<p class="font-small text-small text-text-secondary">Super Admin Portal</p>
+</div>
+</div>
+<!-- Navigation Links -->
+<nav class="flex-1 flex flex-col gap-xs overflow-y-auto">
+<a class="flex items-center gap-md px-md py-sm text-text-secondary dark:text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high transition-all cursor-pointer active:scale-95 duration-200 rounded-lg font-button text-button" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+                Dashboard
+            </a>
+<a class="flex items-center gap-md px-md py-sm text-text-secondary dark:text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high transition-all cursor-pointer active:scale-95 duration-200 rounded-lg font-button text-button" href="#">
+<span class="material-symbols-outlined" data-icon="location_city">location_city</span>
+                Mahals
+            </a>
+<a class="flex items-center gap-md px-md py-sm text-text-secondary dark:text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high transition-all cursor-pointer active:scale-95 duration-200 rounded-lg font-button text-button" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+                Members
+            </a>
+<a class="flex items-center gap-md px-md py-sm text-text-secondary dark:text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high transition-all cursor-pointer active:scale-95 duration-200 rounded-lg font-button text-button" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+                Payments
+            </a>
+<a class="flex items-center gap-md px-md py-sm text-text-secondary dark:text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high transition-all cursor-pointer active:scale-95 duration-200 rounded-lg font-button text-button" href="#">
+<span class="material-symbols-outlined" data-icon="card_membership">card_membership</span>
+                Subscriptions
+            </a>
+<a class="flex items-center gap-md px-md py-sm text-text-secondary dark:text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high transition-all cursor-pointer active:scale-95 duration-200 rounded-lg font-button text-button" href="#">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+                Gateways
+            </a>
+<!-- Active Tab -->
+<a class="flex items-center gap-md px-md py-sm bg-primary-fixed text-on-primary-fixed-variant font-bold cursor-pointer active:scale-95 duration-200 rounded-lg font-button text-button" href="#">
+<span class="material-symbols-outlined" data-icon="undo">undo</span>
+                Refunds
+            </a>
+<a class="flex items-center gap-md px-md py-sm text-text-secondary dark:text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high transition-all cursor-pointer active:scale-95 duration-200 rounded-lg font-button text-button" href="#">
+<span class="material-symbols-outlined" data-icon="assessment">assessment</span>
+                Reports
+            </a>
+<a class="flex items-center gap-md px-md py-sm text-text-secondary dark:text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high transition-all cursor-pointer active:scale-95 duration-200 rounded-lg font-button text-button" href="#">
+<span class="material-symbols-outlined" data-icon="history_edu">history_edu</span>
+                Audit Logs
+            </a>
+<a class="flex items-center gap-md px-md py-sm text-text-secondary dark:text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high transition-all cursor-pointer active:scale-95 duration-200 rounded-lg font-button text-button" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+                Settings
+            </a>
+</nav>
+<!-- CTA & Footer -->
+<div class="mt-auto flex flex-col gap-sm">
+<button class="w-full py-sm bg-primary-container text-on-primary rounded-lg font-button text-button hover:opacity-90 transition-opacity">
+                New Report
+            </button>
+<a class="flex items-center gap-md px-md py-sm text-text-secondary dark:text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high transition-all cursor-pointer active:scale-95 duration-200 rounded-lg font-button text-button" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+                Log Out
+            </a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 md:ml-64 p-margin-mobile md:p-margin-desktop min-h-screen max-w-[1600px] mx-auto w-full">
+<!-- Header -->
+<header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-xl gap-md">
+<div>
+<h2 class="font-page-title text-page-title text-text-primary">Refund Management</h2>
+<p class="font-body text-body text-text-secondary mt-xs">Monitor and process refund requests across all Mahals.</p>
+</div>
+<div class="flex gap-sm">
+<button class="px-md py-sm border border-border-base bg-surface text-text-primary rounded-lg font-button text-button hover:bg-surface-container-low transition-colors flex items-center gap-xs shadow-sm">
+<span class="material-symbols-outlined text-[18px]">download</span>
+                    Export CSV
+                </button>
+</div>
+</header>
+<!-- Summary Cards (Bento Grid Style) -->
+<section class="grid grid-cols-1 md:grid-cols-3 gap-lg mb-xl">
+<!-- Total Refunded -->
+<div class="bg-surface rounded-xl border border-border-base p-lg shadow-[0_2px_8px_rgba(23,32,29,0.04)] relative overflow-hidden">
+<div class="absolute top-0 right-0 w-24 h-24 bg-primary-fixed/20 rounded-bl-full -mr-4 -mt-4 z-0"></div>
+<div class="relative z-10 flex flex-col h-full justify-between">
+<div class="flex justify-between items-start mb-md">
+<span class="font-card-title text-card-title text-text-secondary">Total Refunded (MTD)</span>
+<div class="w-10 h-10 rounded-full bg-info-bg flex items-center justify-center text-info">
+<span class="material-symbols-outlined" data-icon="account_balance">account_balance</span>
+</div>
+</div>
+<div>
+<div class="font-amount-lg text-amount-lg text-text-primary mb-xs">₹1,45,000</div>
+<div class="flex items-center gap-xs font-small text-small text-success">
+<span class="material-symbols-outlined text-[16px]">trending_up</span>
+<span>12% vs last month</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Pending Approvals -->
+<div class="bg-surface rounded-xl border border-border-base p-lg shadow-[0_2px_8px_rgba(23,32,29,0.04)] relative overflow-hidden">
+<div class="absolute top-0 right-0 w-24 h-24 bg-warning-bg/50 rounded-bl-full -mr-4 -mt-4 z-0"></div>
+<div class="relative z-10 flex flex-col h-full justify-between">
+<div class="flex justify-between items-start mb-md">
+<span class="font-card-title text-card-title text-text-secondary">Pending Approvals</span>
+<div class="w-10 h-10 rounded-full bg-warning-bg flex items-center justify-center text-warning">
+<span class="material-symbols-outlined" data-icon="pending_actions">pending_actions</span>
+</div>
+</div>
+<div>
+<div class="font-amount-lg text-amount-lg text-text-primary mb-xs">42</div>
+<div class="flex items-center gap-xs font-small text-small text-text-secondary">
+<span>Requires immediate attention</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Refund Success Rate -->
+<div class="bg-surface rounded-xl border border-border-base p-lg shadow-[0_2px_8px_rgba(23,32,29,0.04)] relative overflow-hidden">
+<div class="absolute top-0 right-0 w-24 h-24 bg-success-bg/50 rounded-bl-full -mr-4 -mt-4 z-0"></div>
+<div class="relative z-10 flex flex-col h-full justify-between">
+<div class="flex justify-between items-start mb-md">
+<span class="font-card-title text-card-title text-text-secondary">Refund Success Rate</span>
+<div class="w-10 h-10 rounded-full bg-success-bg flex items-center justify-center text-success">
+<span class="material-symbols-outlined" data-icon="check_circle">check_circle</span>
+</div>
+</div>
+<div>
+<div class="font-amount-lg text-amount-lg text-text-primary mb-xs">98.5%</div>
+<div class="flex items-center gap-xs font-small text-small text-text-secondary">
+<span>Last 30 days average</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Main Data Section -->
+<section class="bg-surface rounded-xl border border-border-base shadow-[0_2px_8px_rgba(23,32,29,0.04)] overflow-hidden flex flex-col">
+<!-- Filters Toolbar -->
+<div class="p-md border-b border-border-base bg-surface-bright flex flex-col md:flex-row gap-md items-center justify-between">
+<!-- Search -->
+<div class="relative w-full md:w-96">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-muted">search</span>
+<input class="w-full pl-10 pr-4 py-2 h-[44px] rounded-[10px] border border-border-base focus:ring-2 focus:ring-primary focus:border-primary font-body text-body bg-surface text-text-primary placeholder:text-text-muted" placeholder="Search by ID or Mahal name..." type="text"/>
+</div>
+<!-- Filters -->
+<div class="flex flex-wrap items-center gap-sm w-full md:w-auto">
+<select class="h-[44px] rounded-[10px] border border-border-base focus:ring-2 focus:ring-primary focus:border-primary font-body text-body bg-surface text-text-primary px-3 py-2 cursor-pointer min-w-[140px]">
+<option value="">All Statuses</option>
+<option value="pending">Pending</option>
+<option value="successful">Successful</option>
+<option value="failed">Failed</option>
+</select>
+<div class="relative min-w-[160px]">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-[18px]">calendar_month</span>
+<input class="w-full pl-9 pr-4 py-2 h-[44px] rounded-[10px] border border-border-base focus:ring-2 focus:ring-primary focus:border-primary font-body text-body bg-surface text-text-primary cursor-pointer" placeholder="Date Range" readonly="" type="text" value="Last 30 Days"/>
+</div>
+<button class="h-[44px] px-md flex items-center justify-center gap-xs border border-border-base rounded-[10px] text-text-secondary hover:bg-surface-container-low transition-colors font-button text-button bg-surface">
+<span class="material-symbols-outlined text-[18px]">filter_list</span>
+                        More Filters
+                    </button>
+</div>
+</div>
+<!-- Table Container -->
+<div class="overflow-x-auto w-full">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-container-low border-b border-border-base">
+<tr>
+<th class="py-3 px-4 font-button text-button text-text-secondary whitespace-nowrap">Transaction ID</th>
+<th class="py-3 px-4 font-button text-button text-text-secondary whitespace-nowrap">Mahal Name</th>
+<th class="py-3 px-4 font-button text-button text-text-secondary whitespace-nowrap">Member</th>
+<th class="py-3 px-4 font-button text-button text-text-secondary whitespace-nowrap">Amount</th>
+<th class="py-3 px-4 font-button text-button text-text-secondary whitespace-nowrap">Date</th>
+<th class="py-3 px-4 font-button text-button text-text-secondary whitespace-nowrap">Status</th>
+<th class="py-3 px-4 font-button text-button text-text-secondary text-right whitespace-nowrap">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-border-base">
+<!-- Row 1: Pending -->
+<tr class="hover:bg-surface-bright transition-colors group">
+<td class="py-4 px-4 font-body text-body text-text-primary font-medium">TXN-98245</td>
+<td class="py-4 px-4 font-body text-body text-text-primary">Al-Huda Central Mahal</td>
+<td class="py-4 px-4 font-body text-body text-text-primary">
+<div class="flex items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center text-xs font-bold text-text-secondary">ZI</div>
+<span>Zainab Ibrahim</span>
+</div>
+</td>
+<td class="py-4 px-4 font-body text-body font-semibold text-text-primary">₹2,500</td>
+<td class="py-4 px-4 font-body text-body text-text-secondary">Oct 24, 2023<br/><span class="text-xs text-text-muted">14:30 IST</span></td>
+<td class="py-4 px-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-warning-bg text-warning border border-warning/20">
+                                    Pending
+                                </span>
+</td>
+<td class="py-4 px-4 text-right">
+<button class="px-3 py-1.5 bg-primary-container text-on-primary rounded font-button text-small hover:opacity-90 transition-opacity">
+                                    Process Refund
+                                </button>
+</td>
+</tr>
+<!-- Row 2: Successful -->
+<tr class="hover:bg-surface-bright transition-colors group">
+<td class="py-4 px-4 font-body text-body text-text-primary font-medium">TXN-98240</td>
+<td class="py-4 px-4 font-body text-body text-text-primary">Malabar Grand Mosque</td>
+<td class="py-4 px-4 font-body text-body text-text-primary">
+<div class="flex items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center text-xs font-bold text-text-secondary">MA</div>
+<span>Mohammed Ali</span>
+</div>
+</td>
+<td class="py-4 px-4 font-body text-body font-semibold text-text-primary">₹5,000</td>
+<td class="py-4 px-4 font-body text-body text-text-secondary">Oct 23, 2023<br/><span class="text-xs text-text-muted">09:15 IST</span></td>
+<td class="py-4 px-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success-bg text-success border border-success/20">
+                                    Successful
+                                </span>
+</td>
+<td class="py-4 px-4 text-right">
+<button class="text-text-secondary hover:text-primary transition-colors p-2 rounded-full hover:bg-surface-container-low" title="View Details">
+<span class="material-symbols-outlined text-[20px]">visibility</span>
+</button>
+</td>
+</tr>
+<!-- Row 3: Failed -->
+<tr class="hover:bg-surface-bright transition-colors group">
+<td class="py-4 px-4 font-body text-body text-text-primary font-medium">TXN-98211</td>
+<td class="py-4 px-4 font-body text-body text-text-primary">Kozhikode South Mahal</td>
+<td class="py-4 px-4 font-body text-body text-text-primary">
+<div class="flex items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center text-xs font-bold text-text-secondary">FR</div>
+<span>Fatima Rahman</span>
+</div>
+</td>
+<td class="py-4 px-4 font-body text-body font-semibold text-text-primary">₹1,200</td>
+<td class="py-4 px-4 font-body text-body text-text-secondary">Oct 22, 2023<br/><span class="text-xs text-text-muted">16:45 IST</span></td>
+<td class="py-4 px-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-error-bg text-error border border-error/20">
+                                    Failed
+                                </span>
+</td>
+<td class="py-4 px-4 text-right flex justify-end gap-2">
+<button class="px-3 py-1.5 border border-border-base text-text-primary rounded font-button text-small hover:bg-surface-container-low transition-colors">
+                                    Retry
+                                </button>
+<button class="text-text-secondary hover:text-primary transition-colors p-2 rounded-full hover:bg-surface-container-low" title="View Details">
+<span class="material-symbols-outlined text-[20px]">visibility</span>
+</button>
+</td>
+</tr>
+<!-- Row 4: Pending -->
+<tr class="hover:bg-surface-bright transition-colors group">
+<td class="py-4 px-4 font-body text-body text-text-primary font-medium">TXN-98199</td>
+<td class="py-4 px-4 font-body text-body text-text-primary">Green Valley Mahal</td>
+<td class="py-4 px-4 font-body text-body text-text-primary">
+<div class="flex items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center text-xs font-bold text-text-secondary">SK</div>
+<span>Salim Khan</span>
+</div>
+</td>
+<td class="py-4 px-4 font-body text-body font-semibold text-text-primary">₹3,500</td>
+<td class="py-4 px-4 font-body text-body text-text-secondary">Oct 21, 2023<br/><span class="text-xs text-text-muted">11:20 IST</span></td>
+<td class="py-4 px-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-warning-bg text-warning border border-warning/20">
+                                    Pending
+                                </span>
+</td>
+<td class="py-4 px-4 text-right">
+<button class="px-3 py-1.5 bg-primary-container text-on-primary rounded font-button text-small hover:opacity-90 transition-opacity">
+                                    Process Refund
+                                </button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination -->
+<div class="p-md border-t border-border-base flex items-center justify-between bg-surface">
+<div class="font-small text-small text-text-secondary">
+                    Showing <span class="font-semibold text-text-primary">1</span> to <span class="font-semibold text-text-primary">4</span> of <span class="font-semibold text-text-primary">128</span> results
+                </div>
+<div class="flex gap-2">
+<button class="w-8 h-8 rounded border border-border-base flex items-center justify-center text-text-muted cursor-not-allowed bg-surface-container-low" disabled="">
+<span class="material-symbols-outlined text-[18px]">chevron_left</span>
+</button>
+<button class="w-8 h-8 rounded bg-primary-container text-on-primary flex items-center justify-center font-button text-small">1</button>
+<button class="w-8 h-8 rounded border border-border-base hover:bg-surface-container-low text-text-primary flex items-center justify-center font-button text-small transition-colors">2</button>
+<button class="w-8 h-8 rounded border border-border-base hover:bg-surface-container-low text-text-primary flex items-center justify-center font-button text-small transition-colors">3</button>
+<span class="w-8 h-8 flex items-center justify-center text-text-muted">...</span>
+<button class="w-8 h-8 rounded border border-border-base hover:bg-surface-container-low text-text-primary flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-[18px]">chevron_right</span>
+</button>
+</div>
+</div>
+</section>
+</main>
+</body></html>

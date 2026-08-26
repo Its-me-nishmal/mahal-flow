@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Mahal Admin - Audit Logs</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-container": "#576260",
+                        "error-container": "#ffdad6",
+                        "text-muted": "#8A9390",
+                        "on-background": "#181c1b",
+                        "outline-variant": "#bec9c4",
+                        "warning": "#B77900",
+                        "error": "#C93B3B",
+                        "primary-container": "#146c5b",
+                        "success": "#16834B",
+                        "surface-container-high": "#e6e9e6",
+                        "surface": "#FFFFFF",
+                        "tertiary-fixed": "#d9e5e2",
+                        "secondary-fixed": "#b2efde",
+                        "tertiary": "#3f4a48",
+                        "info-bg": "#EAF3FB",
+                        "surface-variant": "#e0e3e0",
+                        "on-primary-container": "#9bead4",
+                        "secondary": "#2d685b",
+                        "surface-container-highest": "#e0e3e0",
+                        "on-error": "#ffffff",
+                        "border-base": "#E3E8E6",
+                        "on-tertiary": "#ffffff",
+                        "on-surface": "#181c1b",
+                        "text-secondary": "#5E6864",
+                        "bg-app": "#F7F9F8",
+                        "on-tertiary-fixed": "#131e1c",
+                        "on-secondary-fixed": "#00201a",
+                        "secondary-container": "#b2efde",
+                        "text-primary": "#17201D",
+                        "surface-tint": "#116a5a",
+                        "on-error-container": "#93000a",
+                        "surface-container": "#ebefec",
+                        "inverse-surface": "#2d3130",
+                        "warning-bg": "#FFF5DC",
+                        "surface-container-low": "#f1f4f1",
+                        "surface-dim": "#d7dbd8",
+                        "success-bg": "#EAF7EF",
+                        "tertiary-fixed-dim": "#bdc9c6",
+                        "primary-fixed-dim": "#87d5c0",
+                        "on-tertiary-container": "#d1ddda",
+                        "outline": "#6f7975",
+                        "inverse-on-surface": "#eef1ee",
+                        "on-primary-fixed": "#00201a",
+                        "primary-fixed": "#a3f2dc",
+                        "on-secondary-container": "#346e61",
+                        "on-primary-fixed-variant": "#005143",
+                        "on-surface-variant": "#3f4945",
+                        "primary": "#005244",
+                        "on-primary": "#ffffff",
+                        "secondary-fixed-dim": "#97d2c2",
+                        "surface-bright": "#f7faf7",
+                        "on-tertiary-fixed-variant": "#3e4947",
+                        "background": "#f7faf7",
+                        "inverse-primary": "#87d5c0",
+                        "surface-container-lowest": "#ffffff",
+                        "info": "#3478B8",
+                        "error-bg": "#FDECEC",
+                        "on-secondary": "#ffffff",
+                        "on-secondary-fixed-variant": "#0f5044"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "margin-desktop": "32px",
+                        "xxl": "48px",
+                        "sm": "8px",
+                        "margin-tablet": "24px",
+                        "xs": "4px",
+                        "gutter": "16px",
+                        "lg": "24px",
+                        "xl": "32px",
+                        "md": "16px",
+                        "margin-mobile": "16px"
+                    },
+                    "fontFamily": {
+                        "amount-lg": ["Inter"],
+                        "card-title": ["Inter"],
+                        "small": ["Inter"],
+                        "section-title": ["Inter"],
+                        "button": ["Inter"],
+                        "body": ["Inter"],
+                        "display": ["Inter"],
+                        "page-title": ["Inter"]
+                    },
+                    "fontSize": {
+                        "amount-lg": ["28px", { "lineHeight": "36px", "fontWeight": "700" }],
+                        "card-title": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "small": ["12px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "section-title": ["18px", { "lineHeight": "26px", "fontWeight": "600" }],
+                        "button": ["14px", { "lineHeight": "20px", "fontWeight": "600" }],
+                        "body": ["14px", { "lineHeight": "22px", "fontWeight": "400" }],
+                        "display": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "page-title": ["24px", { "lineHeight": "32px", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #F7F9F8; }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
+    </style>
+</head>
+<body class="bg-bg-app min-h-screen text-text-primary flex flex-col md:flex-row">
+<!-- Desktop Sidebar (Hidden on Mobile) -->
+<aside class="hidden md:flex flex-col w-[260px] bg-surface border-r border-border-base min-h-screen sticky top-0 h-screen">
+<div class="p-margin-desktop border-b border-border-base">
+<h1 class="font-page-title text-page-title text-primary">Mahal Admin</h1>
+</div>
+<nav class="flex-1 py-lg px-gutter space-y-sm overflow-y-auto">
+<a class="flex items-center space-x-md p-md rounded-lg text-text-secondary hover:bg-surface-container-low transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-button text-button">Dashboard</span>
+</a>
+<a class="flex items-center space-x-md p-md rounded-lg text-text-secondary hover:bg-surface-container-low transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-button text-button">Members</span>
+</a>
+<a class="flex items-center space-x-md p-md rounded-lg text-text-secondary hover:bg-surface-container-low transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-button text-button">Payments</span>
+</a>
+<a class="flex items-center space-x-md p-md rounded-lg bg-surface-container text-primary font-button text-button transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="history">history</span>
+<span>Audit Logs</span>
+</a>
+<a class="flex items-center space-x-md p-md rounded-lg text-text-secondary hover:bg-surface-container-low transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-button text-button">Settings</span>
+</a>
+</nav>
+<div class="p-margin-tablet border-t border-border-base">
+<div class="flex items-center space-x-md">
+<div class="w-10 h-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-bold">
+                    SA
+                </div>
+<div>
+<p class="font-button text-button text-text-primary">System Admin</p>
+<p class="font-small text-small text-text-secondary">Superuser</p>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col min-h-screen">
+<!-- Mobile TopAppBar -->
+<header class="md:hidden w-full top-0 sticky bg-surface text-primary border-b border-border-base flex justify-between items-center px-margin-mobile py-md z-40">
+<div class="flex items-center space-x-md cursor-pointer active:opacity-80 transition-opacity">
+<span class="material-symbols-outlined">menu</span>
+</div>
+<h1 class="font-page-title text-page-title font-bold text-primary">Mahal Admin</h1>
+<div class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-bold text-sm">
+                SA
+            </div>
+</header>
+<!-- Content Canvas -->
+<div class="flex-1 p-margin-mobile md:p-margin-desktop pb-[80px] md:pb-margin-desktop">
+<div class="max-w-6xl mx-auto space-y-lg">
+<!-- Header -->
+<div>
+<h2 class="font-display text-display text-text-primary">Audit Logs</h2>
+<p class="font-body text-body text-text-secondary mt-xs">Secure record of all administrative actions and system events.</p>
+</div>
+<!-- Search & Filters (Bento/Card Style) -->
+<div class="bg-surface border border-border-base rounded-xl p-lg flex flex-col md:flex-row gap-md items-center justify-between">
+<div class="w-full md:w-1/2 relative">
+<span class="material-symbols-outlined absolute left-md top-1/2 -translate-y-1/2 text-text-muted">search</span>
+<input class="w-full h-12 pl-[44px] pr-md rounded-lg border border-outline-variant bg-surface-bright focus:border-primary focus:ring-1 focus:ring-primary outline-none font-body text-body text-text-primary placeholder:text-text-muted" placeholder="Search by admin name or action..." type="text"/>
+</div>
+<div class="w-full md:w-auto flex space-x-sm overflow-x-auto pb-2 md:pb-0 hide-scrollbar">
+<button class="px-md h-10 rounded-full border border-border-base bg-surface-container-low text-text-primary font-button text-small whitespace-nowrap hover:bg-surface-container transition-colors">
+                            All Events
+                        </button>
+<button class="px-md h-10 rounded-full border border-border-base bg-surface text-text-secondary font-button text-small whitespace-nowrap hover:bg-surface-container-low transition-colors">
+                            Member Update
+                        </button>
+<button class="px-md h-10 rounded-full border border-border-base bg-surface text-text-secondary font-button text-small whitespace-nowrap hover:bg-surface-container-low transition-colors">
+                            Gateway Change
+                        </button>
+<button class="px-md h-10 rounded-full border border-border-base bg-surface text-text-secondary font-button text-small whitespace-nowrap hover:bg-surface-container-low transition-colors">
+                            Destructive
+                        </button>
+</div>
+</div>
+<!-- Logs List -->
+<div class="bg-surface border border-border-base rounded-xl overflow-hidden">
+<!-- Log Item 1: Security/Gateway -->
+<div class="p-lg border-b border-border-base hover:bg-surface-bright transition-colors flex flex-col md:flex-row md:items-start gap-md">
+<div class="flex items-center space-x-md md:w-1/4">
+<div class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-text-secondary">person</span>
+</div>
+<div>
+<p class="font-button text-button text-text-primary">Rahul Sharma</p>
+<p class="font-small text-small text-text-muted">ID: ADM-092</p>
+</div>
+</div>
+<div class="flex-1 space-y-xs">
+<div class="flex items-center space-x-sm">
+<span class="px-2 py-1 bg-warning-bg text-warning rounded text-[10px] font-bold uppercase tracking-wider">Gateway Config</span>
+<p class="font-body text-body text-text-primary font-medium">Updated gateway credentials for Razorpay</p>
+</div>
+<p class="font-small text-small text-text-secondary">Changed API Key and Webhook Secret for environment: Production.</p>
+<a class="inline-block mt-xs font-small text-small text-info hover:underline" href="#">View Details</a>
+</div>
+<div class="md:text-right shrink-0 mt-sm md:mt-0">
+<p class="font-small text-small text-text-primary">2 hours ago</p>
+<p class="font-small text-small text-text-muted">IP: 192.168.1.45</p>
+</div>
+</div>
+<!-- Log Item 2: Destructive/Error -->
+<div class="p-lg border-b border-border-base hover:bg-surface-bright transition-colors flex flex-col md:flex-row md:items-start gap-md">
+<div class="flex items-center space-x-md md:w-1/4">
+<div class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-text-secondary">person</span>
+</div>
+<div>
+<p class="font-button text-button text-text-primary">Priya Patel</p>
+<p class="font-small text-small text-text-muted">ID: ADM-104</p>
+</div>
+</div>
+<div class="flex-1 space-y-xs">
+<div class="flex items-center space-x-sm">
+<span class="px-2 py-1 bg-error-bg text-error rounded text-[10px] font-bold uppercase tracking-wider">Deletion</span>
+<p class="font-body text-body text-text-primary font-medium">Deleted Member Profile</p>
+</div>
+<p class="font-small text-small text-text-secondary">Removed member ID: MEM-8834. Action required confirmation prompt.</p>
+</div>
+<div class="md:text-right shrink-0 mt-sm md:mt-0">
+<p class="font-small text-small text-text-primary">Oct 24, 10:30 AM</p>
+<p class="font-small text-small text-text-muted">IP: 10.0.0.12</p>
+</div>
+</div>
+<!-- Log Item 3: Success/Import -->
+<div class="p-lg hover:bg-surface-bright transition-colors flex flex-col md:flex-row md:items-start gap-md">
+<div class="flex items-center space-x-md md:w-1/4">
+<div class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-text-secondary">person</span>
+</div>
+<div>
+<p class="font-button text-button text-text-primary">System Admin</p>
+<p class="font-small text-small text-text-muted">ID: SYS-001</p>
+</div>
+</div>
+<div class="flex-1 space-y-xs">
+<div class="flex items-center space-x-sm">
+<span class="px-2 py-1 bg-success-bg text-success rounded text-[10px] font-bold uppercase tracking-wider">Bulk Import</span>
+<p class="font-body text-body text-text-primary font-medium">Completed Monthly Dues Import</p>
+</div>
+<p class="font-small text-small text-text-secondary">Processed 450 records successfully. 2 skipped due to missing data.</p>
+<a class="inline-block mt-xs font-small text-small text-info hover:underline" href="#">View Import Log</a>
+</div>
+<div class="md:text-right shrink-0 mt-sm md:mt-0">
+<p class="font-small text-small text-text-primary">Oct 23, 09:15 PM</p>
+<p class="font-small text-small text-text-muted">Cron Job</p>
+</div>
+</div>
+</div>
+<div class="flex justify-center mt-lg">
+<button class="px-lg h-10 rounded-lg border border-border-base bg-surface text-text-primary font-button text-button hover:bg-surface-container-low transition-colors">
+                        Load More Logs
+                    </button>
+</div>
+</div>
+</div>
+</main>
+<!-- Mobile BottomNavBar -->
+<nav class="md:hidden fixed bottom-0 w-full z-50 flex justify-around items-center h-[64px] bg-surface border-t border-border-base pb-safe">
+<a class="flex flex-col items-center justify-center text-text-secondary px-4 py-1" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-small text-small mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-text-secondary px-4 py-1" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-small text-small mt-1">Members</span>
+</a>
+<a class="flex flex-col items-center justify-center text-text-secondary px-4 py-1" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-small text-small mt-1">Payments</span>
+</a>
+<a class="flex flex-col items-center justify-center text-text-secondary px-4 py-1" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-small text-small mt-1">Profile</span>
+</a>
+</nav>
+</body></html>

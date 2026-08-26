@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Member Dashboard - MahalFlow</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-fixed": "#d9e5e2",
+                        "surface-container-high": "#e6e9e6",
+                        "surface-container-low": "#f1f4f1",
+                        "primary": "#005244",
+                        "surface-variant": "#e0e3e0",
+                        "on-secondary-fixed": "#00201a",
+                        "error": "#C93B3B",
+                        "surface-tint": "#116a5a",
+                        "secondary": "#2d685b",
+                        "inverse-surface": "#2d3130",
+                        "on-primary-fixed": "#00201a",
+                        "on-tertiary-fixed": "#131e1c",
+                        "warning-bg": "#FFF5DC",
+                        "on-secondary-container": "#346e61",
+                        "surface-container-highest": "#e0e3e0",
+                        "secondary-container": "#b2efde",
+                        "error-container": "#ffdad6",
+                        "inverse-primary": "#87d5c0",
+                        "text-primary": "#17201D",
+                        "info-bg": "#EAF3FB",
+                        "on-error-container": "#93000a",
+                        "inverse-on-surface": "#eef1ee",
+                        "success-bg": "#EAF7EF",
+                        "background": "#f7faf7",
+                        "surface-bright": "#f7faf7",
+                        "success": "#16834B",
+                        "tertiary-container": "#576260",
+                        "on-primary-container": "#9bead4",
+                        "on-tertiary": "#ffffff",
+                        "surface": "#FFFFFF",
+                        "on-primary-fixed-variant": "#005143",
+                        "on-secondary": "#ffffff",
+                        "border-base": "#E3E8E6",
+                        "warning": "#B77900",
+                        "primary-container": "#146c5b",
+                        "error-bg": "#FDECEC",
+                        "tertiary-fixed-dim": "#bdc9c6",
+                        "primary-fixed": "#a3f2dc",
+                        "on-tertiary-fixed-variant": "#3e4947",
+                        "text-secondary": "#5E6864",
+                        "on-primary": "#ffffff",
+                        "primary-fixed-dim": "#87d5c0",
+                        "info": "#3478B8",
+                        "on-secondary-fixed-variant": "#0f5044",
+                        "surface-dim": "#d7dbd8",
+                        "on-surface": "#181c1b",
+                        "on-error": "#ffffff",
+                        "outline-variant": "#bec9c4",
+                        "on-tertiary-container": "#d1ddda",
+                        "secondary-fixed": "#b2efde",
+                        "on-surface-variant": "#3f4945",
+                        "bg-app": "#F7F9F8",
+                        "surface-container": "#ebefec",
+                        "outline": "#6f7975",
+                        "secondary-fixed-dim": "#97d2c2",
+                        "surface-container-lowest": "#ffffff",
+                        "tertiary": "#3f4a48",
+                        "text-muted": "#8A9390",
+                        "on-background": "#181c1b"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "margin-tablet": "24px",
+                        "xs": "4px",
+                        "xl": "32px",
+                        "sm": "8px",
+                        "margin-mobile": "16px",
+                        "xxl": "48px",
+                        "gutter": "16px",
+                        "margin-desktop": "32px",
+                        "lg": "24px",
+                        "md": "16px"
+                    },
+                    "fontFamily": {
+                        "amount-lg": ["Inter"],
+                        "display": ["Inter"],
+                        "card-title": ["Inter"],
+                        "small": ["Inter"],
+                        "button": ["Inter"],
+                        "section-title": ["Inter"],
+                        "body": ["Inter"],
+                        "page-title": ["Inter"]
+                    },
+                    "fontSize": {
+                        "amount-lg": ["28px", { "lineHeight": "36px", "fontWeight": "700" }],
+                        "display": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "card-title": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "small": ["12px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "button": ["14px", { "lineHeight": "20px", "fontWeight": "600" }],
+                        "section-title": ["18px", { "lineHeight": "26px", "fontWeight": "600" }],
+                        "body": ["14px", { "lineHeight": "22px", "fontWeight": "400" }],
+                        "page-title": ["24px", { "lineHeight": "32px", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { background-color: theme('colors.bg-app'); color: theme('colors.text-primary'); font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .material-symbols-outlined.filled { font-variation-settings: 'FILL' 1; }
+        .glass-card { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); border: 1px solid theme('colors.border-base'); }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom, 16px); }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col pt-16 pb-24 md:pb-0">
+<!-- TopAppBar (Mobile) -->
+<header class="fixed top-0 w-full z-50 bg-surface dark:bg-on-background border-b border-border-base dark:border-outline-variant flat no shadows transition-colors duration-200 md:hidden">
+<div class="flex justify-between items-center px-margin-mobile h-16 w-full max-w-screen-xl mx-auto">
+<div class="flex items-center gap-sm">
+<img class="w-8 h-8 rounded-full object-cover" data-alt="A small, professional profile avatar of a man with a neat beard, wearing a light-colored collared shirt against a neutral background. The lighting is soft and bright, creating a clean, modern look suitable for a trusted fintech dashboard. The overall aesthetic is calm, clear, and reassuring." src="https://lh3.googleusercontent.com/aida-public/AB6AXuABkj8cpjziQELLfOYmi9a-fNZvpmNC32jmcj7cK9I4HPESFCmvsX1flkhBeKlZoSu9vlXfPNonY-DmBO3KR8yWvYAl85phuBWAyJkKJx9Fw2MUZ7e1CioXOFrwCiCa5hekjaU8tWuG_qWvAmFMrVB5-pgSW0AfN3DEOzMZtNuHP7AnNvFrnrJJiLgbW5_xYk1YodaeS9ULSG0iQId-ipcRQrVLrlshW2W8NfNijPr2AWqGPGQJv697"/>
+</div>
+<h1 class="font-page-title text-page-title text-primary dark:text-primary-fixed font-bold tracking-tight">MahalFlow</h1>
+<button class="text-text-secondary dark:text-text-muted hover:bg-surface-variant/50 dark:hover:bg-surface-variant/10 rounded-full p-2 transition-colors">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+</button>
+</div>
+</header>
+<!-- Top Navigation (Desktop) -->
+<header class="fixed top-0 w-full z-50 bg-surface dark:bg-on-background border-b border-border-base dark:border-outline-variant hidden md:flex">
+<div class="flex justify-between items-center px-margin-desktop h-16 w-full max-w-screen-xl mx-auto">
+<div class="flex items-center gap-lg">
+<h1 class="font-page-title text-page-title text-primary dark:text-primary-fixed font-extrabold tracking-tight">MahalFlow</h1>
+<nav class="flex gap-lg h-full">
+<a class="flex items-center h-full border-b-2 border-primary text-primary font-semibold px-2" href="#">Home</a>
+<a class="flex items-center h-full border-b-2 border-transparent text-text-secondary hover:text-primary px-2 transition-colors" href="#">Payments</a>
+<a class="flex items-center h-full border-b-2 border-transparent text-text-secondary hover:text-primary px-2 transition-colors" href="#">Receipts</a>
+<a class="flex items-center h-full border-b-2 border-transparent text-text-secondary hover:text-primary px-2 transition-colors" href="#">Alerts</a>
+</nav>
+</div>
+<div class="flex items-center gap-md">
+<button class="text-text-secondary hover:bg-surface-variant/50 rounded-full p-2">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<div class="flex items-center gap-sm cursor-pointer hover:bg-surface-variant/50 p-2 rounded-lg transition-colors">
+<img class="w-8 h-8 rounded-full object-cover" data-alt="A small, professional profile avatar of a man with a neat beard, wearing a light-colored collared shirt against a neutral background. The lighting is soft and bright, creating a clean, modern look suitable for a trusted fintech dashboard. The overall aesthetic is calm, clear, and reassuring." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCNJX_FD-zc9OPEY5UZ52SZo87ocDdHGQp2wirr4Z00bS8RBJBfRkRTqzFMZndar6m1idDeVUhxXpFIbfbX6d39X7x0uPDtPzS3ev8tVk5hebdsHnKhCePpfxl3fjxA8bE3M7sSTQGOXxjFao0cz_vSY-5skIvagLDlqsyxagTOmwwIOjGHTJdvgWxviS3qTQe0mnAK-v4LelFpYJaOMvTCGp324hVLcYl_zymIHOPDpa0SWylp5MS1"/>
+<span class="font-body text-body text-text-primary">Muhammed</span>
+</div>
+</div>
+</div>
+</header>
+<main class="flex-grow w-full max-w-screen-xl mx-auto px-margin-mobile md:px-margin-desktop pt-lg md:pt-xl pb-xxl">
+<!-- Welcome Section -->
+<section class="mb-lg md:mb-xl">
+<h2 class="font-display text-display text-text-primary mb-xs">Assalamu Alaikum, Muhammed</h2>
+<p class="font-body text-body text-text-secondary flex items-center gap-xs">
+<span class="material-symbols-outlined text-sm">mosque</span>
+                Central Juma Masjid Mahal
+            </p>
+</section>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-gutter md:gap-lg">
+<!-- Primary Financial Card (Spans 8 cols on desktop) -->
+<div class="md:col-span-8 bg-surface rounded-xl border border-border-base p-lg shadow-sm flex flex-col justify-between">
+<div>
+<div class="flex justify-between items-start mb-md">
+<h3 class="font-card-title text-card-title text-text-secondary">Outstanding Dues</h3>
+<span class="bg-warning-bg text-warning font-small text-small px-2 py-1 rounded-full font-semibold">Action Required</span>
+</div>
+<div class="flex items-baseline gap-sm mb-xs">
+<span class="font-amount-lg text-amount-lg text-error">₹1,500</span>
+</div>
+<p class="font-body text-body text-text-secondary mb-lg">For the past 3 months (Jun, Jul, Aug)</p>
+</div>
+<button class="w-full md:w-auto self-start bg-primary-container text-on-primary font-button text-button h-12 px-xl rounded-lg hover:bg-primary transition-colors flex items-center justify-center gap-sm">
+                    Pay Dues Now
+                    <span class="material-symbols-outlined" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+<!-- Recent Activity Card (Spans 4 cols on desktop) -->
+<div class="md:col-span-4 bg-surface rounded-xl border border-border-base p-lg shadow-sm flex flex-col justify-between h-full">
+<h3 class="font-card-title text-card-title text-text-secondary mb-md">Latest Payment</h3>
+<div class="flex flex-col gap-sm">
+<div class="flex justify-between items-center">
+<span class="font-section-title text-section-title text-text-primary">₹500</span>
+<span class="bg-success-bg text-success font-small text-small px-2 py-1 rounded-full font-semibold flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">check_circle</span> Paid
+                        </span>
+</div>
+<p class="font-body text-body text-text-secondary">August 2026 Contribution</p>
+</div>
+<div class="mt-auto pt-lg border-t border-border-base flex justify-between items-center">
+<span class="font-small text-small text-text-muted">Paid on Aug 15, 2026</span>
+<button class="text-primary font-button text-button hover:underline flex items-center gap-1">
+                        Receipt <span class="material-symbols-outlined text-[16px]">receipt_long</span>
+</button>
+</div>
+</div>
+<!-- Quick Actions / Info (Bottom Row) -->
+<div class="md:col-span-6 bg-surface rounded-xl border border-border-base p-md flex items-center gap-md hover:bg-surface-container-low transition-colors cursor-pointer">
+<div class="bg-info-bg text-info p-3 rounded-full flex-shrink-0">
+<span class="material-symbols-outlined filled">history</span>
+</div>
+<div>
+<h4 class="font-card-title text-card-title text-text-primary">Payment History</h4>
+<p class="font-small text-small text-text-secondary">View all past contributions and receipts.</p>
+</div>
+<span class="material-symbols-outlined text-text-muted ml-auto">chevron_right</span>
+</div>
+<div class="md:col-span-6 bg-surface rounded-xl border border-border-base p-md flex items-center gap-md hover:bg-surface-container-low transition-colors cursor-pointer">
+<div class="bg-surface-container-high text-primary p-3 rounded-full flex-shrink-0">
+<span class="material-symbols-outlined filled">article</span>
+</div>
+<div>
+<h4 class="font-card-title text-card-title text-text-primary">Mahal Announcements</h4>
+<p class="font-small text-small text-text-secondary">2 unread notices from the committee.</p>
+</div>
+<span class="material-symbols-outlined text-text-muted ml-auto">chevron_right</span>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile) -->
+<nav class="fixed bottom-0 w-full z-50 bg-surface dark:bg-on-background border-t border-border-base dark:border-outline-variant flat no shadows md:hidden">
+<div class="flex justify-around items-center h-16 w-full px-2 pb-safe">
+<a class="flex flex-col items-center justify-center text-primary dark:text-primary-fixed font-semibold active:scale-95 transition-transform duration-150 w-16" href="#">
+<span class="material-symbols-outlined filled mb-1" data-icon="home">home</span>
+<span class="font-small text-small">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-text-secondary dark:text-text-muted hover:bg-surface-container-low dark:hover:bg-surface-container-highest active:scale-95 transition-transform duration-150 w-16 rounded-lg py-1" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="payments">payments</span>
+<span class="font-small text-small">Payments</span>
+</a>
+<a class="flex flex-col items-center justify-center text-text-secondary dark:text-text-muted hover:bg-surface-container-low dark:hover:bg-surface-container-highest active:scale-95 transition-transform duration-150 w-16 rounded-lg py-1" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="receipt_long">receipt_long</span>
+<span class="font-small text-small">Receipts</span>
+</a>
+<a class="flex flex-col items-center justify-center text-text-secondary dark:text-text-muted hover:bg-surface-container-low dark:hover:bg-surface-container-highest active:scale-95 transition-transform duration-150 w-16 rounded-lg py-1 relative" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="notifications">notifications</span>
+<span class="absolute top-1 right-3 w-2 h-2 bg-error rounded-full"></span>
+<span class="font-small text-small">Alerts</span>
+</a>
+<a class="flex flex-col items-center justify-center text-text-secondary dark:text-text-muted hover:bg-surface-container-low dark:hover:bg-surface-container-highest active:scale-95 transition-transform duration-150 w-16 rounded-lg py-1" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="person">person</span>
+<span class="font-small text-small">Profile</span>
+</a>
+</div>
+</nav>
+</body></html>

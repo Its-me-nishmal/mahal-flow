@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Edit Member</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary-container": "#576260",
+                    "inverse-primary": "#87d5c0",
+                    "info-bg": "#EAF3FB",
+                    "on-secondary": "#ffffff",
+                    "secondary-container": "#b2efde",
+                    "surface-container-highest": "#e0e3e0",
+                    "surface-bright": "#f7faf7",
+                    "inverse-on-surface": "#eef1ee",
+                    "tertiary-fixed-dim": "#bdc9c6",
+                    "surface-tint": "#116a5a",
+                    "surface-container": "#ebefec",
+                    "on-secondary-container": "#346e61",
+                    "warning": "#B77900",
+                    "text-muted": "#8A9390",
+                    "on-primary-fixed": "#00201a",
+                    "tertiary-fixed": "#d9e5e2",
+                    "text-primary": "#17201D",
+                    "secondary-fixed": "#b2efde",
+                    "on-tertiary-container": "#d1ddda",
+                    "primary-fixed": "#a3f2dc",
+                    "surface-container-low": "#f1f4f1",
+                    "primary-fixed-dim": "#87d5c0",
+                    "info": "#3478B8",
+                    "on-surface": "#181c1b",
+                    "surface-dim": "#d7dbd8",
+                    "outline": "#6f7975",
+                    "on-primary-fixed-variant": "#005143",
+                    "on-primary": "#ffffff",
+                    "success-bg": "#EAF7EF",
+                    "error": "#C93B3B",
+                    "secondary-fixed-dim": "#97d2c2",
+                    "on-background": "#181c1b",
+                    "text-secondary": "#5E6864",
+                    "on-surface-variant": "#3f4945",
+                    "background": "#f7faf7",
+                    "tertiary": "#3f4a48",
+                    "surface-container-high": "#e6e9e6",
+                    "on-secondary-fixed-variant": "#0f5044",
+                    "warning-bg": "#FFF5DC",
+                    "on-tertiary-fixed": "#131e1c",
+                    "on-secondary-fixed": "#00201a",
+                    "on-error-container": "#93000a",
+                    "error-bg": "#FDECEC",
+                    "on-tertiary": "#ffffff",
+                    "inverse-surface": "#2d3130",
+                    "surface-variant": "#e0e3e0",
+                    "surface": "#FFFFFF",
+                    "border-base": "#E3E8E6",
+                    "primary": "#005244",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary": "#2d685b",
+                    "bg-app": "#F7F9F8",
+                    "on-error": "#ffffff",
+                    "primary-container": "#146c5b",
+                    "outline-variant": "#bec9c4",
+                    "on-primary-container": "#9bead4",
+                    "error-container": "#ffdad6",
+                    "on-tertiary-fixed-variant": "#3e4947",
+                    "success": "#16834B"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px",
+                    "card": "12px",
+                    "input": "10px"
+            },
+            "spacing": {
+                    "xxl": "48px",
+                    "gutter": "16px",
+                    "sm": "8px",
+                    "margin-desktop": "32px",
+                    "lg": "24px",
+                    "xl": "32px",
+                    "md": "16px",
+                    "xs": "4px",
+                    "margin-mobile": "16px",
+                    "margin-tablet": "24px"
+            },
+            "fontFamily": {
+                    "page-title": ["Inter"],
+                    "section-title": ["Inter"],
+                    "button": ["Inter"],
+                    "amount-lg": ["Inter"],
+                    "display": ["Inter"],
+                    "card-title": ["Inter"],
+                    "body": ["Inter"],
+                    "small": ["Inter"]
+            },
+            "fontSize": {
+                    "page-title": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                    "section-title": ["18px", {"lineHeight": "26px", "fontWeight": "600"}],
+                    "button": ["14px", {"lineHeight": "20px", "fontWeight": "600"}],
+                    "amount-lg": ["28px", {"lineHeight": "36px", "fontWeight": "700"}],
+                    "display": ["32px", {"lineHeight": "40px", "fontWeight": "700"}],
+                    "card-title": ["16px", {"lineHeight": "24px", "fontWeight": "600"}],
+                    "body": ["14px", {"lineHeight": "22px", "fontWeight": "400"}],
+                    "small": ["12px", {"lineHeight": "18px", "fontWeight": "400"}]
+            }
+          },
+        }
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-app text-on-surface min-h-screen flex flex-col font-body antialiased pb-24 md:pb-0">
+<!-- TopAppBar -->
+<header class="bg-surface dark:bg-surface-dim text-primary dark:text-inverse-primary fixed top-0 w-full z-50 border-b border-border-base dark:border-outline-variant flat no shadows">
+<div class="flex items-center justify-between px-margin-mobile md:px-margin-desktop h-14 w-full">
+<button class="text-on-surface-variant dark:text-outline hover:bg-surface-container-low dark:hover:bg-tertiary-container transition-colors active:scale-95 duration-150 p-2 rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
+</button>
+<h1 class="font-page-title text-page-title text-primary dark:text-inverse-primary">Edit Member</h1>
+<button class="text-on-surface-variant dark:text-outline hover:bg-surface-container-low dark:hover:bg-tertiary-container transition-colors active:scale-95 duration-150 p-2 rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+</header>
+<div class="flex flex-1 pt-14 md:pl-72 h-full">
+<!-- NavigationDrawer (Hidden on Mobile) -->
+<nav class="bg-surface dark:bg-surface-dim hidden md:flex flex-col h-screen sticky top-0 p-md border-r border-border-base dark:border-outline-variant flat no shadows fixed h-full w-72 z-40 top-0 left-0">
+<div class="flex items-center justify-start gap-4 mb-xl mt-6 px-sm">
+<div class="w-12 h-12 rounded-full bg-surface-container-high overflow-hidden shrink-0 flex items-center justify-center">
+<span class="material-symbols-outlined text-outline">person</span>
+</div>
+<div>
+<h2 class="font-section-title text-section-title text-primary">Admin User</h2>
+<p class="font-small text-small text-text-secondary">MahalFlow Manager</p>
+<p class="font-small text-small text-text-muted mt-0.5">v1.0.2</p>
+</div>
+</div>
+<ul class="flex flex-col gap-2 flex-1 overflow-y-auto">
+<li>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:bg-surface-container-high transition-all active:opacity-80 font-body text-body" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+                        Dashboard
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 bg-secondary-container text-on-secondary-container font-semibold rounded-lg hover:bg-surface-container-high transition-all active:opacity-80 font-body text-body" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+                        Members
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:bg-surface-container-high transition-all active:opacity-80 font-body text-body" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+                        Payments
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:bg-surface-container-high transition-all active:opacity-80 font-body text-body" href="#">
+<span class="material-symbols-outlined" data-icon="receipt_long">receipt_long</span>
+                        Receipts
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:bg-surface-container-high transition-all active:opacity-80 font-body text-body" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+                        Settings
+                    </a>
+</li>
+</ul>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 w-full max-w-3xl mx-auto px-margin-mobile md:px-margin-desktop py-lg">
+<form class="flex flex-col gap-xl pb-24 md:pb-8">
+<!-- Personal Information Card -->
+<section class="bg-surface rounded-card border border-border-base p-md md:p-lg flex flex-col gap-gutter">
+<h2 class="font-section-title text-section-title text-primary mb-2">Personal Information</h2>
+<div class="flex flex-col gap-2">
+<label class="font-body text-body font-medium text-on-surface" for="fullName">Full Name</label>
+<input class="h-12 px-4 rounded-input border border-border-base bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all font-body text-body" id="fullName" type="text" value="Aisha Rahman"/>
+</div>
+<div class="flex flex-col gap-2">
+<label class="font-body text-body font-medium text-on-surface" for="mobile">Mobile Number</label>
+<input class="h-12 px-4 rounded-input border border-border-base bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all font-body text-body" id="mobile" type="tel" value="+91 98765 43210"/>
+</div>
+<div class="flex flex-col gap-2">
+<label class="font-body text-body font-medium text-on-surface" for="email">Email Address</label>
+<input class="h-12 px-4 rounded-input border border-border-base bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all font-body text-body" id="email" type="email" value="aisha.r@example.com"/>
+</div>
+<div class="flex flex-col gap-2">
+<label class="font-body text-body font-medium text-on-surface" for="address">Home Address</label>
+<textarea class="px-4 py-3 rounded-input border border-border-base bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all font-body text-body resize-none" id="address" rows="3">12A, Crescent Apartment, Jayanagar 4th Block, Bangalore 560011</textarea>
+</div>
+</section>
+<!-- Membership Details Card -->
+<section class="bg-surface rounded-card border border-border-base p-md md:p-lg flex flex-col gap-gutter">
+<h2 class="font-section-title text-section-title text-primary mb-2">Membership Details</h2>
+<div class="flex flex-col gap-2">
+<label class="font-body text-body font-medium text-on-surface" for="memberId">Member ID</label>
+<input class="h-12 px-4 rounded-input border border-surface-variant bg-surface-container-low text-text-muted font-body text-body cursor-not-allowed" id="memberId" readonly="" type="text" value="MF-2023-084"/>
+</div>
+<div class="flex flex-col gap-2">
+<label class="font-body text-body font-medium text-on-surface" for="dues">Monthly Dues Amount (₹)</label>
+<div class="relative">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 font-body text-body text-text-secondary">₹</span>
+<input class="h-12 pl-10 pr-4 w-full rounded-input border border-border-base bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all font-body text-body" id="dues" type="number" value="1500"/>
+</div>
+</div>
+<div class="flex flex-col gap-2">
+<label class="font-body text-body font-medium text-on-surface" for="status">Membership Status</label>
+<div class="relative">
+<select class="h-12 px-4 w-full rounded-input border border-border-base bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all font-body text-body appearance-none" id="status">
+<option selected="" value="active">Active</option>
+<option value="pending">Pending</option>
+<option value="suspended">Suspended</option>
+</select>
+<span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary">expand_more</span>
+</div>
+</div>
+</section>
+<!-- Actions -->
+<div class="flex flex-col sm:flex-row-reverse gap-4 pt-sm">
+<button class="bg-primary-container text-on-secondary w-full sm:w-auto h-12 px-8 rounded-full font-button text-button hover:bg-surface-tint transition-colors shadow-sm active:scale-95 duration-150" type="button">
+                        Save Changes
+                    </button>
+<button class="bg-surface text-primary border border-primary w-full sm:w-auto h-12 px-8 rounded-full font-button text-button hover:bg-surface-container-low transition-colors active:scale-95 duration-150" type="button">
+                        Discard
+                    </button>
+</div>
+</form>
+</main>
+</div>
+<!-- BottomNavBar (Hidden on Desktop, Visible on Mobile) -->
+<!-- Suppressed based on semantic mapping rules (Edit Member is a focused task/sub-page) -->
+</body></html>

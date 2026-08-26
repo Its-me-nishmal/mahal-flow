@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+
+<html class="h-full" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Setup AutoPay | MahalFlow</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts: Inter -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "secondary": "#2d685b",
+                    "on-error-container": "#93000a",
+                    "text-muted": "#8A9390",
+                    "secondary-container": "#b2efde",
+                    "primary": "#005244",
+                    "error-bg": "#FDECEC",
+                    "outline": "#6f7975",
+                    "on-primary-fixed": "#00201a",
+                    "on-secondary-container": "#346e61",
+                    "on-background": "#181c1b",
+                    "on-surface-variant": "#3f4945",
+                    "primary-container": "#146c5b",
+                    "on-error": "#ffffff",
+                    "inverse-on-surface": "#eef1ee",
+                    "on-primary-fixed-variant": "#005143",
+                    "surface-dim": "#d7dbd8",
+                    "outline-variant": "#bec9c4",
+                    "surface-container-low": "#f1f4f1",
+                    "surface-tint": "#116a5a",
+                    "text-secondary": "#5E6864",
+                    "tertiary-fixed": "#d9e5e2",
+                    "surface-variant": "#e0e3e0",
+                    "on-secondary-fixed": "#00201a",
+                    "inverse-surface": "#2d3130",
+                    "on-tertiary-fixed-variant": "#3e4947",
+                    "on-surface": "#181c1b",
+                    "tertiary": "#3f4a48",
+                    "surface": "#FFFFFF",
+                    "on-tertiary-container": "#d1ddda",
+                    "on-primary-container": "#9bead4",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary-fixed-dim": "#97d2c2",
+                    "info-bg": "#EAF3FB",
+                    "surface-container-highest": "#e0e3e0",
+                    "surface-container": "#ebefec",
+                    "primary-fixed": "#a3f2dc",
+                    "warning-bg": "#FFF5DC",
+                    "on-secondary-fixed-variant": "#0f5044",
+                    "tertiary-fixed-dim": "#bdc9c6",
+                    "info": "#3478B8",
+                    "surface-bright": "#f7faf7",
+                    "primary-fixed-dim": "#87d5c0",
+                    "success": "#16834B",
+                    "on-tertiary": "#ffffff",
+                    "on-secondary": "#ffffff",
+                    "on-tertiary-fixed": "#131e1c",
+                    "on-primary": "#ffffff",
+                    "surface-container-high": "#e6e9e6",
+                    "bg-app": "#F7F9F8",
+                    "secondary-fixed": "#b2efde",
+                    "text-primary": "#17201D",
+                    "tertiary-container": "#576260",
+                    "inverse-primary": "#87d5c0",
+                    "success-bg": "#EAF7EF",
+                    "error": "#C93B3B",
+                    "border-base": "#E3E8E6",
+                    "background": "#f7faf7",
+                    "warning": "#B77900",
+                    "error-container": "#ffdad6"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "margin-tablet": "24px",
+                    "xl": "32px",
+                    "xxl": "48px",
+                    "gutter": "16px",
+                    "md": "16px",
+                    "sm": "8px",
+                    "margin-desktop": "32px",
+                    "lg": "24px",
+                    "xs": "4px",
+                    "margin-mobile": "16px"
+            },
+            "fontFamily": {
+                    "body": [
+                            "Inter"
+                    ],
+                    "button": [
+                            "Inter"
+                    ],
+                    "card-title": [
+                            "Inter"
+                    ],
+                    "display": [
+                            "Inter"
+                    ],
+                    "amount-lg": [
+                            "Inter"
+                    ],
+                    "small": [
+                            "Inter"
+                    ],
+                    "section-title": [
+                            "Inter"
+                    ],
+                    "page-title": [
+                            "Inter"
+                    ]
+            },
+            "fontSize": {
+                    "body": [
+                            "14px",
+                            {
+                                    "lineHeight": "22px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "button": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "card-title": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "display": [
+                            "32px",
+                            {
+                                    "lineHeight": "40px",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "amount-lg": [
+                            "28px",
+                            {
+                                    "lineHeight": "36px",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "small": [
+                            "12px",
+                            {
+                                    "lineHeight": "18px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "section-title": [
+                            "18px",
+                            {
+                                    "lineHeight": "26px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "page-title": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "fontWeight": "700"
+                            }
+                    ]
+            }
+    },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.fill {
+            font-variation-settings: 'FILL' 1;
+        }
+        /* Hide scrollbar for clean UI */
+        ::-webkit-scrollbar {
+            width: 0px;
+            background: transparent;
+        }
+    </style>
+</head>
+<body class="bg-bg-app text-text-primary font-body flex flex-col h-full min-h-screen">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-surface dark:bg-on-background border-b border-border-base dark:border-outline-variant flat no shadows transition-colors duration-200">
+<div class="flex justify-between items-center px-margin-mobile h-16 w-full max-w-screen-xl mx-auto">
+<div class="flex items-center gap-3">
+<button class="hover:bg-surface-variant/50 dark:hover:bg-surface-variant/10 p-2 rounded-full flex items-center justify-center text-text-secondary dark:text-text-muted">
+<span class="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
+</button>
+<div class="font-page-title text-page-title text-primary dark:text-primary-fixed">MahalFlow</div>
+</div>
+<button class="hover:bg-surface-variant/50 dark:hover:bg-surface-variant/10 p-2 rounded-full flex items-center justify-center text-primary dark:text-primary-fixed">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+</button>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-grow pt-24 pb-24 px-margin-mobile md:px-margin-desktop max-w-screen-md mx-auto w-full">
+<!-- Header Section -->
+<div class="mb-lg">
+<h1 class="font-display text-display text-text-primary mb-xs">Setup AutoPay</h1>
+<p class="font-body text-body text-text-secondary">Never miss a monthly payment again.</p>
+</div>
+<!-- Summary Card -->
+<div class="bg-surface rounded-xl border border-border-base p-md mb-lg shadow-[0_2px_8px_rgba(23,32,29,0.08)]">
+<div class="flex justify-between items-start mb-md">
+<div>
+<h2 class="font-card-title text-card-title text-text-primary">Monthly Jamaat Due</h2>
+<p class="font-small text-small text-text-secondary">Recurring Billing</p>
+</div>
+<div class="bg-info-bg text-info font-small text-small px-2 py-1 rounded-DEFAULT border border-info/20">
+                    Monthly
+                </div>
+</div>
+<div class="flex items-baseline gap-2 mb-sm">
+<span class="font-amount-lg text-amount-lg text-text-primary">₹500</span>
+<span class="font-body text-body text-text-secondary">/ month</span>
+</div>
+<div class="flex items-center gap-2 text-text-secondary bg-surface-container-low p-3 rounded-lg mt-md">
+<span class="material-symbols-outlined text-[20px]" data-icon="calendar_month">calendar_month</span>
+<span class="font-small text-small">Next billing date: <strong>01 Nov 2023</strong></span>
+</div>
+</div>
+<!-- Payment Method Selection -->
+<div class="mb-lg">
+<h3 class="font-section-title text-section-title text-text-primary mb-md">Select Payment Method</h3>
+<div class="space-y-3">
+<!-- UPI Option (Selected) -->
+<label class="block relative cursor-pointer group">
+<input checked="" class="peer sr-only" name="payment_method" type="radio" value="upi"/>
+<div class="bg-surface border border-border-base rounded-xl p-md flex items-center gap-md peer-checked:border-primary peer-checked:bg-surface-bright transition-colors">
+<div class="w-10 h-10 bg-surface-container-low rounded-lg flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="qr_code_scanner">qr_code_scanner</span>
+</div>
+<div class="flex-grow">
+<div class="font-card-title text-card-title text-text-primary">UPI AutoPay</div>
+<div class="font-small text-small text-text-secondary">GPay, PhonePe, Paytm</div>
+</div>
+<div class="w-5 h-5 rounded-full border-2 border-border-base flex items-center justify-center peer-checked:border-primary">
+<div class="w-2.5 h-2.5 rounded-full bg-primary opacity-0 peer-checked:opacity-100"></div>
+</div>
+</div>
+</label>
+<!-- Debit Card Option -->
+<label class="block relative cursor-pointer group">
+<input class="peer sr-only" name="payment_method" type="radio" value="card"/>
+<div class="bg-surface border border-border-base rounded-xl p-md flex items-center gap-md peer-checked:border-primary peer-checked:bg-surface-bright transition-colors">
+<div class="w-10 h-10 bg-surface-container-low rounded-lg flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="credit_card">credit_card</span>
+</div>
+<div class="flex-grow">
+<div class="font-card-title text-card-title text-text-primary">Debit / Credit Card</div>
+<div class="font-small text-small text-text-secondary">Visa, Mastercard, RuPay</div>
+</div>
+<div class="w-5 h-5 rounded-full border-2 border-border-base flex items-center justify-center peer-checked:border-primary">
+<!-- Selected dot (hidden by default) -->
+</div>
+</div>
+</label>
+<!-- Net Banking Option -->
+<label class="block relative cursor-pointer group">
+<input class="peer sr-only" name="payment_method" type="radio" value="netbanking"/>
+<div class="bg-surface border border-border-base rounded-xl p-md flex items-center gap-md peer-checked:border-primary peer-checked:bg-surface-bright transition-colors">
+<div class="w-10 h-10 bg-surface-container-low rounded-lg flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="account_balance">account_balance</span>
+</div>
+<div class="flex-grow">
+<div class="font-card-title text-card-title text-text-primary">Net Banking (e-Mandate)</div>
+<div class="font-small text-small text-text-secondary">All major banks supported</div>
+</div>
+<div class="w-5 h-5 rounded-full border-2 border-border-base flex items-center justify-center peer-checked:border-primary">
+<!-- Selected dot (hidden by default) -->
+</div>
+</div>
+</label>
+</div>
+</div>
+<!-- Consent & Terms -->
+<div class="mb-lg bg-surface-container-low p-md rounded-xl">
+<label class="flex items-start gap-3 cursor-pointer">
+<input checked="" class="mt-1 w-5 h-5 rounded text-primary border-outline focus:ring-primary focus:ring-offset-0 bg-surface" type="checkbox"/>
+<div class="font-small text-small text-text-secondary">
+                    I authorize MahalFlow to deduct ₹500 automatically from my selected payment method on the 1st of every month. I understand I can cancel this mandate anytime from settings.
+                </div>
+</label>
+</div>
+<!-- Action Area -->
+<div class="mt-auto pt-md">
+<button class="w-full bg-primary-container text-on-primary h-[48px] rounded-lg font-button text-button flex items-center justify-center gap-2 hover:bg-primary transition-colors active:scale-[0.98]">
+<span class="material-symbols-outlined text-[20px]" data-icon="lock">lock</span>
+                Confirm &amp; Set Up AutoPay
+            </button>
+<div class="text-center mt-sm">
+<span class="font-small text-small text-text-secondary flex items-center justify-center gap-1">
+<span class="material-symbols-outlined text-[14px]" data-icon="shield">shield</span>
+                    Secured by standard encryption
+                </span>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<!-- Suppressed on transactional/setup screen as per guidelines, but user requested it, so rendering but inactive style for most -->
+<nav class="fixed bottom-0 w-full z-50 bg-surface dark:bg-on-background border-t border-border-base dark:border-outline-variant flat no shadows">
+<div class="flex justify-around items-center h-16 w-full px-2 pb-safe">
+<a class="flex flex-col items-center justify-center text-text-secondary dark:text-text-muted hover:bg-surface-container-low dark:hover:bg-surface-container-highest active:scale-95 transition-transform duration-150 w-full h-full rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-small text-small mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary dark:text-primary-fixed font-semibold hover:bg-surface-container-low dark:hover:bg-surface-container-highest active:scale-95 transition-transform duration-150 w-full h-full rounded-lg" href="#">
+<span class="material-symbols-outlined fill" data-icon="payments" data-weight="fill">payments</span>
+<span class="font-small text-small mt-1">Payments</span>
+</a>
+<a class="flex flex-col items-center justify-center text-text-secondary dark:text-text-muted hover:bg-surface-container-low dark:hover:bg-surface-container-highest active:scale-95 transition-transform duration-150 w-full h-full rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="receipt_long">receipt_long</span>
+<span class="font-small text-small mt-1">Receipts</span>
+</a>
+<a class="flex flex-col items-center justify-center text-text-secondary dark:text-text-muted hover:bg-surface-container-low dark:hover:bg-surface-container-highest active:scale-95 transition-transform duration-150 w-full h-full rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="font-small text-small mt-1">Alerts</span>
+</a>
+<a class="flex flex-col items-center justify-center text-text-secondary dark:text-text-muted hover:bg-surface-container-low dark:hover:bg-surface-container-highest active:scale-95 transition-transform duration-150 w-full h-full rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-small text-small mt-1">Profile</span>
+</a>
+</div>
+</nav>
+<script>
+        // Simple script to handle radio button visual selection state logic if needed beyond CSS peer classes
+        document.querySelectorAll('input[type="radio"][name="payment_method"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                // The CSS peer-checked classes handle the visual state automatically
+                console.log('Selected payment method:', e.target.value);
+            });
+        });
+    </script>
+</body></html>

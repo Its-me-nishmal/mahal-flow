@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Mahal Admin - Financial Reports</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+                "bg-app": "#F7F9F8",
+                "secondary-container": "#b2efde",
+                "surface-container-lowest": "#ffffff",
+                "on-primary-container": "#9bead4",
+                "on-surface": "#181c1b",
+                "secondary-fixed": "#b2efde",
+                "surface-container": "#ebefec",
+                "surface-bright": "#f7faf7",
+                "on-primary-fixed": "#00201a",
+                "on-surface-variant": "#3f4945",
+                "on-secondary-fixed": "#00201a",
+                "on-secondary-fixed-variant": "#0f5044",
+                "primary-container": "#146c5b",
+                "on-primary": "#ffffff",
+                "text-secondary": "#5E6864",
+                "inverse-primary": "#87d5c0",
+                "outline-variant": "#bec9c4",
+                "error": "#C93B3B",
+                "outline": "#6f7975",
+                "primary": "#146c5b",
+                "warning": "#B77900",
+                "on-error": "#ffffff",
+                "inverse-on-surface": "#eef1ee",
+                "success-bg": "#EAF7EF",
+                "on-tertiary": "#ffffff",
+                "surface": "#FFFFFF",
+                "primary-fixed": "#a3f2dc",
+                "info": "#3478B8",
+                "on-secondary-container": "#346e61",
+                "text-muted": "#8A9390",
+                "inverse-surface": "#2d3130",
+                "on-primary-fixed-variant": "#005143",
+                "surface-tint": "#116a5a",
+                "on-error-container": "#93000a",
+                "on-tertiary-fixed-variant": "#3e4947",
+                "tertiary": "#3f4a48",
+                "surface-dim": "#d7dbd8",
+                "surface-container-low": "#f1f4f1",
+                "surface-container-high": "#e6e9e6",
+                "text-primary": "#17201D",
+                "background": "#f7faf7",
+                "warning-bg": "#FFF5DC",
+                "on-tertiary-container": "#d1ddda",
+                "primary-fixed-dim": "#87d5c0",
+                "error-bg": "#FDECEC",
+                "surface-variant": "#e0e3e0",
+                "on-background": "#181c1b",
+                "info-bg": "#EAF3FB",
+                "on-tertiary-fixed": "#131e1c",
+                "surface-container-highest": "#e0e3e0",
+                "error-container": "#ffdad6",
+                "success": "#16834B",
+                "tertiary-container": "#576260",
+                "tertiary-fixed-dim": "#bdc9c6",
+                "border-base": "#E3E8E6",
+                "secondary-fixed-dim": "#97d2c2",
+                "tertiary-fixed": "#d9e5e2",
+                "on-secondary": "#ffffff",
+                "secondary": "#2d685b"
+        },
+        "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "2xl": "12px",
+                "full": "9999px"
+        },
+        "spacing": {
+                "xxl": "48px",
+                "gutter": "16px",
+                "margin-mobile": "16px",
+                "margin-desktop": "32px",
+                "margin-tablet": "24px",
+                "xl": "32px",
+                "lg": "24px",
+                "sm": "8px",
+                "md": "16px",
+                "xs": "4px"
+        },
+        "fontFamily": {
+                "body": [
+                        "Inter"
+                ],
+                "small": [
+                        "Inter"
+                ],
+                "card-title": [
+                        "Inter"
+                ],
+                "page-title": [
+                        "Inter"
+                ],
+                "display": [
+                        "Inter"
+                ],
+                "button": [
+                        "Inter"
+                ],
+                "amount-lg": [
+                        "Inter"
+                ],
+                "section-title": [
+                        "Inter"
+                ]
+        },
+        "fontSize": {
+                "body": [
+                        "14px",
+                        {
+                                "lineHeight": "22px",
+                                "fontWeight": "400"
+                        }
+                ],
+                "small": [
+                        "12px",
+                        {
+                                "lineHeight": "18px",
+                                "fontWeight": "400"
+                        }
+                ],
+                "card-title": [
+                        "16px",
+                        {
+                                "lineHeight": "24px",
+                                "fontWeight": "600"
+                        }
+                ],
+                "page-title": [
+                        "24px",
+                        {
+                                "lineHeight": "32px",
+                                "fontWeight": "700"
+                        }
+                ],
+                "display": [
+                        "32px",
+                        {
+                                "lineHeight": "40px",
+                                "fontWeight": "700"
+                        }
+                ],
+                "button": [
+                        "14px",
+                        {
+                                "lineHeight": "20px",
+                                "fontWeight": "600"
+                        }
+                ],
+                "amount-lg": [
+                        "28px",
+                        {
+                                "lineHeight": "36px",
+                                "fontWeight": "700"
+                        }
+                ],
+                "section-title": [
+                        "18px",
+                        {
+                                "lineHeight": "26px",
+                                "fontWeight": "600"
+                        }
+                ]
+        }
+},
+    },
+  }
+</script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-bg-app min-h-screen font-body text-text-primary selection:bg-primary-container selection:text-on-primary-container pb-[80px] md:pb-0">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky bg-surface border-b border-border-base z-40">
+<div class="flex justify-between items-center px-margin-mobile md:px-margin-desktop h-14 md:h-16 w-full">
+<div class="flex items-center gap-2 cursor-pointer active:opacity-80 transition-opacity">
+<span class="material-symbols-outlined text-text-primary" data-icon="arrow_back">arrow_back</span>
+<span class="font-section-title text-section-title font-semibold text-text-primary ml-2">Financial Reports</span>
+</div>
+<!-- Desktop Nav (Hidden on Mobile) -->
+<nav class="hidden md:flex items-center gap-6">
+<a class="text-text-secondary hover:bg-surface-container-low transition-colors px-3 py-2 rounded-lg font-button text-button" href="#">Dashboard</a>
+<a class="text-text-secondary hover:bg-surface-container-low transition-colors px-3 py-2 rounded-lg font-button text-button" href="#">Members</a>
+<a class="text-primary bg-surface-container-low px-3 py-2 rounded-lg font-button text-button" href="#">Reports</a>
+<a class="text-text-secondary hover:bg-surface-container-low transition-colors px-3 py-2 rounded-lg font-button text-button" href="#">Settings</a>
+</nav>
+<div class="flex items-center gap-3">
+<div class="hidden md:flex flex-col items-end">
+<span class="font-body text-body font-semibold">Admin Profile</span>
+<span class="font-small text-small text-text-secondary">Administrator</span>
+</div>
+<div class="w-8 h-8 md:w-10 md:h-10 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold cursor-pointer hover:bg-opacity-90 transition-opacity">
+                    AP
+                </div>
+</div>
+</div>
+</header>
+<main class="max-w-7xl mx-auto px-margin-mobile md:px-margin-desktop py-md md:py-xl">
+<!-- Header & Actions -->
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-md md:mb-lg">
+<div class="hidden md:block">
+<h1 class="font-page-title text-page-title">Financial Reports</h1>
+<p class="font-body text-body text-text-secondary mt-1">Filter, view, and export transaction data.</p>
+</div>
+<div class="flex items-center gap-3 w-full md:w-auto">
+<button class="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 h-[44px] md:h-12 border border-outline text-text-primary bg-surface rounded-[10px] font-button text-button hover:bg-surface-container-low transition-colors whitespace-nowrap">
+<span class="material-symbols-outlined text-[18px]" data-icon="picture_as_pdf">picture_as_pdf</span>
+                    Export PDF
+                </button>
+<button class="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 h-[44px] md:h-12 bg-surface text-text-primary border border-outline rounded-[10px] font-button text-button hover:bg-surface-container-low transition-colors whitespace-nowrap">
+<span class="material-symbols-outlined text-[18px]" data-icon="table_view">table_view</span>
+                    Export Excel
+                </button>
+</div>
+</div>
+<!-- Filters Section -->
+<section class="mb-md md:mb-lg">
+<h2 class="font-section-title text-section-title mb-sm md:mb-md md:block">Filter Data</h2>
+<div class="grid grid-cols-1 md:grid-cols-4 gap-md">
+<!-- Date Range -->
+<div class="flex flex-col gap-1">
+<label class="font-small text-small text-text-secondary font-semibold">Date Range</label>
+<div class="relative">
+<select class="w-full h-[44px] pl-3 pr-10 border border-border-base rounded-[10px] bg-surface text-text-primary focus:border-primary focus:ring-1 focus:ring-primary appearance-none cursor-pointer text-body font-body">
+<option>This Month</option>
+<option>Last Month</option>
+<option>This Quarter</option>
+<option>Last Quarter</option>
+<option>Custom Range...</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" data-icon="keyboard_arrow_down">keyboard_arrow_down</span>
+</div>
+</div>
+<!-- Payment Type -->
+<div class="flex flex-col gap-1">
+<label class="font-small text-small text-text-secondary font-semibold">Payment Type</label>
+<div class="relative">
+<select class="w-full h-[44px] pl-3 pr-10 border border-border-base rounded-[10px] bg-surface text-text-primary focus:border-primary focus:ring-1 focus:ring-primary appearance-none cursor-pointer text-body font-body">
+<option>All Types</option>
+<option>Monthly Dues</option>
+<option>Special Contribution</option>
+<option>Donation</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" data-icon="keyboard_arrow_down">keyboard_arrow_down</span>
+</div>
+</div>
+<!-- Payment Status -->
+<div class="flex flex-col gap-1">
+<label class="font-small text-small text-text-secondary font-semibold">Status</label>
+<div class="relative">
+<select class="w-full h-[44px] pl-3 pr-10 border border-border-base rounded-[10px] bg-surface text-text-primary focus:border-primary focus:ring-1 focus:ring-primary appearance-none cursor-pointer text-body font-body">
+<option>All Statuses</option>
+<option>Success</option>
+<option>Pending</option>
+<option>Failed</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" data-icon="keyboard_arrow_down">keyboard_arrow_down</span>
+</div>
+</div>
+<!-- Gateway -->
+<div class="flex flex-col gap-1">
+<label class="font-small text-small text-text-secondary font-semibold">Gateway</label>
+<div class="relative">
+<select class="w-full h-[44px] pl-3 pr-10 border border-border-base rounded-[10px] bg-surface text-text-primary focus:border-primary focus:ring-1 focus:ring-primary appearance-none cursor-pointer text-body font-body">
+<option>All Gateways</option>
+<option>Federal Bank</option>
+<option>Razorpay</option>
+<option>Cash/Manual</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" data-icon="keyboard_arrow_down">keyboard_arrow_down</span>
+</div>
+</div>
+</div>
+<div class="mt-2 flex justify-end">
+<button class="text-primary font-button text-button hover:underline px-2 py-1">Reset Filters</button>
+</div>
+</section>
+<!-- Summary Cards (Bento style) -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-md mb-md md:mb-lg">
+<!-- Total Collected -->
+<div class="bg-surface border border-border-base rounded-2xl p-md flex flex-col justify-between">
+<div class="flex items-center justify-between mb-2">
+<span class="font-card-title text-card-title text-text-secondary font-semibold">Total Collected</span>
+<span class="material-symbols-outlined text-text-secondary" data-icon="trending_up">trending_up</span>
+</div>
+<div>
+<div class="font-amount-lg text-[28px] md:text-[32px] font-bold text-text-primary leading-tight">₹ 4,25,000</div>
+<div class="font-small text-small text-success flex items-center gap-1 mt-1 font-semibold">
+<span class="material-symbols-outlined text-[14px]" data-icon="arrow_upward">arrow_upward</span>
+                        12% vs last month
+                    </div>
+</div>
+</div>
+<!-- Total Pending -->
+<div class="bg-surface border border-border-base rounded-2xl p-md flex flex-col justify-between">
+<div class="flex items-center justify-between mb-2">
+<span class="font-card-title text-card-title text-text-secondary font-semibold">Total Pending</span>
+<span class="material-symbols-outlined text-text-secondary" data-icon="pending_actions">pending_actions</span>
+</div>
+<div>
+<div class="font-amount-lg text-[28px] md:text-[32px] font-bold text-text-primary leading-tight">₹ 85,500</div>
+<div class="font-small text-small text-warning flex items-center gap-1 mt-1 font-semibold">
+<span class="material-symbols-outlined text-[14px]" data-icon="warning">warning</span>
+                        Across 42 members
+                    </div>
+</div>
+</div>
+<!-- Total Transactions -->
+<div class="bg-primary text-on-primary rounded-2xl p-md flex flex-col justify-between relative overflow-hidden">
+<!-- Decorative background elements -->
+<div class="absolute -right-6 -top-6 w-24 h-24 bg-surface opacity-10 rounded-full blur-xl pointer-events-none"></div>
+<div class="absolute -left-4 -bottom-4 w-16 h-16 bg-surface opacity-10 rounded-full blur-lg pointer-events-none"></div>
+<div class="flex items-center justify-between mb-2 relative z-10">
+<span class="font-card-title text-card-title font-semibold opacity-90">Transactions Volume</span>
+<span class="material-symbols-outlined opacity-90" data-icon="receipt_long">receipt_long</span>
+</div>
+<div class="relative z-10">
+<div class="font-amount-lg text-[28px] md:text-[32px] font-bold leading-tight">342</div>
+<div class="font-small text-small opacity-90 mt-1 font-semibold">
+                        In selected period
+                    </div>
+</div>
+</div>
+</div>
+<!-- Transactions List -->
+<section class="bg-surface border border-border-base rounded-2xl overflow-hidden mb-xl md:mb-0">
+<div class="p-md border-b border-border-base flex justify-between items-center bg-surface">
+<h2 class="font-section-title text-section-title font-semibold text-text-primary">Recent Transactions</h2>
+<button class="text-primary font-button text-button hover:underline flex items-center gap-1">
+                    View All
+                    <span class="material-symbols-outlined text-[16px]" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low border-b border-border-base">
+<th class="px-md py-3 font-small text-small text-text-secondary font-semibold uppercase tracking-wider">Member</th>
+<th class="px-md py-3 font-small text-small text-text-secondary font-semibold uppercase tracking-wider">Type / Ref</th>
+<th class="px-md py-3 font-small text-small text-text-secondary font-semibold uppercase tracking-wider">Date</th>
+<th class="px-md py-3 font-small text-small text-text-secondary font-semibold uppercase tracking-wider text-right">Amount</th>
+<th class="px-md py-3 font-small text-small text-text-secondary font-semibold uppercase tracking-wider text-center">Status</th>
+<th class="px-md py-3 font-small text-small text-text-secondary font-semibold uppercase tracking-wider text-right">Action</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-border-base">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-bright transition-colors">
+<td class="px-md py-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-text-primary font-bold text-xs">MA</div>
+<div>
+<div class="font-body text-body font-semibold text-text-primary">Mohammed Ali</div>
+<div class="font-small text-small text-text-muted">MHL-2023-045</div>
+</div>
+</div>
+</td>
+<td class="px-md py-4">
+<div class="font-body text-body text-text-primary">Monthly Dues</div>
+<div class="font-small text-small text-text-muted">Razorpay (tx_987654)</div>
+</td>
+<td class="px-md py-4">
+<div class="font-body text-body text-text-primary">Oct 24, 2023</div>
+<div class="font-small text-small text-text-muted">10:45 AM</div>
+</td>
+<td class="px-md py-4 text-right font-body text-body font-bold text-text-primary">
+                                ₹ 1,500
+                            </td>
+<td class="px-md py-4 text-center">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-success-bg text-success font-small text-[11px] font-semibold uppercase tracking-wide border border-success/20">
+                                    Success
+                                </span>
+</td>
+<td class="px-md py-4 text-right">
+<button class="p-2 text-text-secondary hover:text-primary transition-colors rounded-lg hover:bg-surface-container-low" title="Download Receipt">
+<span class="material-symbols-outlined text-[20px]" data-icon="download">download</span>
+</button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-bright transition-colors">
+<td class="px-md py-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-text-primary font-bold text-xs">SA</div>
+<div>
+<div class="font-body text-body font-semibold text-text-primary">Sayed Ahmed</div>
+<div class="font-small text-small text-text-muted">MHL-2023-112</div>
+</div>
+</div>
+</td>
+<td class="px-md py-4">
+<div class="font-body text-body text-text-primary">Building Fund</div>
+<div class="font-small text-small text-text-muted">Federal Bank (ref_5532)</div>
+</td>
+<td class="px-md py-4">
+<div class="font-body text-body text-text-primary">Oct 23, 2023</div>
+<div class="font-small text-small text-text-muted">02:15 PM</div>
+</td>
+<td class="px-md py-4 text-right font-body text-body font-bold text-text-primary">
+                                ₹ 5,000
+                            </td>
+<td class="px-md py-4 text-center">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-warning-bg text-warning font-small text-[11px] font-semibold uppercase tracking-wide border border-warning/20">
+                                    Pending
+                                </span>
+</td>
+<td class="px-md py-4 text-right">
+<button class="p-2 text-text-secondary hover:text-primary transition-colors rounded-lg hover:bg-surface-container-low" title="View Details">
+<span class="material-symbols-outlined text-[20px]" data-icon="visibility">visibility</span>
+</button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-bright transition-colors">
+<td class="px-md py-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-text-primary font-bold text-xs">FZ</div>
+<div>
+<div class="font-body text-body font-semibold text-text-primary">Fathima Zahra</div>
+<div class="font-small text-small text-text-muted">MHL-2023-089</div>
+</div>
+</div>
+</td>
+<td class="px-md py-4">
+<div class="font-body text-body text-text-primary">Monthly Dues</div>
+<div class="font-small text-small text-text-muted">Razorpay (tx_112233)</div>
+</td>
+<td class="px-md py-4">
+<div class="font-body text-body text-text-primary">Oct 22, 2023</div>
+<div class="font-small text-small text-text-muted">09:30 AM</div>
+</td>
+<td class="px-md py-4 text-right font-body text-body font-bold text-text-primary">
+                                ₹ 1,500
+                            </td>
+<td class="px-md py-4 text-center">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-error-bg text-error font-small text-[11px] font-semibold uppercase tracking-wide border border-error/20">
+                                    Failed
+                                </span>
+</td>
+<td class="px-md py-4 text-right">
+<button class="p-2 text-text-secondary hover:text-primary transition-colors rounded-lg hover:bg-surface-container-low" title="View Details">
+<span class="material-symbols-outlined text-[20px]" data-icon="visibility">visibility</span>
+</button>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-surface-bright transition-colors">
+<td class="px-md py-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-text-primary font-bold text-xs">IK</div>
+<div>
+<div class="font-body text-body font-semibold text-text-primary">Ibrahim Khan</div>
+<div class="font-small text-small text-text-muted">MHL-2023-201</div>
+</div>
+</div>
+</td>
+<td class="px-md py-4">
+<div class="font-body text-body text-text-primary">Monthly Dues</div>
+<div class="font-small text-small text-text-muted">Cash (Manual Entry)</div>
+</td>
+<td class="px-md py-4">
+<div class="font-body text-body text-text-primary">Oct 21, 2023</div>
+<div class="font-small text-small text-text-muted">11:00 AM</div>
+</td>
+<td class="px-md py-4 text-right font-body text-body font-bold text-text-primary">
+                                ₹ 3,000
+                            </td>
+<td class="px-md py-4 text-center">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-success-bg text-success font-small text-[11px] font-semibold uppercase tracking-wide border border-success/20">
+                                    Success
+                                </span>
+</td>
+<td class="px-md py-4 text-right">
+<button class="p-2 text-text-secondary hover:text-primary transition-colors rounded-lg hover:bg-surface-container-low" title="Download Receipt">
+<span class="material-symbols-outlined text-[20px]" data-icon="download">download</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination -->
+<div class="p-md border-t border-border-base flex flex-col md:flex-row items-center justify-between gap-4 bg-surface">
+<span class="font-small text-small text-text-secondary">Showing 1 to 4 of 342 entries</span>
+<div class="flex gap-1 md:gap-2">
+<button class="px-3 py-1.5 border border-border-base rounded bg-surface text-text-muted cursor-not-allowed font-button text-button" disabled="">Previous</button>
+<button class="px-3 py-1.5 border border-primary text-primary rounded bg-surface-container-low font-button text-button">1</button>
+<button class="px-3 py-1.5 border border-border-base rounded bg-surface text-text-primary hover:bg-surface-container-low transition-colors font-button text-button">2</button>
+<button class="px-3 py-1.5 border border-border-base rounded bg-surface text-text-primary hover:bg-surface-container-low transition-colors font-button text-button">3</button>
+<span class="px-2 py-1.5 text-text-secondary hidden md:inline">...</span>
+<button class="px-3 py-1.5 border border-border-base rounded bg-surface text-text-primary hover:bg-surface-container-low transition-colors font-button text-button">Next</button>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 w-full z-50 bg-surface border-t border-border-base shadow-sm">
+<div class="flex justify-around items-center w-full h-[64px] pb-safe">
+<a class="flex flex-col items-center justify-center text-text-secondary px-4 py-1 hover:bg-surface-container-highest transition-all active:scale-95 duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-small text-small mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-text-secondary px-4 py-1 hover:bg-surface-container-highest transition-all active:scale-95 duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-small text-small mt-1">Members</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary px-4 py-1 hover:bg-surface-container-highest transition-all active:scale-95 duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-small text-small mt-1 font-semibold">Reports</span>
+</a>
+<a class="flex flex-col items-center justify-center text-text-secondary px-4 py-1 hover:bg-surface-container-highest transition-all active:scale-95 duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-small text-small mt-1">Profile</span>
+</a>
+</div>
+</nav>
+</body></html>

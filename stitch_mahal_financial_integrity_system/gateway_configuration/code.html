@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Gateway Configuration - MahalFlow Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "warning": "#B77900",
+                        "surface-container-highest": "#e0e3e0",
+                        "on-surface-variant": "#3f4945",
+                        "on-primary": "#ffffff",
+                        "secondary-fixed": "#b2efde",
+                        "on-secondary-fixed": "#00201a",
+                        "primary-fixed-dim": "#87d5c0",
+                        "error-bg": "#FDECEC",
+                        "on-surface": "#181c1b",
+                        "info-bg": "#EAF3FB",
+                        "on-secondary-fixed-variant": "#0f5044",
+                        "secondary-fixed-dim": "#97d2c2",
+                        "on-error": "#ffffff",
+                        "on-primary-container": "#9bead4",
+                        "text-muted": "#8A9390",
+                        "text-primary": "#17201D",
+                        "tertiary": "#3f4a48",
+                        "tertiary-fixed": "#d9e5e2",
+                        "inverse-primary": "#87d5c0",
+                        "surface-container-low": "#f1f4f1",
+                        "on-tertiary-container": "#d1ddda",
+                        "surface-bright": "#f7faf7",
+                        "on-error-container": "#93000a",
+                        "surface-dim": "#d7dbd8",
+                        "surface-tint": "#116a5a",
+                        "on-primary-fixed-variant": "#005143",
+                        "surface-container": "#ebefec",
+                        "outline": "#6f7975",
+                        "primary-fixed": "#a3f2dc",
+                        "surface-container-high": "#e6e9e6",
+                        "on-secondary": "#ffffff",
+                        "on-primary-fixed": "#00201a",
+                        "bg-app": "#F7F9F8",
+                        "primary-container": "#146c5b",
+                        "inverse-surface": "#2d3130",
+                        "surface-variant": "#e0e3e0",
+                        "tertiary-container": "#576260",
+                        "outline-variant": "#bec9c4",
+                        "on-background": "#181c1b",
+                        "secondary-container": "#b2efde",
+                        "inverse-on-surface": "#eef1ee",
+                        "tertiary-fixed-dim": "#bdc9c6",
+                        "error-container": "#ffdad6",
+                        "warning-bg": "#FFF5DC",
+                        "secondary": "#2d685b",
+                        "background": "#f7faf7",
+                        "success": "#16834B",
+                        "error": "#C93B3B",
+                        "primary": "#005244",
+                        "surface": "#FFFFFF",
+                        "info": "#3478B8",
+                        "on-tertiary-fixed-variant": "#3e4947",
+                        "text-secondary": "#5E6864",
+                        "on-tertiary-fixed": "#131e1c",
+                        "success-bg": "#EAF7EF",
+                        "on-tertiary": "#ffffff",
+                        "border-base": "#E3E8E6",
+                        "on-secondary-container": "#346e61",
+                        "surface-container-lowest": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xxl": "48px",
+                        "sm": "8px",
+                        "margin-desktop": "32px",
+                        "gutter": "16px",
+                        "margin-tablet": "24px",
+                        "margin-mobile": "16px",
+                        "xl": "32px",
+                        "xs": "4px",
+                        "md": "16px",
+                        "lg": "24px"
+                    },
+                    "fontFamily": {
+                        "display": ["Inter"],
+                        "amount-lg": ["Inter"],
+                        "card-title": ["Inter"],
+                        "body": ["Inter"],
+                        "small": ["Inter"],
+                        "section-title": ["Inter"],
+                        "page-title": ["Inter"],
+                        "button": ["Inter"]
+                    },
+                    "fontSize": {
+                        "display": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "amount-lg": ["28px", { "lineHeight": "36px", "fontWeight": "700" }],
+                        "card-title": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "body": ["14px", { "lineHeight": "22px", "fontWeight": "400" }],
+                        "small": ["12px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "section-title": ["18px", { "lineHeight": "26px", "fontWeight": "600" }],
+                        "page-title": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "button": ["14px", { "lineHeight": "20px", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+    </style>
+</head>
+<body class="bg-bg-app text-text-primary font-body min-h-screen">
+<!-- TopAppBar -->
+<header class="bg-surface fixed top-0 w-full z-50 border-b border-border-base flex justify-between items-center px-margin-mobile md:px-margin-desktop h-16 transition-colors duration-200">
+<div class="flex items-center gap-3">
+<button class="md:hidden p-1 rounded hover:bg-surface-container-low text-primary">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+<h1 class="font-display text-display font-bold text-primary">MahalFlow Admin</h1>
+</div>
+<div class="flex items-center gap-3 cursor-pointer hover:bg-surface-container-low p-1.5 rounded-full transition-colors">
+<div class="w-8 h-8 rounded-full bg-surface-container border border-border-base flex items-center justify-center overflow-hidden">
+<img alt="Admin Profile" class="w-full h-full object-cover" data-alt="A professional headshot of an administrator in a well-lit modern office setting, soft corporate lighting, muted background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBFMQTpO7Ghubv7TCOuBtayGCOx3x305ajyZ2w-KtPe-dvzqlNY8HdnP7B9CA8QWWLBJfFdTA1pebJEzMtQU_kf7CfQwL1J1MzPEDzFFJVSYzvcKVFsQ9seALtVm3l3cpED3e0VTsdlEZmwlFDy5MBNKgCf1a1dSkVXHR3cRgHpv7pMV8j1ev8rUnba5HPeKgB3kDmZa87VqGHENRfkiiL8p2XznmrgtIiaOOpNmzvqejVfneSu4rHm"/>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="pt-24 pb-24 px-margin-mobile md:px-margin-desktop max-w-6xl mx-auto">
+<!-- Header Section -->
+<div class="mb-lg flex flex-col sm:flex-row sm:justify-between sm:items-end gap-md">
+<div>
+<h2 class="font-page-title text-page-title text-text-primary">Payment Gateways</h2>
+<p class="font-body text-body text-text-secondary mt-xs">Configure and monitor your integrated payment processing connections.</p>
+</div>
+<button class="bg-primary-container text-on-primary font-button text-button px-4 h-[44px] rounded-lg hover:bg-surface-tint transition-colors shadow-sm flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[20px]">add</span>
+                Add New Gateway
+            </button>
+</div>
+<!-- Security Notice -->
+<div class="bg-warning-bg border border-warning/20 rounded-xl p-md mb-gutter flex items-start gap-sm shadow-sm">
+<span class="material-symbols-outlined text-warning mt-0.5">enhanced_encryption</span>
+<div>
+<h3 class="font-card-title text-card-title text-warning">Strict Credential Masking Enabled</h3>
+<p class="font-body text-body text-warning/90 mt-1">Due to compliance protocols, API keys and secrets are permanently masked. To update connection details, authenticate via the 'Manage Credentials' secure workflow.</p>
+</div>
+</div>
+<!-- Gateways Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-gutter">
+<!-- Federal Bank Card (Primary) -->
+<div class="bg-surface border border-primary-container/30 rounded-xl p-md shadow-sm relative overflow-hidden group">
+<div class="absolute top-0 left-0 w-1 h-full bg-primary-container"></div>
+<div class="flex justify-between items-start mb-md">
+<div class="flex items-center gap-md">
+<div class="w-12 h-12 rounded-lg bg-surface-container flex items-center justify-center border border-border-base">
+<span class="material-symbols-outlined text-primary-container text-[24px]">account_balance</span>
+</div>
+<div>
+<h3 class="font-card-title text-card-title text-text-primary">Federal Bank</h3>
+<div class="flex items-center gap-sm mt-1">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-primary-container bg-secondary-container/50 font-small text-small border border-primary-container/10">
+<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">star</span> Primary Route
+                                </span>
+</div>
+</div>
+</div>
+<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-success-bg text-success font-small text-small border border-success/20">
+<span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">check_circle</span> Connected
+                    </span>
+</div>
+<div class="bg-bg-app rounded-lg p-sm mb-md border border-border-base">
+<div class="flex justify-between items-center px-xs">
+<span class="font-small text-small text-text-secondary uppercase tracking-wider font-semibold">Live Credentials</span>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-text-muted text-[16px]">key</span>
+<span class="font-body text-body text-text-primary font-mono tracking-widest mt-1">••••••••••</span>
+</div>
+</div>
+</div>
+<div class="flex flex-col sm:flex-row gap-sm">
+<button class="flex-1 h-[44px] border border-border-base text-text-secondary font-button text-button rounded-lg hover:bg-surface-container-low transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[18px]">sync</span> Test Connection
+                    </button>
+<button class="flex-1 h-[44px] bg-primary-container text-on-primary font-button text-button rounded-lg hover:bg-surface-tint transition-colors flex items-center justify-center gap-2 shadow-sm">
+<span class="material-symbols-outlined text-[18px]">admin_panel_settings</span> Manage Credentials
+                    </button>
+</div>
+</div>
+<!-- Razorpay Card (Secondary) -->
+<div class="bg-surface border border-border-base rounded-xl p-md shadow-sm group">
+<div class="flex justify-between items-start mb-md">
+<div class="flex items-center gap-md">
+<div class="w-12 h-12 rounded-lg bg-surface-container flex items-center justify-center border border-border-base">
+<span class="material-symbols-outlined text-text-secondary text-[24px]">credit_card</span>
+</div>
+<div>
+<h3 class="font-card-title text-card-title text-text-primary">Razorpay</h3>
+<div class="flex items-center gap-sm mt-1">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-text-secondary bg-surface-container font-small text-small border border-border-base">
+                                    Fallback Route
+                                </span>
+</div>
+</div>
+</div>
+<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-success-bg text-success font-small text-small border border-success/20">
+<span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">check_circle</span> Connected
+                    </span>
+</div>
+<div class="bg-bg-app rounded-lg p-sm mb-md border border-border-base opacity-90">
+<div class="flex justify-between items-center px-xs">
+<span class="font-small text-small text-text-secondary uppercase tracking-wider font-semibold">Live Credentials</span>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-text-muted text-[16px]">key</span>
+<span class="font-body text-body text-text-primary font-mono tracking-widest mt-1">••••••••••</span>
+</div>
+</div>
+</div>
+<div class="flex flex-col sm:flex-row gap-sm">
+<button class="flex-1 h-[44px] border border-border-base text-text-secondary font-button text-button rounded-lg hover:bg-surface-container-low transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[18px]">sync</span> Test Connection
+                    </button>
+<button class="flex-1 h-[44px] bg-primary-container text-on-primary font-button text-button rounded-lg hover:bg-surface-tint transition-colors flex items-center justify-center gap-2 shadow-sm">
+<span class="material-symbols-outlined text-[18px]">admin_panel_settings</span> Manage Credentials
+                    </button>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden bg-surface fixed bottom-0 left-0 w-full flex justify-around items-center h-16 pb-safe border-t border-border-base z-50">
+<a class="flex flex-col items-center justify-center text-text-secondary px-4 py-1 hover:bg-surface-container-low rounded-full transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-small text-small mt-0.5">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-text-secondary px-4 py-1 hover:bg-surface-container-low rounded-full transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-small text-small mt-0.5">Members</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 scale-95 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="payments" style="font-variation-settings: 'FILL' 1;">payments</span>
+<span class="font-small text-small mt-0.5 font-medium">Payments</span>
+</a>
+<a class="flex flex-col items-center justify-center text-text-secondary px-4 py-1 hover:bg-surface-container-low rounded-full transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+<span class="font-small text-small mt-0.5">Profile</span>
+</a>
+</nav>
+</body></html>

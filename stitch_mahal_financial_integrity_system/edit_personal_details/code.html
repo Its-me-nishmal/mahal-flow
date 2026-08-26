@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Edit Profile - MahalFlow</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "outline-variant": "#bec9c4",
+                      "on-surface": "#181c1b",
+                      "on-primary": "#ffffff",
+                      "on-secondary-fixed": "#00201a",
+                      "inverse-primary": "#87d5c0",
+                      "tertiary-container": "#576260",
+                      "bg-app": "#F7F9F8",
+                      "tertiary-fixed": "#d9e5e2",
+                      "text-primary": "#17201D",
+                      "surface-container-highest": "#e0e3e0",
+                      "error-bg": "#FDECEC",
+                      "on-primary-fixed": "#00201a",
+                      "tertiary": "#3f4a48",
+                      "surface": "#FFFFFF",
+                      "surface-variant": "#e0e3e0",
+                      "on-error-container": "#93000a",
+                      "text-muted": "#8A9390",
+                      "primary-fixed": "#a3f2dc",
+                      "warning-bg": "#FFF5DC",
+                      "primary": "#005244",
+                      "surface-dim": "#d7dbd8",
+                      "on-secondary": "#ffffff",
+                      "on-secondary-fixed-variant": "#0f5044",
+                      "error-container": "#ffdad6",
+                      "primary-container": "#146c5b",
+                      "outline": "#6f7975",
+                      "on-tertiary-container": "#d1ddda",
+                      "inverse-on-surface": "#eef1ee",
+                      "surface-container": "#ebefec",
+                      "error": "#C93B3B",
+                      "secondary-container": "#b2efde",
+                      "warning": "#B77900",
+                      "on-primary-fixed-variant": "#005143",
+                      "info": "#3478B8",
+                      "on-primary-container": "#9bead4",
+                      "text-secondary": "#5E6864",
+                      "surface-container-lowest": "#ffffff",
+                      "background": "#f7faf7",
+                      "on-secondary-container": "#346e61",
+                      "on-surface-variant": "#3f4945",
+                      "secondary": "#2d685b",
+                      "on-error": "#ffffff",
+                      "surface-container-high": "#e6e9e6",
+                      "success-bg": "#EAF7EF",
+                      "surface-tint": "#116a5a",
+                      "surface-bright": "#f7faf7",
+                      "primary-fixed-dim": "#87d5c0",
+                      "inverse-surface": "#2d3130",
+                      "secondary-fixed-dim": "#97d2c2",
+                      "on-background": "#181c1b",
+                      "on-tertiary-fixed": "#131e1c",
+                      "tertiary-fixed-dim": "#bdc9c6",
+                      "secondary-fixed": "#b2efde",
+                      "success": "#16834B",
+                      "border-base": "#E3E8E6",
+                      "info-bg": "#EAF3FB",
+                      "on-tertiary": "#ffffff",
+                      "surface-container-low": "#f1f4f1",
+                      "on-tertiary-fixed-variant": "#3e4947"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "xxl": "48px",
+                      "sm": "8px",
+                      "margin-mobile": "16px",
+                      "margin-tablet": "24px",
+                      "gutter": "16px",
+                      "md": "16px",
+                      "lg": "24px",
+                      "xl": "32px",
+                      "margin-desktop": "32px",
+                      "xs": "4px"
+              },
+              "fontFamily": {
+                      "body": [
+                              "Inter"
+                      ],
+                      "section-title": [
+                              "Inter"
+                      ],
+                      "page-title": [
+                              "Inter"
+                      ],
+                      "amount-lg": [
+                              "Inter"
+                      ],
+                      "small": [
+                              "Inter"
+                      ],
+                      "button": [
+                              "Inter"
+                      ],
+                      "card-title": [
+                              "Inter"
+                      ],
+                      "display": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "body": [
+                              "14px",
+                              {
+                                      "lineHeight": "22px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "section-title": [
+                              "18px",
+                              {
+                                      "lineHeight": "26px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "page-title": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "amount-lg": [
+                              "28px",
+                              {
+                                      "lineHeight": "36px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "small": [
+                              "12px",
+                              {
+                                      "lineHeight": "18px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "button": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "card-title": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "display": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "fontWeight": "700"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .icon-filled {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        /* Custom Input Styles overriding Tailwind Forms plugin slightly to match design system */
+        .ds-input {
+            border-radius: 10px;
+            border-color: #E3E8E6;
+            min-height: 48px;
+        }
+        .ds-input:focus {
+            border-color: #146c5b;
+            box-shadow: 0 0 0 1px #146c5b;
+        }
+    </style>
+</head>
+<body class="bg-bg-app text-text-primary font-body text-body antialiased min-h-screen flex flex-col">
+<!-- TopAppBar -->
+<header class="bg-surface dark:bg-surface-dim border-b border-border-base dark:border-outline-variant flex items-center justify-between px-margin-mobile w-full h-14 sticky top-0 z-10">
+<button aria-label="Go back" class="text-primary dark:text-primary-fixed hover:bg-surface-container-low dark:hover:bg-tertiary-container transition-colors active:opacity-80 transition-opacity p-2 -ml-2 rounded-full">
+<span class="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
+</button>
+<h1 class="font-page-title text-page-title text-primary dark:text-primary-fixed flex-1 text-center pr-8">Edit Profile</h1>
+</header>
+<main class="flex-1 flex flex-col px-margin-mobile py-lg pb-xxl max-w-2xl mx-auto w-full">
+<!-- Profile Picture Section -->
+<section class="flex flex-col items-center justify-center mb-xl">
+<div class="relative">
+<div class="w-24 h-24 rounded-full overflow-hidden border-2 border-surface shadow-sm bg-surface-container-high">
+<img alt="Profile Picture" class="w-full h-full object-cover" data-alt="A professional headshot of a middle-aged South Asian man named Muhammed, looking friendly and approachable. The image is brightly lit with a clean, light-grey background, adhering to a modern corporate aesthetic. The colors are muted and professional, focusing on clear facial features and a subtle smile. High-quality corporate portrait photography style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDutd0BzNfCQL_3KBaGvwGK1AfFWNjPHakVraJbCm8mbcb5jP_b6ASD-4D2_X3Hum6YmAe1tfmWqJ_xt27UXYILJKR0eOpzfY8DaQY-Er12FLWUQ3HfkbydrxwQlubD6nQuYpanObzIK_lEXknzlnUGXYV0LMuVK2I8L8nSM6OXg532T4gkhY3veC5S4E9-aY0YIbN4NMj3hut2eWBWnFK-Q58nAE6rMue-meFdrz5Wm9bXw3FYp4kO"/>
+</div>
+<button aria-label="Edit Profile Picture" class="absolute bottom-0 right-0 bg-primary-container text-on-primary-container p-2 rounded-full shadow-md hover:opacity-90 active:scale-95 transition-all flex items-center justify-center border-2 border-surface">
+<span class="material-symbols-outlined text-[16px]" data-icon="edit">edit</span>
+</button>
+</div>
+</section>
+<!-- Form Section -->
+<form class="space-y-gutter flex-1 flex flex-col">
+<!-- Full Name -->
+<div class="flex flex-col space-y-xs">
+<label class="font-small text-small text-text-secondary" for="fullName">Full Name</label>
+<input class="ds-input w-full bg-surface text-text-primary px-4 py-2 border border-border-base focus:ring-0 focus:border-primary-container transition-colors" id="fullName" placeholder="Enter full name" type="text" value="Muhammed"/>
+</div>
+<!-- Mobile Number (Verified) -->
+<div class="flex flex-col space-y-xs relative">
+<label class="font-small text-small text-text-secondary" for="mobile">Mobile Number</label>
+<div class="relative">
+<input class="ds-input w-full bg-surface-container-low text-text-muted px-4 py-2 border border-border-base pr-24 cursor-not-allowed" disabled="" id="mobile" placeholder="Enter mobile number" type="tel" value="+91 98765 43210"/>
+<div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center bg-success-bg text-success px-2 py-1 rounded-md">
+<span class="material-symbols-outlined icon-filled text-[14px] mr-1" data-icon="check_circle">check_circle</span>
+<span class="font-small text-small font-semibold">Verified</span>
+</div>
+</div>
+<p class="font-small text-small text-text-muted mt-1">To change your verified mobile number, contact the admin.</p>
+</div>
+<!-- Email -->
+<div class="flex flex-col space-y-xs">
+<label class="font-small text-small text-text-secondary" for="email">Email Address</label>
+<input class="ds-input w-full bg-surface text-text-primary px-4 py-2 border border-border-base focus:ring-0 focus:border-primary-container transition-colors" id="email" placeholder="Enter email address" type="email" value="muhammed@example.com"/>
+</div>
+<!-- Address (Multi-line) -->
+<div class="flex flex-col space-y-xs">
+<label class="font-small text-small text-text-secondary" for="address">Address</label>
+<textarea class="ds-input w-full bg-surface text-text-primary px-4 py-3 border border-border-base focus:ring-0 focus:border-primary-container transition-colors resize-none" id="address" placeholder="Enter full address" rows="3">123, Palm Grove, Kerala, India</textarea>
+</div>
+<!-- Spacer to push button to bottom on tall screens -->
+<div class="flex-1 min-h-[32px]"></div>
+<!-- Action Button -->
+<button class="w-full bg-primary-container text-on-primary font-button text-button h-12 rounded-[10px] hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center shadow-sm mt-8" type="button">
+                Save Changes
+            </button>
+</form>
+</main>
+<!-- Bottom Nav is suppressed on this 'focused journey / specific edit' screen based on semantic mapping rules (not a top level destination) -->
+</body></html>

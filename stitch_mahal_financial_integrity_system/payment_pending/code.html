@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Payment Pending - MahalFlow</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts: Inter -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration (Provided) -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "text-secondary": "#5E6864",
+                        "tertiary-fixed": "#d9e5e2",
+                        "background": "#f7faf7",
+                        "on-primary-fixed-variant": "#005143",
+                        "success-bg": "#EAF7EF",
+                        "bg-app": "#F7F9F8",
+                        "on-secondary-fixed-variant": "#0f5044",
+                        "on-error-container": "#93000a",
+                        "on-secondary-container": "#346e61",
+                        "on-background": "#181c1b",
+                        "inverse-primary": "#87d5c0",
+                        "on-primary": "#ffffff",
+                        "error-bg": "#FDECEC",
+                        "error": "#C93B3B",
+                        "primary": "#005244",
+                        "secondary-fixed": "#b2efde",
+                        "surface-tint": "#116a5a",
+                        "surface-container-low": "#f1f4f1",
+                        "outline": "#6f7975",
+                        "error-container": "#ffdad6",
+                        "warning-bg": "#FFF5DC",
+                        "on-surface-variant": "#3f4945",
+                        "on-error": "#ffffff",
+                        "inverse-on-surface": "#eef1ee",
+                        "on-tertiary": "#ffffff",
+                        "on-tertiary-fixed-variant": "#3e4947",
+                        "inverse-surface": "#2d3130",
+                        "secondary-container": "#b2efde",
+                        "on-surface": "#181c1b",
+                        "info": "#3478B8",
+                        "primary-container": "#146c5b",
+                        "border-base": "#E3E8E6",
+                        "surface-container-highest": "#e0e3e0",
+                        "on-secondary-fixed": "#00201a",
+                        "surface-container": "#ebefec",
+                        "surface": "#FFFFFF",
+                        "on-secondary": "#ffffff",
+                        "primary-fixed": "#a3f2dc",
+                        "tertiary": "#3f4a48",
+                        "text-primary": "#17201D",
+                        "on-primary-fixed": "#00201a",
+                        "surface-bright": "#f7faf7",
+                        "surface-variant": "#e0e3e0",
+                        "info-bg": "#EAF3FB",
+                        "outline-variant": "#bec9c4",
+                        "tertiary-fixed-dim": "#bdc9c6",
+                        "secondary-fixed-dim": "#97d2c2",
+                        "surface-container-high": "#e6e9e6",
+                        "success": "#16834B",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-dim": "#d7dbd8",
+                        "on-tertiary-container": "#d1ddda",
+                        "on-tertiary-fixed": "#131e1c",
+                        "tertiary-container": "#576260",
+                        "text-muted": "#8A9390",
+                        "on-primary-container": "#9bead4",
+                        "primary-fixed-dim": "#87d5c0",
+                        "secondary": "#2d685b",
+                        "warning": "#B77900"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xl": "32px",
+                        "margin-desktop": "32px",
+                        "margin-tablet": "24px",
+                        "md": "16px",
+                        "margin-mobile": "16px",
+                        "xs": "4px",
+                        "sm": "8px",
+                        "gutter": "16px",
+                        "lg": "24px",
+                        "xxl": "48px"
+                    },
+                    "fontFamily": {
+                        "section-title": ["Inter"],
+                        "body": ["Inter"],
+                        "page-title": ["Inter"],
+                        "amount-lg": ["Inter"],
+                        "display": ["Inter"],
+                        "button": ["Inter"],
+                        "card-title": ["Inter"],
+                        "small": ["Inter"]
+                    },
+                    "fontSize": {
+                        "section-title": ["18px", { "lineHeight": "26px", "fontWeight": "600" }],
+                        "body": ["14px", { "lineHeight": "22px", "fontWeight": "400" }],
+                        "page-title": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "amount-lg": ["28px", { "lineHeight": "36px", "fontWeight": "700" }],
+                        "display": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "button": ["14px", { "lineHeight": "20px", "fontWeight": "600" }],
+                        "card-title": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "small": ["12px", { "lineHeight": "18px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-bg-app text-text-primary antialiased min-h-screen flex flex-col">
+<!-- Top Navigation App Bar -->
+<header class="fixed top-0 w-full z-50 bg-surface border-b border-border-base transition-colors duration-200">
+<div class="flex justify-between items-center px-margin-mobile h-16 w-full max-w-screen-xl mx-auto">
+<!-- Leading Avatar -->
+<button class="w-8 h-8 rounded-full bg-surface-container-high overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary-container">
+<img alt="Member profile avatar" class="w-full h-full object-cover" data-alt="A clean, professional portrait of a user in a modern office setting. The lighting is bright and high-key, complementing the light-mode corporate aesthetic of the interface. The background is a soft, blurred white or very light gray. The image feels trustworthy and modern." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCAmGAHYfMbgEojuuEBQvo5EXtATj875MPeNS_m2D89G66pOPwoCP5gmD_u15EtlHmeYOcRItaPXE66PxpRcgzcDJ0V7GXWylsaE9S-2v9WEAt8cCpI5xQjMh4L7I1cTcRMYuJQe7CHh86KKSF4UnRMcbNyzIZre_lukK7OaLLBKP31iRkm4-7uPnZGR7dyTh5YTcQlNLaUARyIXnryse5NFCM5S6fPPR1IRHpKLeOGX1xiX5wmKPgf"/>
+</button>
+<!-- Headline -->
+<h1 class="font-page-title text-page-title text-primary">MahalFlow</h1>
+<!-- Trailing Icon -->
+<button aria-label="Help" class="text-text-secondary hover:bg-surface-variant/50 p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-primary-container transition-colors">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+</button>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow flex flex-col items-center justify-center px-margin-mobile pt-[calc(64px+32px)] pb-24 md:pt-[calc(64px+48px)]">
+<div class="w-full max-w-md flex flex-col items-center text-center">
+<!-- Animated Pending Icon -->
+<div class="w-24 h-24 mb-6 rounded-full bg-warning-bg flex items-center justify-center animate-pulse shadow-[0_2px_8px_rgba(23,32,29,0.08)]">
+<span class="material-symbols-outlined text-[48px] text-warning" data-icon="pending" data-weight="fill" style="font-variation-settings: 'FILL' 1;">pending</span>
+</div>
+<!-- Header Text -->
+<h2 class="font-display text-display text-text-primary mb-2">Payment Pending</h2>
+<p class="font-body text-body text-text-secondary mb-8 max-w-sm">
+                Your payment is being processed by the bank. Please do not try again until the final status is confirmed.
+            </p>
+<!-- Transaction Details Card (Glassmorphism/Modern approach) -->
+<div class="w-full bg-surface border border-border-base rounded-xl p-md mb-8 shadow-[0_2px_8px_rgba(23,32,29,0.08)] relative overflow-hidden">
+<!-- Subtle background decorative element to break up the flat white -->
+<div class="absolute -right-8 -top-8 w-24 h-24 bg-surface-container-low rounded-full opacity-50 blur-xl"></div>
+<h3 class="font-card-title text-card-title text-text-primary text-left mb-4 pb-2 border-b border-border-base relative z-10">Transaction Details</h3>
+<div class="flex flex-col gap-3 relative z-10">
+<div class="flex justify-between items-center">
+<span class="font-body text-body text-text-secondary">Amount</span>
+<span class="font-amount-lg text-amount-lg text-text-primary">₹1,500</span>
+</div>
+<div class="flex justify-between items-center">
+<span class="font-body text-body text-text-secondary">Receipt Number</span>
+<span class="inline-flex items-center gap-1 font-body text-body font-semibold text-warning bg-warning-bg px-2 py-0.5 rounded">
+                            Pending
+                        </span>
+</div>
+<div class="flex justify-between items-center">
+<span class="font-body text-body text-text-secondary">Date</span>
+<span class="font-body text-body text-text-primary font-medium">Aug 15, 2026</span>
+</div>
+</div>
+</div>
+<!-- Action Buttons -->
+<div class="w-full flex flex-col gap-sm">
+<button class="w-full h-[48px] flex items-center justify-center bg-primary-container text-on-primary font-button text-button rounded-[10px] hover:bg-surface-tint transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-container shadow-[0_2px_8px_rgba(23,32,29,0.08)]">
+                    Back to Home
+                </button>
+<button class="w-full h-[48px] flex items-center justify-center bg-surface border border-primary-container text-primary-container font-button text-button rounded-[10px] hover:bg-surface-container-low transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-container">
+                    Check Status
+                </button>
+</div>
+</div>
+</main>
+<!-- Suppressed Navigation Shells -->
+<!-- BottomNavBar is SUPPRESSED here as this is a Transactional/Status screen -->
+<!-- SideNav is SUPPRESSED here as this is a mobile-first transactional flow -->
+</body></html>

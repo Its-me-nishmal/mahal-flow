@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>MahalFlow - Subscriptions</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "info": "#3478B8",
+                        "tertiary": "#3f4a48",
+                        "error-container": "#ffdad6",
+                        "success-bg": "#EAF7EF",
+                        "secondary": "#2d685b",
+                        "surface-container-high": "#e6e9e6",
+                        "surface-bright": "#f7faf7",
+                        "surface-variant": "#e0e3e0",
+                        "on-primary-container": "#9bead4",
+                        "inverse-surface": "#2d3130",
+                        "surface-container-highest": "#e0e3e0",
+                        "warning": "#B77900",
+                        "outline-variant": "#bec9c4",
+                        "on-error-container": "#93000a",
+                        "primary": "#005244",
+                        "surface-container-low": "#f1f4f1",
+                        "outline": "#6f7975",
+                        "error": "#C93B3B",
+                        "on-surface-variant": "#3f4945",
+                        "on-secondary-fixed-variant": "#0f5044",
+                        "secondary-container": "#b2efde",
+                        "secondary-fixed": "#b2efde",
+                        "text-muted": "#8A9390",
+                        "on-error": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "warning-bg": "#FFF5DC",
+                        "info-bg": "#EAF3FB",
+                        "border-base": "#E3E8E6",
+                        "on-tertiary-container": "#d1ddda",
+                        "on-secondary-fixed": "#00201a",
+                        "on-primary-fixed-variant": "#005143",
+                        "primary-container": "#146c5b",
+                        "on-secondary-container": "#346e61",
+                        "bg-app": "#F7F9F8",
+                        "tertiary-container": "#576260",
+                        "tertiary-fixed-dim": "#bdc9c6",
+                        "on-tertiary-fixed-variant": "#3e4947",
+                        "error-bg": "#FDECEC",
+                        "on-tertiary": "#ffffff",
+                        "primary-fixed": "#a3f2dc",
+                        "tertiary-fixed": "#d9e5e2",
+                        "inverse-primary": "#87d5c0",
+                        "surface-container": "#ebefec",
+                        "on-primary": "#ffffff",
+                        "on-primary-fixed": "#00201a",
+                        "surface-dim": "#d7dbd8",
+                        "secondary-fixed-dim": "#97d2c2",
+                        "on-surface": "#181c1b",
+                        "text-primary": "#17201D",
+                        "on-tertiary-fixed": "#131e1c",
+                        "on-background": "#181c1b",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-tint": "#116a5a",
+                        "text-secondary": "#5E6864",
+                        "success": "#16834B",
+                        "inverse-on-surface": "#eef1ee",
+                        "primary-fixed-dim": "#87d5c0",
+                        "surface": "#FFFFFF",
+                        "background": "#f7faf7"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xl": "32px",
+                        "xxl": "48px",
+                        "sm": "8px",
+                        "xs": "4px",
+                        "gutter": "16px",
+                        "margin-desktop": "32px",
+                        "lg": "24px",
+                        "margin-mobile": "16px",
+                        "md": "16px",
+                        "margin-tablet": "24px"
+                    },
+                    "fontFamily": {
+                        "button": ["Inter"],
+                        "small": ["Inter"],
+                        "body": ["Inter"],
+                        "section-title": ["Inter"],
+                        "page-title": ["Inter"],
+                        "amount-lg": ["Inter"],
+                        "display": ["Inter"],
+                        "card-title": ["Inter"]
+                    },
+                    "fontSize": {
+                        "button": ["14px", { "lineHeight": "20px", "fontWeight": "600" }],
+                        "small": ["12px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "body": ["14px", { "lineHeight": "22px", "fontWeight": "400" }],
+                        "section-title": ["18px", { "lineHeight": "26px", "fontWeight": "600" }],
+                        "page-title": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "amount-lg": ["28px", { "lineHeight": "36px", "fontWeight": "700" }],
+                        "display": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "card-title": ["16px", { "lineHeight": "24px", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-bg-app text-on-surface min-h-screen flex antialiased">
+<!-- SideNavBar -->
+<nav class="hidden md:flex flex-col h-screen w-64 fixed left-0 top-0 bg-surface dark:bg-inverse-surface border-r border-border-base dark:border-outline-variant p-md gap-xs z-50">
+<div class="flex items-center gap-sm mb-lg px-sm">
+<span class="material-symbols-outlined text-primary dark:text-primary-fixed" data-weight="fill" style="font-variation-settings: 'FILL' 1;">mosque</span>
+<div>
+<h1 class="font-section-title text-section-title text-primary dark:text-primary-fixed leading-tight">MahalFlow</h1>
+<p class="font-small text-small text-text-secondary dark:text-on-surface-variant leading-none">Super Admin Portal</p>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto flex flex-col gap-xs">
+<a class="flex items-center gap-3 px-3 py-2 text-text-secondary dark:text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high rounded-lg cursor-pointer active:scale-95 duration-200 transition-all" href="#">
+<span class="material-symbols-outlined font-button text-button">dashboard</span>
+<span class="font-button text-button">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-text-secondary dark:text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high rounded-lg cursor-pointer active:scale-95 duration-200 transition-all" href="#">
+<span class="material-symbols-outlined font-button text-button">location_city</span>
+<span class="font-button text-button">Mahals</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-text-secondary dark:text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high rounded-lg cursor-pointer active:scale-95 duration-200 transition-all" href="#">
+<span class="material-symbols-outlined font-button text-button">group</span>
+<span class="font-button text-button">Members</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-text-secondary dark:text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high rounded-lg cursor-pointer active:scale-95 duration-200 transition-all" href="#">
+<span class="material-symbols-outlined font-button text-button">payments</span>
+<span class="font-button text-button">Payments</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 bg-primary-fixed text-on-primary-fixed-variant font-bold rounded-lg cursor-pointer active:scale-95 duration-200 transition-all" href="#">
+<span class="material-symbols-outlined font-button text-button" data-weight="fill" style="font-variation-settings: 'FILL' 1;">card_membership</span>
+<span class="font-button text-button">Subscriptions</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-text-secondary dark:text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high rounded-lg cursor-pointer active:scale-95 duration-200 transition-all" href="#">
+<span class="material-symbols-outlined font-button text-button">account_balance_wallet</span>
+<span class="font-button text-button">Gateways</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-text-secondary dark:text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high rounded-lg cursor-pointer active:scale-95 duration-200 transition-all" href="#">
+<span class="material-symbols-outlined font-button text-button">undo</span>
+<span class="font-button text-button">Refunds</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-text-secondary dark:text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high rounded-lg cursor-pointer active:scale-95 duration-200 transition-all" href="#">
+<span class="material-symbols-outlined font-button text-button">assessment</span>
+<span class="font-button text-button">Reports</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-text-secondary dark:text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high rounded-lg cursor-pointer active:scale-95 duration-200 transition-all" href="#">
+<span class="material-symbols-outlined font-button text-button">history_edu</span>
+<span class="font-button text-button">Audit Logs</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-text-secondary dark:text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high rounded-lg cursor-pointer active:scale-95 duration-200 transition-all" href="#">
+<span class="material-symbols-outlined font-button text-button">settings</span>
+<span class="font-button text-button">Settings</span>
+</a>
+</div>
+<button class="mt-auto w-full bg-primary-container text-on-primary-container font-button text-button py-2 px-4 rounded-lg hover:bg-primary-container/90 transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined">add</span>
+            New Report
+        </button>
+<div class="mt-sm pt-sm border-t border-border-base dark:border-outline-variant">
+<a class="flex items-center gap-3 px-3 py-2 text-text-secondary dark:text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high rounded-lg cursor-pointer active:scale-95 duration-200 transition-all" href="#">
+<span class="material-symbols-outlined font-button text-button">logout</span>
+<span class="font-button text-button">Log Out</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col md:ml-64 w-full min-h-screen">
+<!-- TopNavBar (Mobile only for full nav, but providing a structural header for desktop) -->
+<header class="sticky top-0 z-40 flex justify-between items-center px-lg w-full h-16 bg-surface dark:bg-surface-container border-b border-border-base dark:border-outline-variant flat no shadows md:hidden">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined font-page-title text-page-title text-primary dark:text-primary-fixed">menu</span>
+<span class="font-page-title text-page-title text-primary dark:text-primary-fixed">MahalFlow</span>
+</div>
+<div class="flex items-center gap-4 text-primary dark:text-primary-fixed font-body text-body">
+<span class="material-symbols-outlined cursor-pointer active:opacity-80 hover:bg-surface-container-low dark:hover:bg-surface-container-high transition-colors p-1 rounded">search</span>
+<span class="material-symbols-outlined cursor-pointer active:opacity-80 hover:bg-surface-container-low dark:hover:bg-surface-container-high transition-colors p-1 rounded">notifications</span>
+<span class="material-symbols-outlined cursor-pointer active:opacity-80 hover:bg-surface-container-low dark:hover:bg-surface-container-high transition-colors p-1 rounded">help_outline</span>
+<span class="font-button text-button hidden sm:block">Support</span>
+<img alt="Super Admin Avatar" class="w-8 h-8 rounded-full object-cover border border-border-base" data-alt="A small circular avatar placeholder image for a Super Admin profile picture in a clean modern UI context, neutral background, simple lighting, professional style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAzvkFlC9SMoMGBw1wEum_khKfpJFitSo2KSzCP40zwyJtMULoM43RZeDSo1T4vIpC4YnoTfL1IbBbm8DrB5-KD8T6ILayUcAilXi40ZL1tel7XQkBXtfxqPzPxdpoNhXtsEZj0xJGuiROf6kjKQieR3fSHE0_xSLYsreWj1inlE_nnQ4mcNAY47jmoXpQVJ1gYvo36MAnaUWYFg-zSNw1N17PY1zfbqT0K1cVcsnmWFB7wbSQf7Vk5"/>
+</div>
+</header>
+<!-- Desktop Header Content -->
+<div class="hidden md:flex sticky top-0 z-40 justify-between items-center px-margin-desktop py-4 bg-bg-app/90 backdrop-blur-sm">
+<h2 class="font-page-title text-page-title text-on-surface">Subscription Management</h2>
+<div class="flex items-center gap-4">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-muted">search</span>
+<input class="pl-10 pr-4 py-2 bg-surface border border-border-base rounded-lg font-body text-body text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary w-64 h-[44px]" placeholder="Search Mahals..." type="text"/>
+</div>
+<span class="material-symbols-outlined text-text-secondary cursor-pointer hover:text-primary transition-colors">notifications</span>
+<img alt="Super Admin Avatar" class="w-10 h-10 rounded-full object-cover border border-border-base cursor-pointer" data-alt="A small circular avatar placeholder image for a Super Admin profile picture in a clean modern UI context, neutral background, simple lighting, professional style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCyp3ETe2wTTMY2sjCInNlC26gQdkVGv01L7nLiRsJcazJ5F2VtBU5ayqZdx6_sYK4MEU5IX_JGeZTbHFfvkIGDJh8QJ3v0DJ4p0oFQh8hRpFuuwlCkr7bYV3D89aoyJY5P_9Fe1LO9aCkki7rg9PqbTZlTPhzWFekbAc2gIRLiWsnntzg2qss6ItmjunU0AdT2cF8G4FJ2CMfTnUGixXWnxg-GVEJ0uM0iIEzOPcumqxHCFFnQBTu-"/>
+</div>
+</div>
+<div class="p-margin-mobile md:p-margin-desktop flex-1 flex flex-col gap-lg">
+<!-- Mobile Page Title -->
+<h2 class="font-page-title text-page-title text-on-surface md:hidden">Subscriptions</h2>
+<!-- KPI Bento Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-md">
+<div class="bg-surface p-lg rounded-xl border border-border-base flex flex-col justify-between">
+<div class="flex justify-between items-start mb-4">
+<span class="font-card-title text-card-title text-text-secondary">Monthly Recurring Revenue</span>
+<div class="p-2 bg-success-bg rounded-lg">
+<span class="material-symbols-outlined text-success">trending_up</span>
+</div>
+</div>
+<div>
+<div class="font-amount-lg text-amount-lg text-on-surface mb-1">₹1,24,750</div>
+<div class="font-small text-small text-text-muted">From 250 active subscriptions</div>
+</div>
+</div>
+<div class="bg-surface p-lg rounded-xl border border-border-base flex flex-col justify-between">
+<div class="flex justify-between items-start mb-4">
+<span class="font-card-title text-card-title text-text-secondary">Active Mahals</span>
+<div class="p-2 bg-info-bg rounded-lg">
+<span class="material-symbols-outlined text-info">account_balance</span>
+</div>
+</div>
+<div>
+<div class="font-amount-lg text-amount-lg text-on-surface mb-1">250</div>
+<div class="font-small text-small text-text-muted">98% AutoPay Enabled</div>
+</div>
+</div>
+<div class="bg-surface p-lg rounded-xl border border-border-base flex flex-col justify-between">
+<div class="flex justify-between items-start mb-4">
+<span class="font-card-title text-card-title text-text-secondary">Pending Renewals</span>
+<div class="p-2 bg-warning-bg rounded-lg">
+<span class="material-symbols-outlined text-warning">pending_actions</span>
+</div>
+</div>
+<div>
+<div class="font-amount-lg text-amount-lg text-on-surface mb-1">12</div>
+<div class="font-small text-small text-error">Requires attention this week</div>
+</div>
+</div>
+</div>
+<!-- List Section -->
+<div class="bg-surface rounded-xl border border-border-base overflow-hidden flex flex-col flex-1">
+<div class="px-lg py-md border-b border-border-base flex justify-between items-center bg-surface-bright">
+<h3 class="font-section-title text-section-title text-on-surface">Mahal Subscriptions</h3>
+<div class="flex gap-2">
+<button class="flex items-center gap-1 px-3 py-1.5 border border-border-base rounded-lg bg-surface hover:bg-surface-container-low transition-colors font-button text-button text-text-secondary h-[44px]">
+<span class="material-symbols-outlined text-[18px]">filter_list</span>
+                            Filter
+                        </button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-border-base bg-surface-container-low text-text-secondary font-card-title text-card-title">
+<th class="py-3 px-lg font-semibold">Mahal Name</th>
+<th class="py-3 px-lg font-semibold">Plan &amp; Billing</th>
+<th class="py-3 px-lg font-semibold">Status</th>
+<th class="py-3 px-lg font-semibold">Renewal Date</th>
+<th class="py-3 px-lg font-semibold text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="font-body text-body text-on-surface divide-y divide-border-base">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-bright transition-colors">
+<td class="py-4 px-lg">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-primary-container/10 flex items-center justify-center text-primary font-bold">JM</div>
+<div>
+<div class="font-semibold">Juma Masjid, Downtown</div>
+<div class="font-small text-small text-text-muted">ID: MHL-1042</div>
+</div>
+</div>
+</td>
+<td class="py-4 px-lg">
+<div class="font-semibold text-primary">₹499/mo</div>
+<div class="flex items-center gap-1 font-small text-small text-text-muted mt-0.5">
+<span class="material-symbols-outlined text-[14px] text-success">autorenew</span> AutoPay Active
+                                    </div>
+</td>
+<td class="py-4 px-lg">
+<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-success-bg text-success font-small text-small font-semibold">
+<span class="w-1.5 h-1.5 rounded-full bg-success"></span> Active
+                                    </span>
+</td>
+<td class="py-4 px-lg text-text-secondary">Oct 15, 2023</td>
+<td class="py-4 px-lg text-right">
+<button class="p-2 text-text-muted hover:text-primary transition-colors rounded-lg hover:bg-surface-container-low">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-bright transition-colors">
+<td class="py-4 px-lg">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-primary-container/10 flex items-center justify-center text-primary font-bold">AH</div>
+<div>
+<div class="font-semibold">Al-Huda Islamic Center</div>
+<div class="font-small text-small text-text-muted">ID: MHL-0891</div>
+</div>
+</div>
+</td>
+<td class="py-4 px-lg">
+<div class="font-semibold text-primary">₹499/mo</div>
+<div class="flex items-center gap-1 font-small text-small text-warning mt-0.5">
+<span class="material-symbols-outlined text-[14px]">credit_card_off</span> Manual Pay
+                                    </div>
+</td>
+<td class="py-4 px-lg">
+<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-warning-bg text-warning font-small text-small font-semibold">
+<span class="w-1.5 h-1.5 rounded-full bg-warning"></span> Grace Period
+                                    </span>
+</td>
+<td class="py-4 px-lg text-error font-semibold">Oct 01, 2023</td>
+<td class="py-4 px-lg text-right">
+<button class="p-2 text-text-muted hover:text-primary transition-colors rounded-lg hover:bg-surface-container-low">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-bright transition-colors">
+<td class="py-4 px-lg">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-primary-container/10 flex items-center justify-center text-primary font-bold">GN</div>
+<div>
+<div class="font-semibold">Greenwood Noor Mosque</div>
+<div class="font-small text-small text-text-muted">ID: MHL-1105</div>
+</div>
+</div>
+</td>
+<td class="py-4 px-lg">
+<div class="font-semibold text-primary">₹499/mo</div>
+<div class="flex items-center gap-1 font-small text-small text-text-muted mt-0.5">
+<span class="material-symbols-outlined text-[14px] text-success">autorenew</span> AutoPay Active
+                                    </div>
+</td>
+<td class="py-4 px-lg">
+<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-success-bg text-success font-small text-small font-semibold">
+<span class="w-1.5 h-1.5 rounded-full bg-success"></span> Active
+                                    </span>
+</td>
+<td class="py-4 px-lg text-text-secondary">Nov 22, 2023</td>
+<td class="py-4 px-lg text-right">
+<button class="p-2 text-text-muted hover:text-primary transition-colors rounded-lg hover:bg-surface-container-low">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</main>
+</body></html>

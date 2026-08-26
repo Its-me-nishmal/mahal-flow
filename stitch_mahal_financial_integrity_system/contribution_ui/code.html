@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Make a Contribution</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "error": "#C93B3B",
+                        "on-primary": "#ffffff",
+                        "on-tertiary-fixed-variant": "#3e4947",
+                        "outline": "#6f7975",
+                        "on-background": "#181c1b",
+                        "on-primary-container": "#9bead4",
+                        "warning-bg": "#FFF5DC",
+                        "secondary-fixed": "#b2efde",
+                        "error-bg": "#FDECEC",
+                        "surface-container": "#ebefec",
+                        "on-error-container": "#93000a",
+                        "on-surface": "#181c1b",
+                        "surface-container-low": "#f1f4f1",
+                        "background": "#f7faf7",
+                        "on-secondary-container": "#346e61",
+                        "border-base": "#E3E8E6",
+                        "tertiary-fixed-dim": "#bdc9c6",
+                        "inverse-surface": "#2d3130",
+                        "tertiary-container": "#576260",
+                        "tertiary": "#3f4a48",
+                        "surface-dim": "#d7dbd8",
+                        "text-secondary": "#5E6864",
+                        "on-error": "#ffffff",
+                        "primary-container": "#146c5b",
+                        "surface-container-high": "#e6e9e6",
+                        "on-tertiary-fixed": "#131e1c",
+                        "on-tertiary-container": "#d1ddda",
+                        "info": "#3478B8",
+                        "surface-tint": "#116a5a",
+                        "error-container": "#ffdad6",
+                        "secondary": "#2d685b",
+                        "surface-container-highest": "#e0e3e0",
+                        "on-primary-fixed-variant": "#005143",
+                        "on-secondary": "#ffffff",
+                        "bg-app": "#F7F9F8",
+                        "text-primary": "#17201D",
+                        "on-secondary-fixed-variant": "#0f5044",
+                        "inverse-on-surface": "#eef1ee",
+                        "secondary-container": "#b2efde",
+                        "on-secondary-fixed": "#00201a",
+                        "warning": "#B77900",
+                        "on-tertiary": "#ffffff",
+                        "secondary-fixed-dim": "#97d2c2",
+                        "primary-fixed-dim": "#87d5c0",
+                        "on-primary-fixed": "#00201a",
+                        "primary": "#005244",
+                        "outline-variant": "#bec9c4",
+                        "success": "#16834B",
+                        "inverse-primary": "#87d5c0",
+                        "on-surface-variant": "#3f4945",
+                        "surface-variant": "#e0e3e0",
+                        "surface": "#FFFFFF",
+                        "tertiary-fixed": "#d9e5e2",
+                        "surface-container-lowest": "#ffffff",
+                        "success-bg": "#EAF7EF",
+                        "text-muted": "#8A9390",
+                        "info-bg": "#EAF3FB",
+                        "surface-bright": "#f7faf7",
+                        "primary-fixed": "#a3f2dc"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "margin-desktop": "32px",
+                        "xxl": "48px",
+                        "xl": "32px",
+                        "md": "16px",
+                        "margin-tablet": "24px",
+                        "sm": "8px",
+                        "margin-mobile": "16px",
+                        "lg": "24px",
+                        "gutter": "16px"
+                    },
+                    "fontFamily": {
+                        "card-title": ["Inter"],
+                        "section-title": ["Inter"],
+                        "small": ["Inter"],
+                        "page-title": ["Inter"],
+                        "button": ["Inter"],
+                        "body": ["Inter"],
+                        "display": ["Inter"],
+                        "amount-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "card-title": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "section-title": ["18px", { "lineHeight": "26px", "fontWeight": "600" }],
+                        "small": ["12px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "page-title": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "button": ["14px", { "lineHeight": "20px", "fontWeight": "600" }],
+                        "body": ["14px", { "lineHeight": "22px", "fontWeight": "400" }],
+                        "display": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "amount-lg": ["28px", { "lineHeight": "36px", "fontWeight": "700" }]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* Custom scrollbar for webkit */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background-color: #d7dbd8;
+            border-radius: 10px;
+        }
+        /* Remove number input arrows */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+    </style>
+</head>
+<body class="bg-bg-app text-on-surface min-h-screen flex flex-col font-body text-body selection:bg-primary-fixed selection:text-on-primary-fixed">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 border-b border-border-base bg-surface">
+<div class="flex justify-between items-center px-margin-mobile h-16 w-full max-w-screen-xl mx-auto transition-colors duration-200">
+<!-- Leading Avatar -->
+<div class="flex-shrink-0 cursor-pointer hover:bg-surface-variant/50 rounded-full p-1 transition-colors duration-200">
+<img class="w-8 h-8 rounded-full object-cover border border-border-base shadow-sm" data-alt="A clean, professional headshot of an individual used as a profile avatar. The person has a friendly expression, soft lighting, and is positioned against a bright, minimalist white background. The aesthetic is modern and fits a high-quality fintech application." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAUlW9aIuhB60naZbfvp8gNNAZbk4ba7r4CxcmXHTGi2OLXdrotv58dXUsFXj6ch22PUpk0SoMpJepRY89gqp0BkajNotHiNLpB8c7C1o3gO5ilNAQgA5WLqipxXwKsIv0ks7h2MZoXRnPqw96IuKA51N0_vPZfKWcqCpkON3cZ3QMaB241BXPcZ58bzA5wvdUUK6FH71cctcWv_8DXSVEtJcEIv5rRLOc2KVCghhJZdCgol9B840Qa"/>
+</div>
+<!-- Headline -->
+<h1 class="font-page-title text-page-title text-primary tracking-tight">MahalFlow</h1>
+<!-- Trailing Icon -->
+<button class="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full hover:bg-surface-variant/50 transition-colors duration-200 text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">help_outline</span>
+</button>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow pt-[88px] pb-[96px] px-margin-mobile max-w-screen-md mx-auto w-full flex flex-col">
+<!-- Page Title -->
+<div class="mb-6">
+<h2 class="font-page-title text-page-title text-on-surface">Make a Contribution</h2>
+<p class="font-body text-body text-text-secondary mt-1">Support community initiatives outside of regular dues.</p>
+</div>
+<!-- Contribution Form Card -->
+<div class="bg-surface rounded-xl border border-border-base p-5 shadow-[0_2px_8px_rgba(23,32,29,0.04)]">
+<!-- Amount Input -->
+<div class="mb-6">
+<label class="block font-card-title text-card-title text-on-surface mb-2" for="contribution-amount">Amount</label>
+<div class="relative flex items-center h-[56px] rounded-lg border border-outline-variant bg-surface focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all duration-200 overflow-hidden">
+<div class="pl-4 pr-1 text-text-secondary font-amount-lg text-amount-lg flex items-center h-full select-none">
+                        ₹
+                    </div>
+<input class="w-full h-full bg-transparent border-none focus:ring-0 font-amount-lg text-amount-lg text-on-surface placeholder:text-text-muted pb-1" id="contribution-amount" placeholder="1,000" type="number"/>
+</div>
+</div>
+<!-- Optional Note -->
+<div class="mb-8">
+<label class="block font-card-title text-card-title text-on-surface mb-2 flex items-center justify-between" for="contribution-note">
+<span>Note <span class="text-text-secondary font-body text-body font-normal">(Optional)</span></span>
+</label>
+<textarea class="w-full rounded-lg border border-outline-variant bg-surface p-3 font-body text-body text-on-surface placeholder:text-text-muted focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-200 resize-none" id="contribution-note" placeholder="Add a message or specify the purpose..." rows="3"></textarea>
+</div>
+<!-- Action Button -->
+<button class="w-full h-12 bg-primary-container text-on-primary font-button text-button rounded-lg flex items-center justify-center transition-all duration-200 hover:bg-surface-tint active:scale-[0.98] shadow-sm">
+                Continue to Payment
+            </button>
+<div class="mt-4 flex items-center justify-center text-text-secondary gap-1.5">
+<span class="material-symbols-outlined text-[16px]">lock</span>
+<span class="font-small text-small">Secure encrypted transaction</span>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 border-t border-border-base bg-surface md:hidden">
+<div class="flex justify-around items-center h-16 w-full px-2 pb-safe">
+<!-- Home (Inactive) -->
+<a class="flex flex-col items-center justify-center text-text-secondary hover:bg-surface-container-low active:scale-95 transition-all duration-150 w-16 h-full rounded-lg" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 0;">home</span>
+<span class="font-small text-small">Home</span>
+</a>
+<!-- Payments (Active) -->
+<a class="flex flex-col items-center justify-center text-primary font-semibold hover:bg-surface-container-low active:scale-95 transition-all duration-150 w-16 h-full rounded-lg" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1;">payments</span>
+<span class="font-small text-small">Payments</span>
+</a>
+<!-- Receipts (Inactive) -->
+<a class="flex flex-col items-center justify-center text-text-secondary hover:bg-surface-container-low active:scale-95 transition-all duration-150 w-16 h-full rounded-lg" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 0;">receipt_long</span>
+<span class="font-small text-small">Receipts</span>
+</a>
+<!-- Alerts (Inactive) -->
+<a class="flex flex-col items-center justify-center text-text-secondary hover:bg-surface-container-low active:scale-95 transition-all duration-150 w-16 h-full rounded-lg" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 0;">notifications</span>
+<span class="font-small text-small">Alerts</span>
+</a>
+<!-- Profile (Inactive) -->
+<a class="flex flex-col items-center justify-center text-text-secondary hover:bg-surface-container-low active:scale-95 transition-all duration-150 w-16 h-full rounded-lg" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 0;">person</span>
+<span class="font-small text-small">Profile</span>
+</a>
+</div>
+</nav>
+</body></html>

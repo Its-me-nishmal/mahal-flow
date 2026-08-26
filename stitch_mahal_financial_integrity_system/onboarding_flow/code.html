@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>MahalFlow - Onboarding</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-fixed": "#d9e5e2",
+                        "surface-container-high": "#e6e9e6",
+                        "surface-container-low": "#f1f4f1",
+                        "primary": "#005244",
+                        "surface-variant": "#e0e3e0",
+                        "on-secondary-fixed": "#00201a",
+                        "error": "#C93B3B",
+                        "surface-tint": "#116a5a",
+                        "secondary": "#2d685b",
+                        "inverse-surface": "#2d3130",
+                        "on-primary-fixed": "#00201a",
+                        "on-tertiary-fixed": "#131e1c",
+                        "warning-bg": "#FFF5DC",
+                        "on-secondary-container": "#346e61",
+                        "surface-container-highest": "#e0e3e0",
+                        "secondary-container": "#b2efde",
+                        "error-container": "#ffdad6",
+                        "inverse-primary": "#87d5c0",
+                        "text-primary": "#17201D",
+                        "info-bg": "#EAF3FB",
+                        "on-error-container": "#93000a",
+                        "inverse-on-surface": "#eef1ee",
+                        "success-bg": "#EAF7EF",
+                        "background": "#f7faf7",
+                        "surface-bright": "#f7faf7",
+                        "success": "#16834B",
+                        "tertiary-container": "#576260",
+                        "on-primary-container": "#9bead4",
+                        "on-tertiary": "#ffffff",
+                        "surface": "#FFFFFF",
+                        "on-primary-fixed-variant": "#005143",
+                        "on-secondary": "#ffffff",
+                        "border-base": "#E3E8E6",
+                        "warning": "#B77900",
+                        "primary-container": "#146c5b",
+                        "error-bg": "#FDECEC",
+                        "tertiary-fixed-dim": "#bdc9c6",
+                        "primary-fixed": "#a3f2dc",
+                        "on-tertiary-fixed-variant": "#3e4947",
+                        "text-secondary": "#5E6864",
+                        "on-primary": "#ffffff",
+                        "primary-fixed-dim": "#87d5c0",
+                        "info": "#3478B8",
+                        "on-secondary-fixed-variant": "#0f5044",
+                        "surface-dim": "#d7dbd8",
+                        "on-surface": "#181c1b",
+                        "on-error": "#ffffff",
+                        "outline-variant": "#bec9c4",
+                        "on-tertiary-container": "#d1ddda",
+                        "secondary-fixed": "#b2efde",
+                        "on-surface-variant": "#3f4945",
+                        "bg-app": "#F7F9F8",
+                        "surface-container": "#ebefec",
+                        "outline": "#6f7975",
+                        "secondary-fixed-dim": "#97d2c2",
+                        "surface-container-lowest": "#ffffff",
+                        "tertiary": "#3f4a48",
+                        "text-muted": "#8A9390",
+                        "on-background": "#181c1b"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "margin-tablet": "24px",
+                        "xs": "4px",
+                        "xl": "32px",
+                        "sm": "8px",
+                        "margin-mobile": "16px",
+                        "xxl": "48px",
+                        "gutter": "16px",
+                        "margin-desktop": "32px",
+                        "lg": "24px",
+                        "md": "16px"
+                    },
+                    "fontFamily": {
+                        "amount-lg": ["Inter"],
+                        "display": ["Inter"],
+                        "card-title": ["Inter"],
+                        "small": ["Inter"],
+                        "button": ["Inter"],
+                        "section-title": ["Inter"],
+                        "body": ["Inter"],
+                        "page-title": ["Inter"]
+                    },
+                    "fontSize": {
+                        "amount-lg": ["28px", { "lineHeight": "36px", "fontWeight": "700" }],
+                        "display": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "card-title": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "small": ["12px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "button": ["14px", { "lineHeight": "20px", "fontWeight": "600" }],
+                        "section-title": ["18px", { "lineHeight": "26px", "fontWeight": "600" }],
+                        "body": ["14px", { "lineHeight": "22px", "fontWeight": "400" }],
+                        "page-title": ["24px", { "lineHeight": "32px", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .carousel-slide {
+            transition: transform 0.5s ease-in-out, opacity 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-bg-app min-h-screen flex flex-col items-center justify-center font-body text-text-primary antialiased selection:bg-primary-container selection:text-on-primary">
+<main class="w-full max-w-md mx-auto h-[100dvh] flex flex-col relative overflow-hidden bg-surface shadow-[0_2px_8px_rgba(23,32,29,0.08)] sm:h-auto sm:min-h-[600px] sm:rounded-xl sm:my-8 border border-border-base">
+<!-- Header / Skip -->
+<div class="flex justify-between items-center w-full px-margin-mobile pt-margin-mobile z-10">
+<h1 class="font-page-title text-page-title text-primary-container tracking-tight">MahalFlow</h1>
+<button class="font-button text-button text-text-secondary hover:text-primary-container transition-colors px-4 py-2" id="skipBtn">Skip</button>
+</div>
+<!-- Carousel Container -->
+<div class="flex-1 relative w-full overflow-hidden mt-8" id="carouselContainer">
+<!-- Step 1 -->
+<div class="carousel-slide absolute inset-0 w-full h-full flex flex-col items-center px-margin-mobile opacity-100 translate-x-0" id="slide1">
+<div class="flex-1 flex flex-col items-center justify-center w-full max-w-xs mx-auto">
+<div class="w-48 h-48 mb-8 rounded-full bg-info-bg flex items-center justify-center">
+<span class="material-symbols-outlined text-[80px] text-info" style="font-variation-settings: 'FILL' 1;">account_balance_wallet</span>
+</div>
+<h2 class="font-display text-display text-center mb-4">Financial Clarity</h2>
+<p class="font-body text-body text-text-secondary text-center">Easily track your dues, contributions, and outstanding balances in one unified dashboard.</p>
+</div>
+</div>
+<!-- Step 2 -->
+<div class="carousel-slide absolute inset-0 w-full h-full flex flex-col items-center px-margin-mobile opacity-0 translate-x-full" id="slide2">
+<div class="flex-1 flex flex-col items-center justify-center w-full max-w-xs mx-auto">
+<div class="w-48 h-48 mb-8 rounded-full bg-success-bg flex items-center justify-center">
+<span class="material-symbols-outlined text-[80px] text-success" style="font-variation-settings: 'FILL' 1;">groups</span>
+</div>
+<h2 class="font-display text-display text-center mb-4">Community Growth</h2>
+<p class="font-body text-body text-text-secondary text-center">See how your contributions directly support the Mahal and foster community development.</p>
+</div>
+</div>
+<!-- Step 3 -->
+<div class="carousel-slide absolute inset-0 w-full h-full flex flex-col items-center px-margin-mobile opacity-0 translate-x-full" id="slide3">
+<div class="flex-1 flex flex-col items-center justify-center w-full max-w-xs mx-auto">
+<div class="w-48 h-48 mb-8 rounded-full bg-warning-bg flex items-center justify-center">
+<span class="material-symbols-outlined text-[80px] text-warning" style="font-variation-settings: 'FILL' 1;">verified_user</span>
+</div>
+<h2 class="font-display text-display text-center mb-4">Secure Payments</h2>
+<p class="font-body text-body text-text-secondary text-center">Experience trusted, reliable, and secure transactions for all your financial commitments.</p>
+</div>
+</div>
+</div>
+<!-- Controls Footer -->
+<div class="w-full px-margin-mobile pb-margin-mobile pt-4 mt-auto z-10 bg-surface">
+<!-- Indicators -->
+<div class="flex justify-center items-center space-x-2 mb-8">
+<div class="h-2 rounded-full transition-all duration-300 w-8 bg-primary-container" id="dot1"></div>
+<div class="h-2 rounded-full transition-all duration-300 w-2 bg-surface-variant" id="dot2"></div>
+<div class="h-2 rounded-full transition-all duration-300 w-2 bg-surface-variant" id="dot3"></div>
+</div>
+<!-- Buttons -->
+<div class="flex justify-between items-center w-full">
+<button class="invisible font-button text-button text-primary-container bg-surface border border-border-base rounded-lg px-6 py-3 min-h-[44px] flex items-center justify-center hover:bg-surface-container-low transition-colors" id="prevBtn">
+                    Back
+                </button>
+<button class="font-button text-button text-on-primary bg-primary-container rounded-lg px-8 py-3 min-h-[44px] flex items-center justify-center hover:bg-primary transition-colors ml-auto shadow-[0_2px_8px_rgba(20,108,91,0.2)]" id="nextBtn">
+                    Next
+                </button>
+</div>
+</div>
+</main>
+<script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const slides = [
+                document.getElementById('slide1'),
+                document.getElementById('slide2'),
+                document.getElementById('slide3')
+            ];
+            const dots = [
+                document.getElementById('dot1'),
+                document.getElementById('dot2'),
+                document.getElementById('dot3')
+            ];
+            
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            const skipBtn = document.getElementById('skipBtn');
+            
+            let currentSlide = 0;
+            const totalSlides = slides.length;
+
+            function updateCarousel() {
+                // Update slides
+                slides.forEach((slide, index) => {
+                    if (index === currentSlide) {
+                        slide.style.opacity = '1';
+                        slide.style.transform = 'translateX(0)';
+                    } else if (index < currentSlide) {
+                        slide.style.opacity = '0';
+                        slide.style.transform = 'translateX(-100%)';
+                    } else {
+                        slide.style.opacity = '0';
+                        slide.style.transform = 'translateX(100%)';
+                    }
+                });
+
+                // Update dots
+                dots.forEach((dot, index) => {
+                    if (index === currentSlide) {
+                        dot.classList.replace('w-2', 'w-8');
+                        dot.classList.replace('bg-surface-variant', 'bg-primary-container');
+                    } else {
+                        dot.classList.replace('w-8', 'w-2');
+                        dot.classList.replace('bg-primary-container', 'bg-surface-variant');
+                    }
+                });
+
+                // Update buttons
+                if (currentSlide === 0) {
+                    prevBtn.classList.add('invisible');
+                } else {
+                    prevBtn.classList.remove('invisible');
+                }
+
+                if (currentSlide === totalSlides - 1) {
+                    nextBtn.textContent = 'Get Started';
+                    skipBtn.classList.add('invisible');
+                } else {
+                    nextBtn.textContent = 'Next';
+                    skipBtn.classList.remove('invisible');
+                }
+            }
+
+            nextBtn.addEventListener('click', () => {
+                if (currentSlide < totalSlides - 1) {
+                    currentSlide++;
+                    updateCarousel();
+                } else {
+                    // Action for final step
+                    alert('Onboarding complete!');
+                }
+            });
+
+            prevBtn.addEventListener('click', () => {
+                if (currentSlide > 0) {
+                    currentSlide--;
+                    updateCarousel();
+                }
+            });
+
+            skipBtn.addEventListener('click', () => {
+                currentSlide = totalSlides - 1;
+                updateCarousel();
+            });
+        });
+    </script>
+</body></html>

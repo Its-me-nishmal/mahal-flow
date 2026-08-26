@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Add New Mahal - MahalFlow</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-lowest": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "primary": "#005244",
+                        "on-primary-fixed": "#00201a",
+                        "secondary-container": "#b2efde",
+                        "on-tertiary-fixed": "#131e1c",
+                        "surface": "#FFFFFF",
+                        "on-primary-container": "#9bead4",
+                        "secondary-fixed-dim": "#97d2c2",
+                        "secondary": "#2d685b",
+                        "surface-tint": "#116a5a",
+                        "surface-container-low": "#f1f4f1",
+                        "inverse-surface": "#2d3130",
+                        "on-surface-variant": "#3f4945",
+                        "on-tertiary-fixed-variant": "#3e4947",
+                        "tertiary": "#3f4a48",
+                        "inverse-primary": "#87d5c0",
+                        "primary-container": "#146c5b",
+                        "on-primary-fixed-variant": "#005143",
+                        "success-bg": "#EAF7EF",
+                        "surface-container": "#ebefec",
+                        "on-secondary-fixed": "#00201a",
+                        "primary-fixed": "#a3f2dc",
+                        "text-muted": "#8A9390",
+                        "on-error-container": "#93000a",
+                        "outline": "#6f7975",
+                        "warning-bg": "#FFF5DC",
+                        "surface-container-highest": "#e0e3e0",
+                        "on-primary": "#ffffff",
+                        "surface-dim": "#d7dbd8",
+                        "success": "#16834B",
+                        "tertiary-fixed-dim": "#bdc9c6",
+                        "bg-app": "#F7F9F8",
+                        "on-surface": "#181c1b",
+                        "surface-container-high": "#e6e9e6",
+                        "tertiary-fixed": "#d9e5e2",
+                        "on-error": "#ffffff",
+                        "error-bg": "#FDECEC",
+                        "on-secondary-container": "#346e61",
+                        "warning": "#B77900",
+                        "outline-variant": "#bec9c4",
+                        "surface-bright": "#f7faf7",
+                        "primary-fixed-dim": "#87d5c0",
+                        "on-tertiary-container": "#d1ddda",
+                        "secondary-fixed": "#b2efde",
+                        "info": "#3478B8",
+                        "border-base": "#E3E8E6",
+                        "background": "#f7faf7",
+                        "on-tertiary": "#ffffff",
+                        "text-primary": "#17201D",
+                        "tertiary-container": "#576260",
+                        "info-bg": "#EAF3FB",
+                        "on-background": "#181c1b",
+                        "inverse-on-surface": "#eef1ee",
+                        "text-secondary": "#5E6864",
+                        "surface-variant": "#e0e3e0",
+                        "error-container": "#ffdad6",
+                        "on-secondary-fixed-variant": "#0f5044",
+                        "error": "#C93B3B"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xxl": "48px",
+                        "sm": "8px",
+                        "xl": "32px",
+                        "lg": "24px",
+                        "margin-mobile": "16px",
+                        "md": "16px",
+                        "xs": "4px",
+                        "margin-tablet": "24px",
+                        "margin-desktop": "32px",
+                        "gutter": "16px"
+                    },
+                    "fontFamily": {
+                        "card-title": ["Inter"],
+                        "page-title": ["Inter"],
+                        "section-title": ["Inter"],
+                        "button": ["Inter"],
+                        "small": ["Inter"],
+                        "display": ["Inter"],
+                        "amount-lg": ["Inter"],
+                        "body": ["Inter"]
+                    },
+                    "fontSize": {
+                        "card-title": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "page-title": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "section-title": ["18px", { "lineHeight": "26px", "fontWeight": "600" }],
+                        "button": ["14px", { "lineHeight": "20px", "fontWeight": "600" }],
+                        "small": ["12px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "display": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "amount-lg": ["28px", { "lineHeight": "36px", "fontWeight": "700" }],
+                        "body": ["14px", { "lineHeight": "22px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .input-field {
+            @apply w-full h-12 rounded-[10px] border-border-base bg-surface px-md font-body text-body text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors;
+        }
+        .form-label {
+            @apply block font-card-title text-card-title text-on-surface mb-xs;
+        }
+        .form-section {
+            @apply bg-surface rounded-xl border border-border-base p-lg mb-lg;
+        }
+        .form-section-header {
+            @apply font-section-title text-section-title text-text-primary mb-md pb-sm border-b border-border-base flex items-center gap-sm;
+        }
+    </style>
+</head>
+<body class="bg-bg-app min-h-screen text-on-surface font-body flex">
+<!-- TopNavBar (Hidden on desktop, mapped for logic structure, but task asks for SideNav) -->
+<!-- Assuming we are focusing on Desktop layout with SideNavBar based on constraints -->
+<!-- SideNavBar -->
+<nav class="bg-surface border-r border-border-base h-screen w-64 fixed left-0 top-0 flex flex-col p-md gap-xs z-50">
+<div class="mb-lg px-xs py-sm">
+<h1 class="font-section-title text-section-title text-primary">MahalFlow</h1>
+<p class="font-small text-small text-text-secondary mt-xs">Super Admin Portal</p>
+</div>
+<div class="flex-1 overflow-y-auto space-y-xs">
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-text-secondary hover:bg-surface-container-low transition-all cursor-pointer active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">dashboard</span>
+<span class="font-button text-button">Dashboard</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg bg-primary-fixed text-on-primary-fixed-variant font-bold cursor-pointer active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">location_city</span>
+<span class="font-button text-button">Mahals</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-text-secondary hover:bg-surface-container-low transition-all cursor-pointer active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">group</span>
+<span class="font-button text-button">Members</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-text-secondary hover:bg-surface-container-low transition-all cursor-pointer active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">payments</span>
+<span class="font-button text-button">Payments</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-text-secondary hover:bg-surface-container-low transition-all cursor-pointer active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">card_membership</span>
+<span class="font-button text-button">Subscriptions</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-text-secondary hover:bg-surface-container-low transition-all cursor-pointer active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">account_balance_wallet</span>
+<span class="font-button text-button">Gateways</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-text-secondary hover:bg-surface-container-low transition-all cursor-pointer active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">undo</span>
+<span class="font-button text-button">Refunds</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-text-secondary hover:bg-surface-container-low transition-all cursor-pointer active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">assessment</span>
+<span class="font-button text-button">Reports</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-text-secondary hover:bg-surface-container-low transition-all cursor-pointer active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">history_edu</span>
+<span class="font-button text-button">Audit Logs</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-text-secondary hover:bg-surface-container-low transition-all cursor-pointer active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">settings</span>
+<span class="font-button text-button">Settings</span>
+</a>
+</div>
+<div class="mt-auto pt-sm border-t border-border-base">
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-text-secondary hover:bg-surface-container-low transition-all cursor-pointer active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">logout</span>
+<span class="font-button text-button">Log Out</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Canvas -->
+<main class="ml-64 flex-1 flex flex-col min-h-screen">
+<!-- Page Header -->
+<header class="bg-surface border-b border-border-base px-margin-desktop py-lg sticky top-0 z-30 flex justify-between items-center shadow-[0_2px_8px_rgba(23,32,29,0.02)]">
+<div>
+<div class="flex items-center gap-sm text-text-secondary mb-xs">
+<a class="hover:text-primary transition-colors flex items-center" href="#">
+<span class="material-symbols-outlined text-[18px]">arrow_back</span>
+<span class="font-small text-small ml-xs">Back to Mahals</span>
+</a>
+</div>
+<h2 class="font-page-title text-page-title text-text-primary">Add New Mahal</h2>
+</div>
+<!-- Quick Actions could go here if needed, keeping simple for this form -->
+</header>
+<!-- Form Content Area -->
+<div class="flex-1 overflow-y-auto p-margin-desktop bg-bg-app">
+<div class="max-w-4xl mx-auto pb-xxl">
+<form id="add-mahal-form">
+<!-- Section 1: Mahal Information -->
+<div class="form-section">
+<h3 class="form-section-header">
+<span class="material-symbols-outlined text-primary">location_city</span>
+                            Mahal Information
+                        </h3>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-lg">
+<div class="col-span-1 md:col-span-2">
+<label class="form-label" for="mahalName">Mahal Name</label>
+<input class="input-field" id="mahalName" placeholder="Enter full name of the Mahal" type="text"/>
+</div>
+<div class="col-span-1">
+<label class="form-label" for="location">Location / City</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-md top-1/2 -translate-y-1/2 text-text-muted">location_on</span>
+<input class="input-field pl-[44px]" id="location" placeholder="e.g. Kozhikode" type="text"/>
+</div>
+</div>
+<div class="col-span-1">
+<label class="form-label" for="postalCode">Postal Code</label>
+<input class="input-field" id="postalCode" placeholder="Enter PIN code" type="text"/>
+</div>
+<div class="col-span-1">
+<label class="form-label" for="contactPerson">Primary Contact Person</label>
+<input class="input-field" id="contactPerson" placeholder="President / Secretary Name" type="text"/>
+</div>
+<div class="col-span-1">
+<label class="form-label" for="mobileNumber">Mobile Number</label>
+<div class="relative">
+<span class="absolute left-md top-1/2 -translate-y-1/2 text-text-muted font-body text-body">+91</span>
+<input class="input-field pl-[50px]" id="mobileNumber" placeholder="10-digit mobile number" type="tel"/>
+</div>
+</div>
+</div>
+</div>
+<!-- Section 2: Subscription Setup -->
+<div class="form-section">
+<h3 class="form-section-header">
+<span class="material-symbols-outlined text-primary">card_membership</span>
+                            Subscription Setup
+                        </h3>
+<div class="space-y-lg">
+<div>
+<label class="form-label mb-md">Select Plan Tier</label>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-md">
+<!-- Standard Plan -->
+<label class="relative cursor-pointer group">
+<input checked="" class="peer sr-only" name="planTier" type="radio" value="standard"/>
+<div class="h-full border border-border-base rounded-xl p-md bg-surface peer-checked:border-primary peer-checked:ring-1 peer-checked:ring-primary hover:bg-surface-container-lowest transition-all">
+<div class="flex justify-between items-center mb-sm">
+<span class="font-section-title text-section-title text-text-primary">Standard</span>
+<span class="material-symbols-outlined text-border-base peer-checked:text-primary transition-colors">check_circle</span>
+</div>
+<p class="font-small text-small text-text-secondary mb-md">Basic management tools for smaller Mahals.</p>
+<div class="font-card-title text-card-title text-primary">₹5,000 <span class="font-small text-small text-text-secondary font-normal">/yr</span></div>
+</div>
+</label>
+<!-- Premium Plan -->
+<label class="relative cursor-pointer group">
+<input class="peer sr-only" name="planTier" type="radio" value="premium"/>
+<div class="h-full border border-border-base rounded-xl p-md bg-surface peer-checked:border-primary peer-checked:ring-1 peer-checked:ring-primary hover:bg-surface-container-lowest transition-all relative overflow-hidden">
+<div class="absolute top-0 right-0 bg-secondary-container text-on-secondary-container px-2 py-1 text-[10px] font-bold rounded-bl-lg">POPULAR</div>
+<div class="flex justify-between items-center mb-sm mt-1">
+<span class="font-section-title text-section-title text-text-primary">Premium</span>
+<span class="material-symbols-outlined text-border-base peer-checked:text-primary transition-colors">check_circle</span>
+</div>
+<p class="font-small text-small text-text-secondary mb-md">Advanced features including Gateway integration.</p>
+<div class="font-card-title text-card-title text-primary">₹12,000 <span class="font-small text-small text-text-secondary font-normal">/yr</span></div>
+</div>
+</label>
+<!-- Enterprise Plan -->
+<label class="relative cursor-pointer group">
+<input class="peer sr-only" name="planTier" type="radio" value="enterprise"/>
+<div class="h-full border border-border-base rounded-xl p-md bg-surface peer-checked:border-primary peer-checked:ring-1 peer-checked:ring-primary hover:bg-surface-container-lowest transition-all">
+<div class="flex justify-between items-center mb-sm">
+<span class="font-section-title text-section-title text-text-primary">Enterprise</span>
+<span class="material-symbols-outlined text-border-base peer-checked:text-primary transition-colors">check_circle</span>
+</div>
+<p class="font-small text-small text-text-secondary mb-md">Custom setup, dedicated support for large institutions.</p>
+<div class="font-card-title text-card-title text-primary">Custom</div>
+</div>
+</label>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-lg">
+<div>
+<label class="form-label" for="billingCycle">Billing Cycle</label>
+<div class="relative">
+<select class="input-field appearance-none pr-xl" id="billingCycle">
+<option value="annual">Annually (Recommended)</option>
+<option value="biannual">Bi-Annually</option>
+<option value="monthly">Monthly</option>
+</select>
+<span class="material-symbols-outlined absolute right-md top-1/2 -translate-y-1/2 text-text-muted pointer-events-none">expand_more</span>
+</div>
+</div>
+<div>
+<label class="form-label" for="startDate">Subscription Start Date</label>
+<div class="relative">
+<input class="input-field" id="startDate" type="date"/>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Section 3: Gateway Assignment -->
+<div class="form-section mb-0">
+<div class="flex items-center justify-between mb-md pb-sm border-b border-border-base">
+<h3 class="font-section-title text-section-title text-text-primary flex items-center gap-sm m-0 border-0 pb-0">
+<span class="material-symbols-outlined text-primary">account_balance_wallet</span>
+                                Gateway Assignment
+                            </h3>
+<span class="bg-info-bg text-info px-sm py-xs rounded text-[10px] font-bold tracking-wide">OPTIONAL</span>
+</div>
+<div class="space-y-md">
+<p class="font-body text-body text-text-secondary">Assign a default payment gateway for this Mahal's transactions. You can configure credentials later in the Settings module.</p>
+<div>
+<label class="form-label" for="primaryGateway">Primary Gateway</label>
+<div class="relative">
+<select class="input-field appearance-none pr-xl" id="primaryGateway">
+<option value="none">None (Cash/Manual Only)</option>
+<option value="razorpay">Razorpay</option>
+<option value="cashfree">Cashfree</option>
+<option value="payu">PayU</option>
+</select>
+<span class="material-symbols-outlined absolute right-md top-1/2 -translate-y-1/2 text-text-muted pointer-events-none">expand_more</span>
+</div>
+</div>
+</div>
+</div>
+</form>
+</div>
+</div>
+<!-- Sticky Footer Actions -->
+<div class="sticky bottom-0 bg-surface border-t border-border-base p-margin-desktop flex justify-end gap-md shadow-[0_-4px_12px_rgba(23,32,29,0.05)] z-40">
+<button class="h-12 px-xl rounded-lg font-button text-button text-primary border border-border-base hover:bg-surface-container-low transition-colors min-w-[120px]" type="button">
+                Cancel
+            </button>
+<button class="h-12 px-xl rounded-lg font-button text-button bg-primary-container text-white hover:bg-surface-tint transition-colors min-w-[160px] flex items-center justify-center gap-sm" form="add-mahal-form" type="submit">
+<span class="material-symbols-outlined text-[20px]">add</span>
+                Create Mahal
+            </button>
+</div>
+</main>
+<script>
+        // Simple form submission prevention for demo purposes
+        document.getElementById('add-mahal-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            // In a real app, gather data and submit via API
+            const btn = document.querySelector('button[type="submit"]');
+            const originalContent = btn.innerHTML;
+            btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[20px]">progress_activity</span> Creating...';
+            btn.disabled = true;
+            btn.classList.add('opacity-80');
+            
+            setTimeout(() => {
+                btn.innerHTML = '<span class="material-symbols-outlined text-[20px]">check</span> Created';
+                btn.classList.remove('bg-primary-container', 'hover:bg-surface-tint');
+                btn.classList.add('bg-success', 'text-white');
+                
+                setTimeout(() => {
+                    btn.innerHTML = originalContent;
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-80', 'bg-success');
+                    btn.classList.add('bg-primary-container', 'hover:bg-surface-tint');
+                }, 2000);
+            }, 1000);
+        });
+    </script>
+</body></html>

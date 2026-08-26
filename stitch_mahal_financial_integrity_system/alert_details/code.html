@@ -1,0 +1,252 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>MahalFlow - Alert Details</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "secondary-fixed-dim": "#97d2c2",
+                      "on-error": "#ffffff",
+                      "primary": "#005244",
+                      "surface-tint": "#116a5a",
+                      "on-primary-fixed-variant": "#005143",
+                      "inverse-primary": "#87d5c0",
+                      "surface-container-high": "#e6e9e6",
+                      "success": "#16834B",
+                      "error-bg": "#FDECEC",
+                      "on-secondary-fixed": "#00201a",
+                      "error-container": "#ffdad6",
+                      "secondary-container": "#b2efde",
+                      "on-secondary": "#ffffff",
+                      "surface-container-low": "#f1f4f1",
+                      "text-secondary": "#5E6864",
+                      "primary-fixed": "#a3f2dc",
+                      "tertiary-container": "#576260",
+                      "on-secondary-fixed-variant": "#0f5044",
+                      "inverse-surface": "#2d3130",
+                      "on-tertiary-fixed-variant": "#3e4947",
+                      "surface-container": "#ebefec",
+                      "on-primary-container": "#9bead4",
+                      "border-base": "#E3E8E6",
+                      "tertiary": "#3f4a48",
+                      "text-primary": "#17201D",
+                      "outline-variant": "#bec9c4",
+                      "on-primary-fixed": "#00201a",
+                      "surface": "#FFFFFF",
+                      "warning": "#B77900",
+                      "background": "#f7faf7",
+                      "primary-fixed-dim": "#87d5c0",
+                      "on-secondary-container": "#346e61",
+                      "outline": "#6f7975",
+                      "on-tertiary": "#ffffff",
+                      "on-primary": "#ffffff",
+                      "on-error-container": "#93000a",
+                      "surface-container-highest": "#e0e3e0",
+                      "surface-variant": "#e0e3e0",
+                      "surface-container-lowest": "#ffffff",
+                      "on-surface-variant": "#3f4945",
+                      "tertiary-fixed-dim": "#bdc9c6",
+                      "surface-bright": "#f7faf7",
+                      "secondary": "#2d685b",
+                      "tertiary-fixed": "#d9e5e2",
+                      "on-tertiary-fixed": "#131e1c",
+                      "on-tertiary-container": "#d1ddda",
+                      "success-bg": "#EAF7EF",
+                      "inverse-on-surface": "#eef1ee",
+                      "primary-container": "#146c5b",
+                      "info": "#3478B8",
+                      "info-bg": "#EAF3FB",
+                      "bg-app": "#F7F9F8",
+                      "secondary-fixed": "#b2efde",
+                      "error": "#C93B3B",
+                      "warning-bg": "#FFF5DC",
+                      "on-surface": "#181c1b",
+                      "text-muted": "#8A9390",
+                      "surface-dim": "#d7dbd8",
+                      "on-background": "#181c1b"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "lg": "24px",
+                      "sm": "8px",
+                      "margin-mobile": "16px",
+                      "xl": "32px",
+                      "xs": "4px",
+                      "gutter": "16px",
+                      "margin-tablet": "24px",
+                      "margin-desktop": "32px",
+                      "xxl": "48px",
+                      "md": "16px"
+              },
+              "fontFamily": {
+                      "card-title": [
+                              "Inter"
+                      ],
+                      "body": [
+                              "Inter"
+                      ],
+                      "small": [
+                              "Inter"
+                      ],
+                      "section-title": [
+                              "Inter"
+                      ],
+                      "page-title": [
+                              "Inter"
+                      ],
+                      "button": [
+                              "Inter"
+                      ],
+                      "display": [
+                              "Inter"
+                      ],
+                      "amount-lg": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "card-title": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body": [
+                              "14px",
+                              {
+                                      "lineHeight": "22px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "small": [
+                              "12px",
+                              {
+                                      "lineHeight": "18px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "section-title": [
+                              "18px",
+                              {
+                                      "lineHeight": "26px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "page-title": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "button": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "display": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "amount-lg": [
+                              "28px",
+                              {
+                                      "lineHeight": "36px",
+                                      "fontWeight": "700"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+    </script>
+<style>
+        body {
+            background-color: #F7F9F8; /* bg-app fallback */
+        }
+    </style>
+</head>
+<body class="bg-bg-app text-text-primary min-h-screen flex flex-col font-body">
+<!-- TopAppBar -->
+<header class="bg-surface dark:bg-on-background fixed top-0 w-full z-50 border-b border-border-base dark:border-outline-variant flat no shadows transition-colors duration-200">
+<div class="flex justify-between items-center px-margin-mobile h-16 w-full max-w-screen-xl mx-auto">
+<div class="flex items-center gap-4">
+<button aria-label="Go back" class="text-text-secondary hover:bg-surface-variant/50 p-2 rounded-full transition-colors duration-200">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+<h1 class="font-page-title text-page-title text-text-primary">Alert Details</h1>
+</div>
+<button class="text-text-secondary hover:bg-surface-variant/50 p-2 rounded-full transition-colors duration-200">
+<span class="material-symbols-outlined">help_outline</span>
+</button>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-grow pt-24 pb-xxl px-margin-mobile md:px-margin-desktop max-w-screen-md mx-auto w-full">
+<!-- Alert Card -->
+<article class="bg-surface rounded-xl border border-border-base p-lg shadow-[0_2px_8px_rgba(23,32,29,0.08)] mb-lg relative overflow-hidden">
+<!-- Decorative accent line -->
+<div class="absolute top-0 left-0 w-full h-1 bg-warning"></div>
+<header class="mb-lg">
+<div class="flex justify-between items-start mb-sm">
+<span class="inline-flex items-center gap-xs bg-warning-bg text-warning font-small text-small px-2 py-1 rounded-full">
+<span class="material-symbols-outlined text-[16px]">info</span>
+                        Payment Due
+                    </span>
+<time class="font-small text-small text-text-muted">2 hours ago</time>
+</div>
+<h2 class="font-section-title text-section-title text-text-primary">Monthly Subscription Due</h2>
+</header>
+<div class="mb-xl bg-bg-app rounded-lg p-md border border-border-base">
+<div class="flex flex-col items-center justify-center py-sm">
+<span class="font-small text-small text-text-secondary mb-xs">Amount Due</span>
+<span class="font-amount-lg text-amount-lg text-primary">₹1,500</span>
+</div>
+<div class="w-full h-[1px] bg-border-base my-md"></div>
+<div class="flex justify-between items-center">
+<span class="font-body text-body text-text-secondary">Due Date</span>
+<span class="font-body text-body text-text-primary font-semibold">Oct 15, 2023</span>
+</div>
+
+</div>
+<div class="mb-xl">
+<p class="font-body text-body text-text-secondary leading-relaxed">Your monthly subscription payment is due soon. Please ensure payment is made by the due date. If you have already made the payment, it may take up to 24 hours to reflect in your account.</p>
+</div>
+<!-- Actions -->
+<div class="flex flex-col sm:flex-row gap-md mt-xl pt-lg border-t border-border-base">
+<button class="flex-1 bg-primary-container text-on-primary font-button text-button h-12 rounded-lg hover:bg-surface-tint transition-colors duration-200 flex items-center justify-center gap-sm">
+                    Pay ₹1,500
+                    <span class="material-symbols-outlined">arrow_forward</span>
+</button>
+<div class="flex flex-1 gap-md">
+<button class="flex-1 bg-surface border border-primary-container text-primary-container font-button text-button h-12 rounded-lg hover:bg-surface-container-low transition-colors duration-200">
+                        Remind Me
+                    </button>
+<button class="flex-1 bg-surface border border-border-base text-text-secondary font-button text-button h-12 rounded-lg hover:bg-surface-container-low transition-colors duration-200">
+                        Dismiss
+                    </button>
+</div>
+</div>
+</article>
+</main>
+
+
+</body></html>

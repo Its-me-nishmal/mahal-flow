@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>Monthly Dues - MahalFlow</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "error": "#C93B3B",
+                        "on-primary": "#ffffff",
+                        "on-tertiary-fixed-variant": "#3e4947",
+                        "outline": "#6f7975",
+                        "on-background": "#181c1b",
+                        "on-primary-container": "#9bead4",
+                        "warning-bg": "#FFF5DC",
+                        "secondary-fixed": "#b2efde",
+                        "error-bg": "#FDECEC",
+                        "surface-container": "#ebefec",
+                        "on-error-container": "#93000a",
+                        "on-surface": "#181c1b",
+                        "surface-container-low": "#f1f4f1",
+                        "background": "#f7faf7",
+                        "on-secondary-container": "#346e61",
+                        "border-base": "#E3E8E6",
+                        "tertiary-fixed-dim": "#bdc9c6",
+                        "inverse-surface": "#2d3130",
+                        "tertiary-container": "#576260",
+                        "tertiary": "#3f4a48",
+                        "surface-dim": "#d7dbd8",
+                        "text-secondary": "#5E6864",
+                        "on-error": "#ffffff",
+                        "primary-container": "#146c5b",
+                        "surface-container-high": "#e6e9e6",
+                        "on-tertiary-fixed": "#131e1c",
+                        "on-tertiary-container": "#d1ddda",
+                        "info": "#3478B8",
+                        "surface-tint": "#116a5a",
+                        "error-container": "#ffdad6",
+                        "secondary": "#2d685b",
+                        "surface-container-highest": "#e0e3e0",
+                        "on-primary-fixed-variant": "#005143",
+                        "on-secondary": "#ffffff",
+                        "bg-app": "#F7F9F8",
+                        "text-primary": "#17201D",
+                        "on-secondary-fixed-variant": "#0f5044",
+                        "inverse-on-surface": "#eef1ee",
+                        "secondary-container": "#b2efde",
+                        "on-secondary-fixed": "#00201a",
+                        "warning": "#B77900",
+                        "on-tertiary": "#ffffff",
+                        "secondary-fixed-dim": "#97d2c2",
+                        "primary-fixed-dim": "#87d5c0",
+                        "on-primary-fixed": "#00201a",
+                        "primary": "#005244",
+                        "outline-variant": "#bec9c4",
+                        "success": "#16834B",
+                        "inverse-primary": "#87d5c0",
+                        "on-surface-variant": "#3f4945",
+                        "surface-variant": "#e0e3e0",
+                        "surface": "#FFFFFF",
+                        "tertiary-fixed": "#d9e5e2",
+                        "surface-container-lowest": "#ffffff",
+                        "success-bg": "#EAF7EF",
+                        "text-muted": "#8A9390",
+                        "info-bg": "#EAF3FB",
+                        "surface-bright": "#f7faf7",
+                        "primary-fixed": "#a3f2dc"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "margin-desktop": "32px",
+                        "xxl": "48px",
+                        "xl": "32px",
+                        "md": "16px",
+                        "margin-tablet": "24px",
+                        "sm": "8px",
+                        "margin-mobile": "16px",
+                        "lg": "24px",
+                        "gutter": "16px"
+                    },
+                    "fontFamily": {
+                        "card-title": ["Inter"],
+                        "section-title": ["Inter"],
+                        "small": ["Inter"],
+                        "page-title": ["Inter"],
+                        "button": ["Inter"],
+                        "body": ["Inter"],
+                        "display": ["Inter"],
+                        "amount-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "card-title": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "section-title": ["18px", { "lineHeight": "26px", "fontWeight": "600" }],
+                        "small": ["12px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "page-title": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "button": ["14px", { "lineHeight": "20px", "fontWeight": "600" }],
+                        "body": ["14px", { "lineHeight": "22px", "fontWeight": "400" }],
+                        "display": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "amount-lg": ["28px", { "lineHeight": "36px", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: theme('colors.bg-app');
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* Hide scrollbar for clean mobile look */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        .pt-safe { padding-top: env(safe-area-inset-top); }
+    </style>
+</head>
+<body class="text-text-primary antialiased font-body min-h-screen flex flex-col relative pb-safe">
+<!-- TopAppBar (Transactional context -> Back button implied, but JSON says leading avatar. Since it's a specific sub-flow (Monthly Dues), we adapt slightly for UX while keeping JSON styles) -->
+<header class="fixed top-0 w-full z-50 bg-surface border-b border-border-base transition-colors duration-200">
+<div class="flex justify-between items-center px-margin-mobile h-16 w-full max-w-screen-xl mx-auto pt-safe">
+<div class="flex items-center gap-3">
+<!-- Transactional back replacement for avatar to make sense for a sub-page, but adhering to the intent of a leading element -->
+<button class="text-primary p-2 -ml-2 rounded-full hover:bg-surface-variant/50 transition-colors duration-200 flex items-center justify-center">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">arrow_back</span>
+</button>
+<h1 class="font-page-title text-page-title text-primary">Monthly Dues</h1>
+</div>
+<button class="text-primary hover:bg-surface-variant/50 transition-colors duration-200 p-2 rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">help_outline</span>
+</button>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-1 px-margin-mobile pt-24 pb-32 max-w-screen-md mx-auto w-full">
+<div class="mb-6">
+<p class="font-body text-body text-text-secondary">Select the months you wish to pay for.</p>
+</div>
+<!-- Dues List Card (Bento-style grouping) -->
+<div class="bg-surface rounded-xl border border-border-base shadow-[0_2px_8px_rgba(23,32,29,0.08)] overflow-hidden">
+<!-- List Header -->
+<div class="px-md py-4 border-b border-border-base bg-surface-bright flex justify-between items-center">
+<span class="font-card-title text-card-title text-text-primary">Unpaid Months</span>
+<label class="flex items-center gap-2 cursor-pointer">
+<span class="font-small text-small text-text-secondary">Select All</span>
+<input checked="" class="form-checkbox h-5 w-5 text-primary-container border-outline-variant rounded transition duration-150 ease-in-out focus:ring-primary-container focus:ring-2 focus:ring-offset-1 focus:ring-offset-surface cursor-pointer" type="checkbox"/>
+</label>
+</div>
+<!-- List Items -->
+<div class="divide-y divide-border-base">
+<!-- Item 1 -->
+<label class="flex items-center justify-between p-md hover:bg-surface-container-low transition-colors duration-150 cursor-pointer group">
+<div class="flex items-center gap-4">
+<input checked="" class="form-checkbox h-5 w-5 text-primary-container border-outline-variant rounded transition duration-150 ease-in-out focus:ring-primary-container focus:ring-2 focus:ring-offset-1 focus:ring-offset-surface cursor-pointer" type="checkbox"/>
+<div>
+<p class="font-body text-body font-semibold text-text-primary group-hover:text-primary-container transition-colors">June 2026</p>
+<p class="font-small text-small text-error flex items-center gap-1 mt-0.5">
+<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">error</span> Overdue
+                            </p>
+</div>
+</div>
+<span class="font-card-title text-card-title text-text-primary">₹500</span>
+</label>
+<!-- Item 2 -->
+<label class="flex items-center justify-between p-md hover:bg-surface-container-low transition-colors duration-150 cursor-pointer group">
+<div class="flex items-center gap-4">
+<input checked="" class="form-checkbox h-5 w-5 text-primary-container border-outline-variant rounded transition duration-150 ease-in-out focus:ring-primary-container focus:ring-2 focus:ring-offset-1 focus:ring-offset-surface cursor-pointer" type="checkbox"/>
+<div>
+<p class="font-body text-body font-semibold text-text-primary group-hover:text-primary-container transition-colors">July 2026</p>
+<p class="font-small text-small text-warning flex items-center gap-1 mt-0.5">
+<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">warning</span> Due Soon
+                            </p>
+</div>
+</div>
+<span class="font-card-title text-card-title text-text-primary">₹500</span>
+</label>
+<!-- Item 3 -->
+<label class="flex items-center justify-between p-md hover:bg-surface-container-low transition-colors duration-150 cursor-pointer group">
+<div class="flex items-center gap-4">
+<input checked="" class="form-checkbox h-5 w-5 text-primary-container border-outline-variant rounded transition duration-150 ease-in-out focus:ring-primary-container focus:ring-2 focus:ring-offset-1 focus:ring-offset-surface cursor-pointer" type="checkbox"/>
+<div>
+<p class="font-body text-body font-semibold text-text-primary group-hover:text-primary-container transition-colors">August 2026</p>
+<p class="font-small text-small text-text-secondary flex items-center gap-1 mt-0.5">
+                                Upcoming
+                            </p>
+</div>
+</div>
+<span class="font-card-title text-card-title text-text-primary">₹500</span>
+</label>
+</div>
+</div>
+</main>
+<!-- Payment Summary Bottom Sheet / Fixed Area -->
+<div class="fixed bottom-0 left-0 w-full bg-surface border-t border-border-base shadow-[0_-4px_12px_rgba(23,32,29,0.05)] z-40 pb-safe">
+<div class="max-w-screen-md mx-auto px-margin-mobile py-md">
+<div class="flex justify-between items-end mb-4">
+<div>
+<p class="font-small text-small text-text-secondary mb-1">Selected (3 months)</p>
+<p class="font-amount-lg text-amount-lg text-primary-container">₹1,500</p>
+</div>
+<div class="text-right">
+<p class="font-small text-small text-text-secondary mb-1">Processing Fee</p>
+<p class="font-body text-body text-text-primary">₹0</p>
+</div>
+</div>
+<button class="w-full bg-primary-container text-on-primary font-button text-button h-[48px] rounded-[10px] flex items-center justify-center gap-2 hover:bg-surface-tint active:scale-[0.98] transition-all duration-200 shadow-sm">
+<span class="material-symbols-outlined text-[20px]">lock</span>
+                Pay ₹1,500
+            </button>
+</div>
+</div>
+<!-- Note: BottomNavBar is intentionally suppressed here as per the "Shell Visibility & Relevance" rule: 
+         "Linear/Transactional: Login, Sign-up, Onboarding, Checkout... implied temporary departure".
+         This is a payment flow (Checkout), so we suppress the main nav to focus on the transaction canvas. -->
+<script>
+        // Simple script to handle select all logic for demonstration
+        document.addEventListener('DOMContentLoaded', () => {
+            const checkboxes = document.querySelectorAll('.divide-y input[type="checkbox"]');
+            const selectAllCheckbox = document.querySelector('.bg-surface-bright input[type="checkbox"]');
+            
+            selectAllCheckbox.addEventListener('change', (e) => {
+                checkboxes.forEach(cb => cb.checked = e.target.checked);
+            });
+
+            checkboxes.forEach(cb => {
+                cb.addEventListener('change', () => {
+                    const allChecked = Array.from(checkboxes).every(c => c.checked);
+                    selectAllCheckbox.checked = allChecked;
+                });
+            });
+        });
+    </script>
+</body></html>

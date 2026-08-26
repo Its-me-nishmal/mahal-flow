@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Bulk Import - MahalFlow Admin</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "warning": "#B77900",
+                      "surface-container-highest": "#e0e3e0",
+                      "on-surface-variant": "#3f4945",
+                      "on-primary": "#ffffff",
+                      "secondary-fixed": "#b2efde",
+                      "on-secondary-fixed": "#00201a",
+                      "primary-fixed-dim": "#87d5c0",
+                      "error-bg": "#FDECEC",
+                      "on-surface": "#181c1b",
+                      "info-bg": "#EAF3FB",
+                      "on-secondary-fixed-variant": "#0f5044",
+                      "secondary-fixed-dim": "#97d2c2",
+                      "on-error": "#ffffff",
+                      "on-primary-container": "#9bead4",
+                      "text-muted": "#8A9390",
+                      "text-primary": "#17201D",
+                      "tertiary": "#3f4a48",
+                      "tertiary-fixed": "#d9e5e2",
+                      "inverse-primary": "#87d5c0",
+                      "surface-container-low": "#f1f4f1",
+                      "on-tertiary-container": "#d1ddda",
+                      "surface-bright": "#f7faf7",
+                      "on-error-container": "#93000a",
+                      "surface-dim": "#d7dbd8",
+                      "surface-tint": "#116a5a",
+                      "on-primary-fixed-variant": "#005143",
+                      "surface-container": "#ebefec",
+                      "outline": "#6f7975",
+                      "primary-fixed": "#a3f2dc",
+                      "surface-container-high": "#e6e9e6",
+                      "on-secondary": "#ffffff",
+                      "on-primary-fixed": "#00201a",
+                      "bg-app": "#F7F9F8",
+                      "primary-container": "#146c5b",
+                      "inverse-surface": "#2d3130",
+                      "surface-variant": "#e0e3e0",
+                      "tertiary-container": "#576260",
+                      "outline-variant": "#bec9c4",
+                      "on-background": "#181c1b",
+                      "secondary-container": "#b2efde",
+                      "inverse-on-surface": "#eef1ee",
+                      "tertiary-fixed-dim": "#bdc9c6",
+                      "error-container": "#ffdad6",
+                      "warning-bg": "#FFF5DC",
+                      "secondary": "#2d685b",
+                      "background": "#f7faf7",
+                      "success": "#16834B",
+                      "error": "#C93B3B",
+                      "primary": "#005244",
+                      "surface": "#FFFFFF",
+                      "info": "#3478B8",
+                      "on-tertiary-fixed-variant": "#3e4947",
+                      "text-secondary": "#5E6864",
+                      "on-tertiary-fixed": "#131e1c",
+                      "success-bg": "#EAF7EF",
+                      "on-tertiary": "#ffffff",
+                      "border-base": "#E3E8E6",
+                      "on-secondary-container": "#346e61",
+                      "surface-container-lowest": "#ffffff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "xxl": "48px",
+                      "sm": "8px",
+                      "margin-desktop": "32px",
+                      "gutter": "16px",
+                      "margin-tablet": "24px",
+                      "margin-mobile": "16px",
+                      "xl": "32px",
+                      "xs": "4px",
+                      "md": "16px",
+                      "lg": "24px"
+              },
+              "fontFamily": {
+                      "display": [
+                              "Inter"
+                      ],
+                      "amount-lg": [
+                              "Inter"
+                      ],
+                      "card-title": [
+                              "Inter"
+                      ],
+                      "body": [
+                              "Inter"
+                      ],
+                      "small": [
+                              "Inter"
+                      ],
+                      "section-title": [
+                              "Inter"
+                      ],
+                      "page-title": [
+                              "Inter"
+                      ],
+                      "button": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "display": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "amount-lg": [
+                              "28px",
+                              {
+                                      "lineHeight": "36px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "card-title": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body": [
+                              "14px",
+                              {
+                                      "lineHeight": "22px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "small": [
+                              "12px",
+                              {
+                                      "lineHeight": "18px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "section-title": [
+                              "18px",
+                              {
+                                      "lineHeight": "26px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "page-title": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "button": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "600"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+</head>
+<body class="bg-bg-app min-h-screen text-text-primary font-body font-body pt-16 pb-24 md:pb-16 flex flex-col md:flex-row">
+<!-- TopAppBar -->
+<header class="bg-surface dark:bg-on-surface fixed top-0 w-full z-50 border-b border-border-base dark:border-on-surface-variant flex justify-between items-center px-margin-mobile md:px-margin-desktop h-16 w-full">
+<div class="flex items-center gap-4">
+<button class="hover:bg-surface-container-low dark:hover:bg-on-surface-variant transition-colors duration-200 p-2 rounded-full hidden md:flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+<h1 class="font-display text-display font-bold text-primary dark:text-primary-fixed">MahalFlow Admin</h1>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex items-center justify-center w-8 h-8 rounded-full bg-primary-container text-on-primary font-card-title text-card-title">
+                AP
+            </div>
+</div>
+</header>
+<!-- SideNav (Desktop) -->
+<nav class="hidden md:flex flex-col w-64 bg-surface border-r border-border-base fixed h-[calc(100vh-64px)] top-16 left-0 pt-8 px-4 z-40">
+<div class="space-y-2">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-text-secondary hover:bg-surface-container-low transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-button text-button">Home</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-primary bg-surface-container-low font-bold" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-button text-button">Members</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-text-secondary hover:bg-surface-container-low transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-button text-button">Payments</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-text-secondary hover:bg-surface-container-low transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+<span class="font-button text-button">Profile</span>
+</a>
+</div>
+</nav>
+<!-- Main Content -->
+<main class="flex-1 px-margin-mobile md:px-margin-desktop md:ml-64 mt-8 max-w-4xl mx-auto w-full">
+<div class="mb-8">
+<h2 class="font-page-title text-page-title text-text-primary mb-2">Bulk Import</h2>
+<p class="font-body text-body text-text-secondary">Import multiple member records at once using an Excel template.</p>
+</div>
+<!-- Progress Steps -->
+<div class="bg-surface border border-border-base rounded-xl p-6 mb-6">
+<div class="flex items-center justify-between mb-8 relative">
+<div class="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-surface-container-highest -z-10"></div>
+<div class="absolute left-0 top-1/2 -translate-y-1/2 w-1/4 h-1 bg-primary-container -z-10 transition-all duration-300"></div>
+<div class="flex flex-col items-center gap-2 bg-surface px-2">
+<div class="w-8 h-8 rounded-full bg-primary-container text-on-primary flex items-center justify-center font-button text-button shadow-sm">1</div>
+<span class="font-small text-small text-primary font-bold">Upload</span>
+</div>
+<div class="flex flex-col items-center gap-2 bg-surface px-2">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest text-text-muted flex items-center justify-center font-button text-button">2</div>
+<span class="font-small text-small text-text-muted">Validate</span>
+</div>
+<div class="flex flex-col items-center gap-2 bg-surface px-2">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest text-text-muted flex items-center justify-center font-button text-button">3</div>
+<span class="font-small text-small text-text-muted">Preview</span>
+</div>
+<div class="flex flex-col items-center gap-2 bg-surface px-2">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest text-text-muted flex items-center justify-center font-button text-button">4</div>
+<span class="font-small text-small text-text-muted">Confirm</span>
+</div>
+</div>
+<!-- Step 1: Upload Content -->
+<div class="space-y-6">
+<!-- Instructions & Template -->
+<div class="bg-info-bg border border-info border-opacity-20 rounded-lg p-4 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+<div class="flex gap-3">
+<span class="material-symbols-outlined text-info mt-0.5">info</span>
+<div>
+<h3 class="font-card-title text-card-title text-info">Download Template First</h3>
+<p class="font-body text-body text-text-secondary mt-1">Please use our official Excel template to ensure your data is formatted correctly before uploading.</p>
+</div>
+</div>
+<button class="h-11 px-4 border border-primary-container text-primary-container bg-surface rounded-lg font-button text-button flex items-center gap-2 hover:bg-surface-container-low transition-colors whitespace-nowrap shrink-0">
+<span class="material-symbols-outlined">download</span>
+                        Download Template
+                    </button>
+</div>
+<!-- Upload Area -->
+<div class="border-2 border-dashed border-outline-variant rounded-xl p-12 flex flex-col items-center justify-center text-center hover:border-primary-container hover:bg-surface-bright transition-colors cursor-pointer group">
+<div class="w-16 h-16 bg-surface-container-highest rounded-full flex items-center justify-center mb-4 group-hover:bg-secondary-fixed transition-colors">
+<span class="material-symbols-outlined text-3xl text-text-secondary group-hover:text-primary-container">cloud_upload</span>
+</div>
+<h3 class="font-section-title text-section-title text-text-primary mb-2">Click or drag file to this area to upload</h3>
+<p class="font-body text-body text-text-secondary mb-6">Support for a single or bulk upload. Strictly prohibit from uploading company data or other band files.</p>
+<button class="h-12 px-6 bg-primary-container text-on-primary rounded-lg font-button text-button flex items-center gap-2 hover:bg-primary transition-colors">
+                        Select Excel File
+                    </button>
+<p class="font-small text-small text-text-muted mt-4">Supported formats: .xlsx, .csv (Max 10MB)</p>
+</div>
+</div>
+</div>
+<!-- Action Footer -->
+<div class="flex justify-end gap-4 mt-8">
+<button class="h-12 px-6 border border-outline-variant text-text-primary bg-surface rounded-lg font-button text-button hover:bg-surface-container-low transition-colors">
+                Cancel
+            </button>
+<button class="h-12 px-6 bg-primary-container text-on-primary rounded-lg font-button text-button flex items-center gap-2 hover:bg-primary transition-colors opacity-50 cursor-not-allowed">
+                Next Step
+                <span class="material-symbols-outlined">arrow_forward</span>
+</button>
+</div>
+</main>
+<!-- BottomNavBar (Mobile) -->
+<nav class="md:hidden bg-surface dark:bg-on-surface border-t border-border-base dark:border-on-surface-variant fixed bottom-0 left-0 w-full flex justify-around items-center h-16 pb-safe z-50">
+<a class="flex flex-col items-center justify-center text-text-secondary dark:text-text-muted px-4 py-1 hover:bg-surface-container-low dark:hover:bg-on-surface-variant scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-small text-small mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-secondary-container dark:bg-secondary text-on-secondary-container dark:text-on-secondary rounded-full px-4 py-1 hover:bg-surface-container-low dark:hover:bg-on-surface-variant scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-small text-small mt-1">Members</span>
+</a>
+<a class="flex flex-col items-center justify-center text-text-secondary dark:text-text-muted px-4 py-1 hover:bg-surface-container-low dark:hover:bg-on-surface-variant scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-small text-small mt-1">Payments</span>
+</a>
+<a class="flex flex-col items-center justify-center text-text-secondary dark:text-text-muted px-4 py-1 hover:bg-surface-container-low dark:hover:bg-on-surface-variant scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+<span class="font-small text-small mt-1">Profile</span>
+</a>
+</nav>
+</body></html>
