@@ -14,14 +14,32 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final ApiService _apiService = ApiService();
-  String _memberName = "Muhammed Ameen";
-  String _phone = "+91 98765 43210";
-  String _email = "muhammed@example.com";
-  String _address1 = "123, Palm Grove";
+  String _memberName = ApiService.cachedMemberName;
+  String _phone = ApiService.cachedPhone;
+  String _email = ApiService.cachedEmail;
+  String _address1 = ApiService.cachedAddress;
   String _address2 = "";
   String _city = "Kochi";
   String _state = "Kerala";
   String _pincode = "682001";
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    final profile = await _apiService.getMemberProfile();
+    if (profile != null && mounted) {
+      setState(() {
+        _memberName = profile["name"]?.toString() ?? _memberName;
+        _phone = profile["phone"]?.toString() ?? _phone;
+        _email = profile["email"]?.toString() ?? _email;
+        _address1 = profile["house_name"]?.toString() ?? profile["address"]?.toString() ?? _address1;
+      });
+    }
+  }
 
   Future<void> _openEditProfile() async {
     final updated = await Navigator.push<Map<String, String>>(

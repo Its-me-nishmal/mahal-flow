@@ -4,6 +4,12 @@ class ApiService {
   static const String baseUrl = "http://localhost:8080/api/v1";
   static const String defaultTenant = "MH_001_CALICUT";
 
+  // In-memory cache synced across all app tabs
+  static String cachedMemberName = "Muhammed Ameen";
+  static String cachedPhone = "+91 98471 11222";
+  static String cachedEmail = "muhammed@example.com";
+  static String cachedAddress = "Darul Aman";
+
   final Dio _dio = Dio(
     BaseOptions(
       baseUrl: baseUrl,
@@ -21,14 +27,18 @@ class ApiService {
     try {
       final response = await _dio.get("/member/dashboard?member_id=$memberId");
       if (response.statusCode == 200) {
-        return response.data as Map<String, dynamic>;
+        final data = response.data as Map<String, dynamic>;
+        if (data["member_name"] != null) {
+          cachedMemberName = data["member_name"].toString();
+        }
+        return data;
       }
     } catch (e) {
       // Fallback data if backend is offline
     }
     return {
       "member_id": memberId,
-      "member_name": "Muhammed Ameen",
+      "member_name": cachedMemberName,
       "mahal_name": "Central Juma Masjid Mahal",
       "outstanding_balance": 1500.0,
       "last_paid_month": "2026-05",
@@ -92,6 +102,11 @@ class ApiService {
     String? state,
     String? pincode,
   }) async {
+    // Immediately update in-memory cache
+    cachedMemberName = name;
+    if (email != null && email.isNotEmpty) cachedEmail = email;
+    if (address != null && address.isNotEmpty) cachedAddress = address;
+
     try {
       final response = await _dio.put(
         "/members/profile/$memberId",
@@ -108,5 +123,27 @@ class ApiService {
     } catch (e) {
       return false;
     }
+  }
+
+  // 5. Get Member Profile
+  Future<Map<String, dynamic>?> getMemberProfile({String memberId = "MEM_001_9910"}) async {
+    try {
+      final response = await _dio.get("/members/profile/$memberId");
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+        if (data["name"] != null) {
+          cachedMemberName = data["name"].toString();
+        }
+        return data;
+      }
+    } catch (e) {
+      // Fallback
+    }
+    return {
+      "name": cachedMemberName,
+      "phone": cachedPhone,
+      "email": cachedEmail,
+      "address": cachedAddress,
+    };
   }
 }
