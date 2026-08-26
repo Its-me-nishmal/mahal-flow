@@ -492,7 +492,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
       width: double.infinity,
       height: 48,
       child: OutlinedButton.icon(
-        onPressed: () {},
+        onPressed: () {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              backgroundColor: AppColors.surface,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: [
+                  const Icon(Icons.logout, color: AppColors.error, size: 24),
+                  const SizedBox(width: 8),
+                  Text("Log Out", style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 18)),
+                ],
+              ),
+              content: Text(
+                "Are you sure you want to log out of MahalFlow?",
+                style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: Text("Cancel", style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    Navigator.of(context).pushNamedAndRemoveUntil(
+                      '/login',
+                      (route) => false,
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.error,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: Text("Log Out", style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                ),
+              ],
+            ),
+          );
+        },
         icon: const Icon(Icons.logout, color: AppColors.error, size: 20),
         label: Text(
           'Logout',
