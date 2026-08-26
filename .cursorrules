@@ -1,0 +1,9 @@
+# MahalFlow Cursor Rules
+# Always adhere to the core instructions in AGENTS.md
+
+- Read .agents/memory/learning_log.md for project lessons and gotchas.
+- Backend: Go 1.22 + Fiber + official mongo-driver/v2.
+- Mobile: Flutter + Riverpod + AppColors.primary (#146C5B).
+- Financial Invariant: Never allow partial dues. Months must be paid in full sequential order.
+- Tenancy: Always filter by `mahal_id`.
+- Commit format: Conventional Commits (`feat:`, `fix:`, `agent:`, `chore:`).
