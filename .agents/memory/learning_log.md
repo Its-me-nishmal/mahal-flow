@@ -27,6 +27,10 @@
 - **Context**: Phone numbers and gateway credentials cannot appear in logs.
 - **Rule**: Use `logger.MaskPhone()` and `logger.MaskSecret()` in all logging interceptors.
 
+### Entry 021: Single-Command Automated API & Model Validation Runner
+- **Context**: Adding new routes or changing schemas must be testable in 1 second with a single command.
+- **Rule**: Run `.\scripts\test_all_apis.ps1` (or `go run cmd/test-api/main.go`). It automatically validates HTTP status codes, security guards, response models, and latency across all endpoints. Whenever a developer adds a new route, add a test case to `backend-go/cmd/test-api/main.go`.
+
 ---
 
 ## 3. Frontend (Flutter Mobile & Next.js Web) Learnings
