@@ -3,7 +3,26 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 
 class EditPersonalDetailsScreen extends StatefulWidget {
-  const EditPersonalDetailsScreen({super.key});
+  final String name;
+  final String email;
+  final String phone;
+  final String address1;
+  final String address2;
+  final String city;
+  final String state;
+  final String pincode;
+
+  const EditPersonalDetailsScreen({
+    super.key,
+    this.name = 'Muhammed Ameen',
+    this.email = 'muhammed@example.com',
+    this.phone = '+91 98765 43210',
+    this.address1 = '123, Palm Grove',
+    this.address2 = '',
+    this.city = 'Kochi',
+    this.state = 'Kerala',
+    this.pincode = '682001',
+  });
 
   @override
   State<EditPersonalDetailsScreen> createState() =>
@@ -11,6 +30,62 @@ class EditPersonalDetailsScreen extends StatefulWidget {
 }
 
 class _EditPersonalDetailsScreenState extends State<EditPersonalDetailsScreen> {
+  late TextEditingController _nameController;
+  late TextEditingController _emailController;
+  late TextEditingController _phoneController;
+  late TextEditingController _address1Controller;
+  late TextEditingController _address2Controller;
+  late TextEditingController _cityController;
+  late TextEditingController _stateController;
+  late TextEditingController _pincodeController;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.name);
+    _emailController = TextEditingController(text: widget.email);
+    _phoneController = TextEditingController(text: widget.phone);
+    _address1Controller = TextEditingController(text: widget.address1);
+    _address2Controller = TextEditingController(text: widget.address2);
+    _cityController = TextEditingController(text: widget.city);
+    _stateController = TextEditingController(text: widget.state);
+    _pincodeController = TextEditingController(text: widget.pincode);
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _address1Controller.dispose();
+    _address2Controller.dispose();
+    _cityController.dispose();
+    _stateController.dispose();
+    _pincodeController.dispose();
+    super.dispose();
+  }
+
+  void _saveChanges() {
+    final updatedName = _nameController.text.trim();
+    if (updatedName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid name')),
+      );
+      return;
+    }
+
+    Navigator.pop(context, {
+      'name': updatedName,
+      'email': _emailController.text.trim(),
+      'phone': _phoneController.text.trim(),
+      'address1': _address1Controller.text.trim(),
+      'address2': _address2Controller.text.trim(),
+      'city': _cityController.text.trim(),
+      'state': _stateController.text.trim(),
+      'pincode': _pincodeController.text.trim(),
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -25,10 +100,13 @@ class _EditPersonalDetailsScreenState extends State<EditPersonalDetailsScreen> {
         title: Text(
           'Edit Profile',
           style: GoogleFonts.inter(
-            fontSize: 24,
+            fontSize: 22,
             fontWeight: FontWeight.w700,
             color: AppColors.primary,
           ),
+        ),
+        shape: const Border(
+          bottom: BorderSide(color: AppColors.border, width: 1),
         ),
       ),
       body: SingleChildScrollView(
@@ -37,31 +115,31 @@ class _EditPersonalDetailsScreenState extends State<EditPersonalDetailsScreen> {
           children: [
             _buildAvatar(),
             const SizedBox(height: 24),
-            _buildField('Full Name', 'Muhammed'),
+            _buildField('Full Name', _nameController),
             const SizedBox(height: 16),
-            _buildField('Email', 'muhammed@example.com'),
+            _buildField('Email', _emailController),
             const SizedBox(height: 16),
-            _buildField('Phone', '+91 98765 43210', enabled: false),
+            _buildField('Phone', _phoneController, enabled: false),
             const SizedBox(height: 16),
-            _buildField('Address Line 1', '123, Palm Grove'),
+            _buildField('Address Line 1', _address1Controller),
             const SizedBox(height: 16),
-            _buildField('Address Line 2', ''),
+            _buildField('Address Line 2', _address2Controller),
             const SizedBox(height: 16),
             Row(
               children: [
-                Expanded(child: _buildField('City', 'Kochi')),
+                Expanded(child: _buildField('City', _cityController)),
                 const SizedBox(width: 12),
-                Expanded(child: _buildField('State', 'Kerala')),
+                Expanded(child: _buildField('State', _stateController)),
               ],
             ),
             const SizedBox(height: 16),
-            _buildField('PIN Code', '682001'),
+            _buildField('PIN Code', _pincodeController),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               height: 48,
               child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: _saveChanges,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
@@ -86,6 +164,9 @@ class _EditPersonalDetailsScreenState extends State<EditPersonalDetailsScreen> {
   }
 
   Widget _buildAvatar() {
+    final initial = _nameController.text.isNotEmpty
+        ? _nameController.text[0].toUpperCase()
+        : 'M';
     return Center(
       child: Stack(
         clipBehavior: Clip.none,
@@ -101,7 +182,7 @@ class _EditPersonalDetailsScreenState extends State<EditPersonalDetailsScreen> {
               radius: 48,
               backgroundColor: AppColors.primaryLight,
               child: Text(
-                'M',
+                initial,
                 style: GoogleFonts.inter(
                   fontSize: 36,
                   fontWeight: FontWeight.w700,
@@ -133,7 +214,8 @@ class _EditPersonalDetailsScreenState extends State<EditPersonalDetailsScreen> {
     );
   }
 
-  Widget _buildField(String label, String value, {bool enabled = true}) {
+  Widget _buildField(String label, TextEditingController controller,
+      {bool enabled = true}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -146,8 +228,8 @@ class _EditPersonalDetailsScreenState extends State<EditPersonalDetailsScreen> {
           ),
         ),
         const SizedBox(height: 6),
-        TextFormField(
-          initialValue: value,
+        TextField(
+          controller: controller,
           enabled: enabled,
           style: GoogleFonts.inter(
             fontSize: 14,
@@ -171,6 +253,10 @@ class _EditPersonalDetailsScreenState extends State<EditPersonalDetailsScreen> {
             disabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
               borderSide: const BorderSide(color: AppColors.border),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
             ),
           ),
         ),

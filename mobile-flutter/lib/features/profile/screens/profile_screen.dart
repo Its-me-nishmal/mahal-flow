@@ -12,8 +12,52 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  String _memberName = "Muhammed Ameen";
+  String _phone = "+91 98765 43210";
+  String _email = "muhammed@example.com";
+  String _address1 = "123, Palm Grove";
+  String _address2 = "";
+  String _city = "Kochi";
+  String _state = "Kerala";
+  String _pincode = "682001";
+
+  Future<void> _openEditProfile() async {
+    final updated = await Navigator.push<Map<String, String>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditPersonalDetailsScreen(
+          name: _memberName,
+          email: _email,
+          phone: _phone,
+          address1: _address1,
+          address2: _address2,
+          city: _city,
+          state: _state,
+          pincode: _pincode,
+        ),
+      ),
+    );
+
+    if (updated != null && mounted) {
+      setState(() {
+        _memberName = updated['name'] ?? _memberName;
+        _email = updated['email'] ?? _email;
+        _phone = updated['phone'] ?? _phone;
+        _address1 = updated['address1'] ?? _address1;
+        _address2 = updated['address2'] ?? _address2;
+        _city = updated['city'] ?? _city;
+        _state = updated['state'] ?? _state;
+        _pincode = updated['pincode'] ?? _pincode;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Profile details updated successfully!")),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final initial = _memberName.isNotEmpty ? _memberName[0].toUpperCase() : 'M';
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -25,7 +69,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             radius: 20,
             backgroundColor: AppColors.primaryLight,
             child: Text(
-              'M',
+              initial,
               style: GoogleFonts.inter(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
@@ -122,7 +166,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         radius: 48,
                         backgroundColor: AppColors.primaryLight,
                         child: Text(
-                          'M',
+                          _memberName.isNotEmpty ? _memberName[0].toUpperCase() : 'M',
                           style: GoogleFonts.inter(
                             fontSize: 36,
                             fontWeight: FontWeight.w700,
@@ -134,21 +178,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Positioned(
                       bottom: 0,
                       right: 0,
-                      child: Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: AppColors.surface,
-                            width: 2,
+                      child: GestureDetector(
+                        onTap: _openEditProfile,
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: AppColors.surface,
+                              width: 2,
+                            ),
                           ),
-                        ),
-                        child: const Icon(
-                          Icons.edit,
-                          size: 16,
-                          color: Colors.white,
+                          child: const Icon(
+                            Icons.edit,
+                            size: 16,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ),
@@ -156,7 +203,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Muhammed',
+                  _memberName,
                   style: GoogleFonts.inter(
                     fontSize: 24,
                     fontWeight: FontWeight.w700,
@@ -165,7 +212,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '+91 98765 43210',
+                  _phone,
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     color: AppColors.textSecondary,
@@ -279,14 +326,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(width: 8),
         Expanded(
           child: GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const EditPersonalDetailsScreen(),
-                ),
-              );
-            },
+            onTap: _openEditProfile,
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
