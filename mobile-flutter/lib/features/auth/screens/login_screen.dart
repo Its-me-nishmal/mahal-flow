@@ -68,12 +68,17 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
       child: Column(
         children: [
-          Text(
-            "MahalFlow",
-            style: GoogleFonts.inter(
-              fontSize: 32,
-              fontWeight: FontWeight.w700,
-              color: AppColors.primary,
+          Image.asset(
+            "assets/images/logo.png",
+            width: 180,
+            fit: BoxFit.contain,
+            errorBuilder: (ctx, err, stack) => Text(
+              "MahalFlow",
+              style: GoogleFonts.inter(
+                fontSize: 28,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary,
+              ),
             ),
           ),
           const SizedBox(height: 8),

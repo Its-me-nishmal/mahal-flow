@@ -1,12 +1,12 @@
+import { MahalFlowLogo } from "@/components/ui/MahalFlowLogo";
+
 export default function LoginPage() {
   return (
     <main className="flex-grow flex flex-col justify-center items-center p-margin-mobile md:p-margin-desktop min-h-screen bg-background">
       <div className="w-full max-w-[400px] bg-surface border border-border-base rounded-xl shadow-[0_2px_8px_rgba(23,32,29,0.08)] overflow-hidden">
-        <div className="p-xl flex flex-col items-center text-center border-b border-border-base">
-          <h1 className="font-display text-display text-primary-container tracking-tight mb-2">
-            MahalFlow
-          </h1>
-          <p className="font-body text-body text-text-secondary">Welcome back</p>
+        <div className="p-xl flex flex-col items-center text-center border-b border-border-base gap-2">
+          <MahalFlowLogo size="xl" />
+          <p className="font-body text-body text-text-secondary">Welcome back to Super Admin</p>
         </div>
         <div className="p-xl flex flex-col gap-lg">
           <form className="flex flex-col gap-lg">

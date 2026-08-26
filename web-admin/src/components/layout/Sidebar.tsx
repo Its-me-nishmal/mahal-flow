@@ -18,26 +18,16 @@ const navItems = [
   { label: "Settings", icon: "settings", href: "/settings" },
 ];
 
+import { MahalFlowLogo } from "@/components/ui/MahalFlowLogo";
+
 export function Sidebar() {
   const pathname = usePathname();
 
   return (
     <nav className="hidden md:flex flex-col h-screen w-64 fixed left-0 top-0 border-r border-border-base bg-surface p-md gap-xs shadow-[0_2px_8px_rgba(23,32,29,0.08)] z-50">
-      <div className="flex items-center gap-sm mb-lg px-sm pt-sm cursor-pointer">
-        <div className="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center shrink-0">
-          <span className="material-symbols-outlined text-on-primary-container text-[22px]">
-            account_balance
-          </span>
-        </div>
-        <div>
-          <h1 className="font-section-title text-section-title text-primary">
-            MahalFlow
-          </h1>
-          <p className="font-small text-small text-text-secondary">
-            Super Admin Portal
-          </p>
-        </div>
-      </div>
+      <Link href="/dashboard" className="flex items-center gap-sm mb-lg px-sm pt-sm cursor-pointer hover:opacity-90 transition-opacity">
+        <MahalFlowLogo size="lg" />
+      </Link>
 
       <button className="w-full py-2 px-4 mb-md bg-primary-container text-on-primary font-button text-button rounded-lg hover:bg-primary transition-colors flex items-center justify-center gap-2 cursor-pointer active:scale-95 duration-200">
         <span className="material-symbols-outlined text-[18px]">add</span>

@@ -63,12 +63,17 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
             ),
           ),
         ),
-        title: Text(
-          "MahalFlow",
-          style: GoogleFonts.inter(
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: AppColors.primary,
+        title: Image.asset(
+          "assets/images/logo.png",
+          height: 28,
+          fit: BoxFit.contain,
+          errorBuilder: (ctx, err, stack) => Text(
+            "MahalFlow",
+            style: GoogleFonts.inter(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: AppColors.primary,
+            ),
           ),
         ),
         actions: [
