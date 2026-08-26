@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/member_bottom_nav_bar.dart';
 
 class ContributionScreen extends StatefulWidget {
   const ContributionScreen({super.key});
@@ -10,7 +11,6 @@ class ContributionScreen extends StatefulWidget {
 }
 
 class _ContributionScreenState extends State<ContributionScreen> {
-  int _currentNavIndex = 1;
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _noteController = TextEditingController();
 
@@ -30,7 +30,13 @@ class _ContributionScreenState extends State<ContributionScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: AppColors.primary),
-          onPressed: () => Navigator.of(context).maybePop(),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              Navigator.of(context).pushReplacementNamed('/member/dashboard');
+            }
+          },
         ),
         title: Text(
           "Make a Contribution",
@@ -151,6 +157,32 @@ class _ContributionScreenState extends State<ContributionScreen> {
                       ],
                     ),
                   ),
+                  const SizedBox(height: 16),
+
+                  // Quick Amount Chips
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _buildQuickAmountChip(500),
+                      _buildQuickAmountChip(1000),
+                      _buildQuickAmountChip(2000),
+                      _buildQuickAmountChip(5000),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Fund Selection
+                  Text(
+                    "Contribution Fund",
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildFundSelector(),
                   const SizedBox(height: 20),
 
                   // Note Textarea
@@ -171,7 +203,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
                       color: AppColors.textPrimary,
                     ),
                     decoration: InputDecoration(
-                      hintText: "Add a message or specify the purpose...",
+                      hintText: "Add a note or special intention...",
                       hintStyle: GoogleFonts.inter(
                         fontSize: 14,
                         color: AppColors.textMuted,
@@ -186,8 +218,12 @@ class _ContributionScreenState extends State<ContributionScreen> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                        borderSide: const BorderSide(
+                          color: AppColors.primary,
+                          width: 1.5,
+                        ),
                       ),
+                      contentPadding: const EdgeInsets.all(12),
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -197,7 +233,44 @@ class _ContributionScreenState extends State<ContributionScreen> {
                     width: double.infinity,
                     height: 48,
                     child: ElevatedButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        final amount = _amountController.text.trim();
+                        if (amount.isEmpty || (double.tryParse(amount) ?? 0) <= 0) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Please enter a valid contribution amount")),
+                          );
+                          return;
+                        }
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (ctx) => AlertDialog(
+                            backgroundColor: AppColors.surface,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            title: Row(
+                              children: [
+                                const Icon(Icons.check_circle, color: AppColors.success, size: 28),
+                                const SizedBox(width: 8),
+                                Text("Contribution Received", style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 18)),
+                              ],
+                            ),
+                            content: Text("Thank you! Your contribution of ₹$amount has been received and verified.", style: GoogleFonts.inter(fontSize: 14)),
+                            actions: [
+                              ElevatedButton(
+                                onPressed: () {
+                                  Navigator.of(ctx).pop();
+                                  Navigator.of(context).pushNamedAndRemoveUntil('/member/dashboard', (route) => false);
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  foregroundColor: Colors.white,
+                                ),
+                                child: const Text("View Dashboard"),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
@@ -237,38 +310,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentNavIndex,
-        onTap: (index) => setState(() => _currentNavIndex = index),
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: AppColors.surface,
-        selectedItemColor: AppColors.primary,
-        unselectedItemColor: AppColors.textSecondary,
-        selectedLabelStyle: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
-        unselectedLabelStyle: GoogleFonts.inter(fontSize: 12),
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: "Home",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.payments),
-            label: "Payments",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.receipt_long),
-            label: "Receipts",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.notifications),
-            label: "Alerts",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: "Profile",
-          ),
-        ],
-      ),
+      bottomNavigationBar: const MemberBottomNavBar(currentIndex: 1),
     );
   }
 }

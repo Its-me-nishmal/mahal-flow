@@ -121,7 +121,12 @@ class PaymentSuccessScreen extends StatelessWidget {
                     width: double.infinity,
                     height: 48,
                     child: ElevatedButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        Navigator.of(context).pushNamedAndRemoveUntil(
+                          '/member/receipts',
+                          (route) => false,
+                        );
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
@@ -146,7 +151,10 @@ class PaymentSuccessScreen extends StatelessWidget {
                     height: 48,
                     child: OutlinedButton(
                       onPressed: () {
-                        Navigator.of(context).popUntil((route) => route.isFirst);
+                        Navigator.of(context).pushNamedAndRemoveUntil(
+                          '/member/dashboard',
+                          (route) => false,
+                        );
                       },
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.primary,

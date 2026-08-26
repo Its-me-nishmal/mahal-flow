@@ -122,7 +122,10 @@ class _MonthlyPaymentScreenState extends State<MonthlyPaymentScreen> {
                 ElevatedButton(
                   onPressed: () {
                     Navigator.of(ctx).pop();
-                    Navigator.of(context).pop(); // Go back to dashboard
+                    Navigator.of(context).pushNamedAndRemoveUntil(
+                      '/member/dashboard',
+                      (route) => false,
+                    );
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
@@ -143,7 +146,10 @@ class _MonthlyPaymentScreenState extends State<MonthlyPaymentScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Payment completed successfully!")),
       );
-      Navigator.of(context).pop();
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        '/member/dashboard',
+        (route) => false,
+      );
     }
   }
 
