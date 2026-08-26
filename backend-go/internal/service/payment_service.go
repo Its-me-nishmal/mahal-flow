@@ -18,9 +18,10 @@ import (
 
 var (
 	ErrInvalidAmount       = errors.New("amount does not match expected total for selected months")
-	ErrNonSequentialMonths = errors.New("selected months must be sequential starting after last paid month")
+	ErrNonSequentialMonths = errors.New("selected months must be contiguous sequence starting from next unpaid month")
 	ErrDuplicateInFlight   = errors.New("payment with this idempotency key is already processing")
-	ErrMemberNotFound      = errors.New("member not found")
+	ErrMemberNotFound      = errors.New("member not found in this tenant")
+	ErrInvalidMonthFormat  = errors.New("invalid month format, must be YYYY-MM")
 )
 
 type PaymentService interface {
@@ -53,6 +54,45 @@ func NewPaymentService(
 	}
 }
 
+// Validates that months are sequential starting directly after lastPaidMonth
+func ValidateContiguousMonths(lastPaidMonth string, selectedMonths []string) error {
+	if len(selectedMonths) == 0 {
+		return errors.New("at least one month must be selected")
+	}
+
+	expectedNext, err := getNextMonth(lastPaidMonth)
+	if err != nil && lastPaidMonth != "" {
+		return ErrInvalidMonthFormat
+	}
+
+	for i, m := range selectedMonths {
+		if i == 0 && lastPaidMonth != "" {
+			if m != expectedNext {
+				return fmt.Errorf("%w: expected start month %s, got %s", ErrNonSequentialMonths, expectedNext, m)
+			}
+		} else if i > 0 {
+			prevMonth := selectedMonths[i-1]
+			expected, err := getNextMonth(prevMonth)
+			if err != nil || m != expected {
+				return fmt.Errorf("%w: gap detected between %s and %s", ErrNonSequentialMonths, prevMonth, m)
+			}
+		}
+	}
+	return nil
+}
+
+func getNextMonth(yearMonth string) (string, error) {
+	if yearMonth == "" {
+		return "", nil
+	}
+	t, err := time.Parse("2006-01", yearMonth)
+	if err != nil {
+		return "", err
+	}
+	next := t.AddDate(0, 1, 15) // safe jump to next month
+	return next.Format("2006-01"), nil
+}
+
 func (s *paymentService) InitializeDuesPayment(
 	ctx context.Context,
 	mahalID, memberID string,
@@ -63,11 +103,18 @@ func (s *paymentService) InitializeDuesPayment(
 		return nil, errors.New("at least one month must be selected")
 	}
 
+	// 1. Strict Tenant Isolation Check
 	member, err := s.memberRepo.GetByID(ctx, mahalID, memberID)
-	if err != nil {
+	if err != nil || member == nil {
 		return nil, ErrMemberNotFound
 	}
 
+	// 2. Sequential Contiguous Months Validation
+	if err := ValidateContiguousMonths(member.LastPaidMonth, months); err != nil {
+		return nil, err
+	}
+
+	// 3. Exact Dues Rate Calculation (Zero Partial Payments)
 	rate := member.MonthlyDuesCustomAmount
 	if rate <= 0 {
 		mahal, err := s.mahalRepo.GetByID(ctx, mahalID)
@@ -107,7 +154,13 @@ func (s *paymentService) InitializeContribution(
 	gateway, idempotencyKey string,
 ) (*domain.Transaction, error) {
 	if amount <= 0 {
-		return nil, errors.New("contribution amount must be greater than zero")
+		return nil, errors.New("contribution amount must be strictly greater than zero")
+	}
+
+	// Strict Tenant Isolation Check
+	member, err := s.memberRepo.GetByID(ctx, mahalID, memberID)
+	if err != nil || member == nil {
+		return nil, ErrMemberNotFound
 	}
 
 	txn := &domain.Transaction{
