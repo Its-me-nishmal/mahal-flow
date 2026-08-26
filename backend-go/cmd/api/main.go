@@ -74,8 +74,17 @@ func main() {
 		})
 	})
 
+	// Public Auth & Webhooks
+	app.Post("/api/v1/auth/login", handler.Login)
+	app.Post("/api/v1/webhooks/razorpay", handler.HandleRazorpayWebhook)
+
 	// Tenant-Scoped API Routes (v1)
 	v1 := app.Group("/api/v1", api.TenantExtractionMiddleware())
+
+	// Auth & Profile
+	v1.Get("/auth/me", handler.GetCurrentUser)
+	v1.Get("/members/profile/:id", handler.GetMemberProfile)
+	v1.Put("/members/profile/:id", handler.UpdateMemberProfile)
 
 	// Member Routes
 	v1.Get("/member/dashboard", handler.GetMemberDashboard)
@@ -83,10 +92,21 @@ func main() {
 	v1.Post("/payments/dues/confirm", handler.ConfirmPayment)
 	v1.Post("/payments/contribution/initialize", handler.InitializeContribution)
 	v1.Get("/receipts/:number", handler.GetReceipt)
+	v1.Get("/receipts/:number/verify", handler.VerifyReceiptIntegrity)
+
+	// AutoPay Mandates
+	v1.Post("/autopay/mandate/create", handler.CreateAutoPayMandate)
+	v1.Get("/autopay/mandate/status", handler.GetAutoPayStatus)
 
 	// Admin Routes
 	v1.Get("/admin/dashboard", handler.GetAdminDashboard)
 	v1.Get("/admin/members", handler.GetAdminMembers)
+	v1.Get("/admin/reports/financial", handler.GetFinancialReports)
+	v1.Get("/admin/gateways", handler.GetGateways)
+	v1.Get("/admin/audit-logs", handler.GetAuditLogs)
+	v1.Get("/admin/alerts", handler.GetAlerts)
+	v1.Post("/admin/excel/upload-preview", handler.UploadExcelPreview)
+	v1.Post("/admin/excel/commit-import", handler.CommitExcelImport)
 
 	// Graceful shutdown setup
 	sigChan := make(chan os.Signal, 1)
