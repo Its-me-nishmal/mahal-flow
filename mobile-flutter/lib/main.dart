@@ -58,11 +58,11 @@ class MahalFlowApp extends StatelessWidget {
         '/member/alerts': (context) => const AlertsScreen(),
         '/member/alert-details': (context) => const AlertDetailsScreen(),
         '/admin/members': (context) => const MemberManagementScreen(),
-        '/admin/member-details': (context) => MemberDetailsScreen(
-          member: const {"name": "Muhammed", "phone": "98765 43210", "amount": "₹500", "status": "Active", "id": "MH-2023-4829"},
+        '/admin/member-details': (context) => const MemberDetailsScreen(
+          member: {"name": "Muhammed", "phone": "98765 43210", "amount": "₹500", "status": "Active", "id": "MH-2023-4829"},
         ),
-        '/admin/edit-member': (context) => EditMemberDetailsScreen(
-          member: const {"name": "Muhammed", "phone": "98765 43210", "amount": "₹500", "status": "Active", "id": "MH-2023-4829"},
+        '/admin/edit-member': (context) => const EditMemberDetailsScreen(
+          member: {"name": "Muhammed", "phone": "98765 43210", "amount": "₹500", "status": "Active", "id": "MH-2023-4829"},
         ),
         '/admin/reports': (context) => const FinancialReportsScreen(),
         '/admin/audit-logs': (context) => const AuditLogsScreen(),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/member_bottom_nav_bar.dart';
 import 'edit_personal_details_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -11,8 +12,6 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  int _currentNav = 4;
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -45,7 +44,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.help_outline, color: AppColors.textSecondary),
+            icon: const Icon(Icons.help_outline, color: AppColors.textSecondary),
             onPressed: () {},
           ),
         ],
@@ -73,7 +72,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: _buildBottomNav(),
+      bottomNavigationBar: const MemberBottomNavBar(currentIndex: 4),
     );
   }
 
@@ -185,7 +184,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
+                      const Icon(
                         Icons.verified,
                         size: 16,
                         color: AppColors.success,
@@ -231,7 +230,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     color: AppColors.background,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(
+                  child: const Icon(
                     Icons.mosque,
                     color: AppColors.primary,
                     size: 22,
@@ -307,13 +306,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           color: AppColors.background,
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Icon(
+                        child: const Icon(
                           Icons.person,
                           color: AppColors.primary,
                           size: 22,
                         ),
                       ),
-                      Icon(
+                      const Icon(
                         Icons.chevron_right,
                         color: AppColors.textMuted,
                         size: 20,
@@ -385,7 +384,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             badgeBg: AppColors.successBg,
             showChevron: true,
           ),
-          Divider(height: 1, color: AppColors.border),
+          const Divider(height: 1, color: AppColors.border),
           _buildSettingsRow(
             icon: Icons.shield,
             iconBg: AppColors.background,
@@ -394,7 +393,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             subtitle: 'PIN, Biometrics, and Login history',
             showChevron: true,
           ),
-          Divider(height: 1, color: AppColors.border),
+          const Divider(height: 1, color: AppColors.border),
           _buildSettingsRow(
             icon: Icons.notifications_outlined,
             iconBg: AppColors.background,
@@ -482,7 +481,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           if (showChevron)
-            Icon(Icons.chevron_right, color: AppColors.textMuted, size: 20),
+            const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 20),
         ],
       ),
     );
@@ -494,7 +493,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       height: 48,
       child: OutlinedButton.icon(
         onPressed: () {},
-        icon: Icon(Icons.logout, color: AppColors.error, size: 20),
+        icon: const Icon(Icons.logout, color: AppColors.error, size: 20),
         label: Text(
           'Logout',
           style: GoogleFonts.inter(
@@ -504,50 +503,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
         style: OutlinedButton.styleFrom(
-          side: BorderSide(color: AppColors.error),
+          side: const BorderSide(color: AppColors.error),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildBottomNav() {
-    return BottomNavigationBar(
-      currentIndex: _currentNav,
-      onTap: (i) => setState(() => _currentNav = i),
-      type: BottomNavigationBarType.fixed,
-      backgroundColor: AppColors.surface,
-      selectedItemColor: AppColors.primary,
-      unselectedItemColor: AppColors.textMuted,
-      selectedLabelStyle: GoogleFonts.inter(
-        fontSize: 12,
-        fontWeight: FontWeight.w600,
-      ),
-      unselectedLabelStyle: GoogleFonts.inter(
-        fontSize: 12,
-        fontWeight: FontWeight.w400,
-      ),
-      items: const [
-        BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'Home'),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.payment_outlined),
-          label: 'Payments',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.receipt_long_outlined),
-          label: 'Receipts',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.notifications_outlined),
-          label: 'Alerts',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.person),
-          label: 'Profile',
-        ),
-      ],
     );
   }
 }

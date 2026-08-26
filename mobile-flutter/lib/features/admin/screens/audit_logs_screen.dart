@@ -54,7 +54,13 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: AppColors.primary),
-          onPressed: () => Navigator.of(context).maybePop(),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              Navigator.of(context).pushReplacementNamed('/admin/dashboard');
+            }
+          },
         ),
         title: Text(
           "Audit Logs",

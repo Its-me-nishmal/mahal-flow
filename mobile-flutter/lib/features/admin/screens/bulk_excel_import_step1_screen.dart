@@ -22,7 +22,13 @@ class _BulkExcelImportStep1ScreenState extends State<BulkExcelImportStep1Screen>
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: AppColors.primary),
-          onPressed: () => Navigator.of(context).maybePop(),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              Navigator.of(context).pushReplacementNamed('/admin/dashboard');
+            }
+          },
         ),
         title: Text(
           "Import Members",
@@ -171,7 +177,7 @@ class _BulkExcelImportStep1ScreenState extends State<BulkExcelImportStep1Screen>
             Container(
               width: 64,
               height: 64,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: AppColors.background,
                 shape: BoxShape.circle,
               ),

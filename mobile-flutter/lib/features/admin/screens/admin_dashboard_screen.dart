@@ -10,37 +10,60 @@ class AdminDashboardScreen extends StatefulWidget {
 }
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
-  int _currentNavIndex = 0;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final int _currentNavIndex = 0;
+
+  void _onBottomNavTapped(int index) {
+    if (index == _currentNavIndex) return;
+    switch (index) {
+      case 0:
+        Navigator.of(context).pushReplacementNamed('/admin/dashboard');
+        break;
+      case 1:
+        Navigator.of(context).pushNamed('/admin/members');
+        break;
+      case 2:
+        Navigator.of(context).pushNamed('/admin/reports');
+        break;
+      case 3:
+        Navigator.of(context).pushNamed('/admin/audit-logs');
+        break;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.surface,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.menu, color: AppColors.textPrimary),
-          onPressed: () {},
+          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
         ),
         title: Text(
           "MahalFlow Admin",
           style: GoogleFonts.inter(
-            fontSize: 24,
+            fontSize: 22,
             fontWeight: FontWeight.w700,
             color: AppColors.primary,
           ),
         ),
         actions: [
-          const Padding(
-            padding: EdgeInsets.only(right: 16),
-            child: CircleAvatar(
-              backgroundColor: AppColors.primaryLight,
-              child: Text(
-                "A",
-                style: TextStyle(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w700,
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: GestureDetector(
+              onTap: () => _scaffoldKey.currentState?.openDrawer(),
+              child: const CircleAvatar(
+                backgroundColor: AppColors.primaryLight,
+                child: Text(
+                  "A",
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ),
@@ -50,6 +73,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           bottom: BorderSide(color: AppColors.border, width: 1),
         ),
       ),
+      drawer: _buildAdminDrawer(context),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -73,11 +97,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
             const SizedBox(height: 20),
 
+            // Quick Action Buttons
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () {},
+                    onPressed: () => Navigator.of(context).pushNamed('/admin/members'),
                     icon: const Icon(Icons.person_add, size: 16, color: AppColors.primary),
                     label: Text(
                       "Add Member",
@@ -99,7 +124,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: () {},
+                    onPressed: () => Navigator.of(context).pushNamed('/member/monthly-payment'),
                     icon: const Icon(Icons.payment, size: 16, color: Colors.white),
                     label: Text(
                       "Record Payment",
@@ -123,6 +148,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
             const SizedBox(height: 24),
 
+            // Metric Cards Grid
             GridView.count(
               crossAxisCount: 2,
               shrinkWrap: true,
@@ -137,6 +163,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   AppColors.success,
                   AppColors.successBg,
                   Icons.trending_up,
+                  onTap: () => Navigator.of(context).pushNamed('/admin/reports'),
                 ),
                 _buildMetricCard(
                   "Pending Dues",
@@ -144,6 +171,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   AppColors.warning,
                   AppColors.warningBg,
                   Icons.schedule,
+                  onTap: () => Navigator.of(context).pushNamed('/admin/reports'),
                 ),
                 _buildMetricCard(
                   "Paid Members",
@@ -151,6 +179,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   AppColors.info,
                   AppColors.infoBg,
                   Icons.check_circle_outline,
+                  onTap: () => Navigator.of(context).pushNamed('/admin/members'),
                 ),
                 _buildMetricCard(
                   "Pending Members",
@@ -158,6 +187,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   AppColors.error,
                   AppColors.errorBg,
                   Icons.pending_outlined,
+                  onTap: () => Navigator.of(context).pushNamed('/admin/members'),
                 ),
               ],
             ),
@@ -170,12 +200,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             const SizedBox(height: 16),
 
             _buildAnnouncementCard(),
+            const SizedBox(height: 16),
           ],
         ),
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentNavIndex,
-        onTap: (index) => setState(() => _currentNavIndex = index),
+        onTap: _onBottomNavTapped,
         type: BottomNavigationBarType.fixed,
         backgroundColor: AppColors.surface,
         selectedItemColor: AppColors.primary,
@@ -183,64 +214,223 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         selectedLabelStyle: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
         unselectedLabelStyle: GoogleFonts.inter(fontSize: 12),
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
-          BottomNavigationBarItem(icon: Icon(Icons.people), label: "Members"),
-          BottomNavigationBarItem(icon: Icon(Icons.payments), label: "Payments"),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
+          BottomNavigationBarItem(icon: Icon(Icons.dashboard_outlined), activeIcon: Icon(Icons.dashboard), label: "Dashboard"),
+          BottomNavigationBarItem(icon: Icon(Icons.people_outline), activeIcon: Icon(Icons.people), label: "Members"),
+          BottomNavigationBarItem(icon: Icon(Icons.assessment_outlined), activeIcon: Icon(Icons.assessment), label: "Reports"),
+          BottomNavigationBarItem(icon: Icon(Icons.history_outlined), activeIcon: Icon(Icons.history), label: "Logs"),
         ],
       ),
     );
   }
 
-  Widget _buildMetricCard(String title, String value, Color color, Color bgColor, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-        boxShadow: const [
-          BoxShadow(
-            color: Color.fromRGBO(23, 32, 29, 0.03),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
+  Widget _buildAdminDrawer(BuildContext context) {
+    return Drawer(
+      backgroundColor: AppColors.surface,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                title,
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
+          Container(
+            padding: const EdgeInsets.fromLTRB(20, 56, 20, 24),
+            decoration: const BoxDecoration(
+              color: AppColors.primary,
+            ),
+            width: double.infinity,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const CircleAvatar(
+                  radius: 28,
+                  backgroundColor: Colors.white,
+                  child: Text(
+                    "AD",
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                    ),
+                  ),
                 ),
-              ),
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: bgColor,
-                  borderRadius: BorderRadius.circular(8),
+                const SizedBox(height: 14),
+                Text(
+                  "Central Juma Masjid Mahal",
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-                child: Icon(icon, size: 16, color: color),
-              ),
-            ],
+                Text(
+                  "Admin Portal • Reg #REG/KL/2024/0912",
+                  style: GoogleFonts.inter(
+                    color: Colors.white.withValues(alpha: 0.8),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
           ),
-          Text(
-            value,
-            style: GoogleFonts.inter(
-              fontSize: 28,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              children: [
+                _buildDrawerTile(
+                  icon: Icons.dashboard_outlined,
+                  title: "Dashboard",
+                  onTap: () {
+                    Navigator.pop(context);
+                  },
+                ),
+                _buildDrawerTile(
+                  icon: Icons.people_outline,
+                  title: "Member Management",
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.of(context).pushNamed('/admin/members');
+                  },
+                ),
+                _buildDrawerTile(
+                  icon: Icons.assessment_outlined,
+                  title: "Financial Reports",
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.of(context).pushNamed('/admin/reports');
+                  },
+                ),
+                _buildDrawerTile(
+                  icon: Icons.upload_file_outlined,
+                  title: "Bulk Excel Import",
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.of(context).pushNamed('/admin/import-step1');
+                  },
+                ),
+                _buildDrawerTile(
+                  icon: Icons.account_balance_outlined,
+                  title: "Payment Gateways",
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.of(context).pushNamed('/admin/gateways');
+                  },
+                ),
+                _buildDrawerTile(
+                  icon: Icons.history_outlined,
+                  title: "Audit Logs",
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.of(context).pushNamed('/admin/audit-logs');
+                  },
+                ),
+                const Divider(color: AppColors.border, height: 24),
+                _buildDrawerTile(
+                  icon: Icons.swap_horiz,
+                  title: "Switch to Member View",
+                  color: AppColors.info,
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.of(context).pushNamedAndRemoveUntil(
+                      '/member/dashboard',
+                      (route) => false,
+                    );
+                  },
+                ),
+                _buildDrawerTile(
+                  icon: Icons.logout,
+                  title: "Sign Out",
+                  color: AppColors.error,
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.of(context).pushNamedAndRemoveUntil(
+                      '/login',
+                      (route) => false,
+                    );
+                  },
+                ),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDrawerTile({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+    Color? color,
+  }) {
+    final itemColor = color ?? AppColors.textPrimary;
+    return ListTile(
+      leading: Icon(icon, color: itemColor, size: 22),
+      title: Text(
+        title,
+        style: GoogleFonts.inter(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          color: itemColor,
+        ),
+      ),
+      onTap: onTap,
+      dense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+    );
+  }
+
+  Widget _buildMetricCard(String title, String value, Color color, Color bgColor, IconData icon, {VoidCallback? onTap}) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.border),
+            boxShadow: const [
+              BoxShadow(
+                color: Color.fromRGBO(23, 32, 29, 0.03),
+                blurRadius: 8,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: bgColor,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(icon, size: 16, color: color),
+                  ),
+                ],
+              ),
+              Text(
+                value,
+                style: GoogleFonts.inter(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -280,7 +470,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
               ),
               TextButton(
-                onPressed: () {},
+                onPressed: () => Navigator.of(context).pushNamed('/admin/reports'),
                 child: Text(
                   "View All",
                   style: GoogleFonts.inter(
@@ -423,10 +613,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           const SizedBox(height: 8),
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
+            child: const LinearProgressIndicator(
               value: 1.0,
               backgroundColor: AppColors.border,
-              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.success),
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.success),
               minHeight: 8,
             ),
           ),
@@ -453,10 +643,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           const SizedBox(height: 8),
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
+            child: const LinearProgressIndicator(
               value: 0.85,
               backgroundColor: AppColors.border,
-              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.warning),
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.warning),
               minHeight: 8,
             ),
           ),
@@ -493,7 +683,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ),
           const SizedBox(height: 16),
           ElevatedButton(
-            onPressed: () {},
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Announcement composer opened")),
+              );
+            },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,
               foregroundColor: AppColors.primary,

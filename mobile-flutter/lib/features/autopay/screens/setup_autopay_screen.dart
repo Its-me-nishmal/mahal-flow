@@ -11,7 +11,7 @@ class SetupAutoPayScreen extends StatefulWidget {
 
 class _SetupAutoPayScreenState extends State<SetupAutoPayScreen> {
   bool _enabled = true;
-  String _selectedMethod = 'UPI (•••• 1234)';
+  final String _selectedMethod = 'UPI (•••• 1234)';
 
   @override
   Widget build(BuildContext context) {
@@ -21,7 +21,7 @@ class _SetupAutoPayScreenState extends State<SetupAutoPayScreen> {
         backgroundColor: AppColors.surface,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
@@ -101,7 +101,7 @@ class _SetupAutoPayScreenState extends State<SetupAutoPayScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.info_outline, color: AppColors.info, size: 20),
+          const Icon(Icons.info_outline, color: AppColors.info, size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -221,11 +221,11 @@ class _SetupAutoPayScreenState extends State<SetupAutoPayScreen> {
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: AppColors.border),
+              borderSide: const BorderSide(color: AppColors.border),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: AppColors.border),
+              borderSide: const BorderSide(color: AppColors.border),
             ),
           ),
         ),

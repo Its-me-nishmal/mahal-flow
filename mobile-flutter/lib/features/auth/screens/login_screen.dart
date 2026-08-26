@@ -156,7 +156,14 @@ class _LoginScreenState extends State<LoginScreen> {
             width: double.infinity,
             height: 48,
             child: ElevatedButton(
-              onPressed: () {},
+              onPressed: () {
+                final phone = _phoneController.text.trim();
+                if (phone.contains('admin') || phone == '9847123456') {
+                  Navigator.of(context).pushReplacementNamed('/admin/dashboard');
+                } else {
+                  Navigator.of(context).pushReplacementNamed('/member/dashboard');
+                }
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
@@ -180,6 +187,39 @@ class _LoginScreenState extends State<LoginScreen> {
                 ],
               ),
             ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pushReplacementNamed('/member/dashboard');
+                },
+                child: Text(
+                  "Demo Member",
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+              const Text("•", style: TextStyle(color: AppColors.textMuted)),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pushReplacementNamed('/admin/dashboard');
+                },
+                child: Text(
+                  "Demo Admin",
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -216,7 +256,9 @@ class _LoginScreenState extends State<LoginScreen> {
         width: double.infinity,
         height: 48,
         child: OutlinedButton(
-          onPressed: () {},
+          onPressed: () {
+            Navigator.of(context).pushReplacementNamed('/member/dashboard');
+          },
           style: OutlinedButton.styleFrom(
             backgroundColor: AppColors.surface,
             foregroundColor: AppColors.primary,
