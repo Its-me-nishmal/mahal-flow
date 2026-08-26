@@ -13,6 +13,15 @@ class ContributionScreen extends StatefulWidget {
 class _ContributionScreenState extends State<ContributionScreen> {
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _noteController = TextEditingController();
+  String _selectedFund = "Zakat Fund";
+
+  final List<String> _funds = [
+    "Zakat Fund",
+    "General Fund",
+    "Masjid Renovation",
+    "Education Help",
+    "Medical Aid",
+  ];
 
   @override
   void dispose() {
@@ -185,7 +194,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
                   _buildFundSelector(),
                   const SizedBox(height: 20),
 
-                  // Note Textarea
+                  // Optional Note
                   Text(
                     "Note (Optional)",
                     style: GoogleFonts.inter(
@@ -254,7 +263,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
                                 Text("Contribution Received", style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 18)),
                               ],
                             ),
-                            content: Text("Thank you! Your contribution of ₹$amount has been received and verified.", style: GoogleFonts.inter(fontSize: 14)),
+                            content: Text("Thank you! Your contribution of ₹$amount to $_selectedFund has been received and verified.", style: GoogleFonts.inter(fontSize: 14)),
                             actions: [
                               ElevatedButton(
                                 onPressed: () {
@@ -311,6 +320,58 @@ class _ContributionScreenState extends State<ContributionScreen> {
         ),
       ),
       bottomNavigationBar: const MemberBottomNavBar(currentIndex: 1),
+    );
+  }
+
+  Widget _buildQuickAmountChip(int amount) {
+    return ActionChip(
+      label: Text(
+        "₹$amount",
+        style: GoogleFonts.inter(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: AppColors.primary,
+        ),
+      ),
+      backgroundColor: AppColors.primaryLight,
+      side: const BorderSide(color: AppColors.border),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      onPressed: () {
+        setState(() {
+          _amountController.text = amount.toString();
+        });
+      },
+    );
+  }
+
+  Widget _buildFundSelector() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: DropdownButton<String>(
+        value: _selectedFund,
+        isExpanded: true,
+        underline: const SizedBox(),
+        dropdownColor: AppColors.surface,
+        style: GoogleFonts.inter(
+          fontSize: 14,
+          color: AppColors.textPrimary,
+        ),
+        items: _funds.map((f) {
+          return DropdownMenuItem<String>(
+            value: f,
+            child: Text(f),
+          );
+        }).toList(),
+        onChanged: (val) {
+          if (val != null) {
+            setState(() => _selectedFund = val);
+          }
+        },
+      ),
     );
   }
 }
