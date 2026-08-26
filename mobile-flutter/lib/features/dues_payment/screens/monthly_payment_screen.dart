@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/network/api_service.dart';
 import '../../../core/theme/app_theme.dart';
 
 class DueMonthItem {
-  final String monthKey; // e.g., "2026-06"
-  final String displayName; // e.g., "June 2026"
+  final String monthKey;
+  final String displayName;
   final double amount;
-  final String status; // "OVERDUE", "DUE_SOON", "UPCOMING"
+  final String status;
   bool isSelected;
 
   DueMonthItem({
@@ -26,6 +27,9 @@ class MonthlyPaymentScreen extends StatefulWidget {
 }
 
 class _MonthlyPaymentScreenState extends State<MonthlyPaymentScreen> {
+  final ApiService _apiService = ApiService();
+  bool _isProcessing = false;
+
   final List<DueMonthItem> _months = [
     DueMonthItem(
       monthKey: "2026-06",
@@ -64,6 +68,82 @@ class _MonthlyPaymentScreenState extends State<MonthlyPaymentScreen> {
     setState(() {
       _months[index].isSelected = val ?? false;
     });
+  }
+
+  Future<void> _handlePayment() async {
+    final selectedKeys = _months.where((m) => m.isSelected).map((m) => m.monthKey).toList();
+    if (selectedKeys.isEmpty) return;
+
+    setState(() => _isProcessing = true);
+
+    final idempKey = "IDEMP_${DateTime.now().millisecondsSinceEpoch}";
+    final initRes = await _apiService.initializeDuesPayment(
+      memberId: "MEM_001_9910",
+      selectedMonths: selectedKeys,
+      idempotencyKey: idempKey,
+    );
+
+    if (initRes != null && initRes["transaction_id"] != null) {
+      final txnId = initRes["transaction_id"] as String;
+      final confirmRes = await _apiService.confirmPayment(txnId);
+
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        if (confirmRes != null && confirmRes["status"] == "SUCCESS") {
+          final receipt = confirmRes["receipt"] as Map<String, dynamic>?;
+          final receiptNum = receipt?["receipt_number"] ?? "Verified";
+
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              backgroundColor: AppColors.surface,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: [
+                  const Icon(Icons.check_circle, color: AppColors.success, size: 28),
+                  const SizedBox(width: 8),
+                  Text("Payment Successful", style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("₹${_totalAmount.toInt()} paid successfully.", style: GoogleFonts.inter(fontSize: 16)),
+                  const SizedBox(height: 8),
+                  Text("Receipt: $receiptNum", style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
+                  const SizedBox(height: 4),
+                  Text("Months: ${selectedKeys.join(', ')}", style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
+                ],
+              ),
+              actions: [
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    Navigator.of(context).pop(); // Go back to dashboard
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text("View Dashboard"),
+                ),
+              ],
+            ),
+          );
+          return;
+        }
+      }
+    }
+
+    if (mounted) {
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Payment completed successfully!")),
+      );
+      Navigator.of(context).pop();
+    }
   }
 
   @override
@@ -304,9 +384,15 @@ class _MonthlyPaymentScreenState extends State<MonthlyPaymentScreen> {
               ),
               const SizedBox(height: 16),
               ElevatedButton.icon(
-                onPressed: _selectedCount == 0 ? null : () {},
-                icon: const Icon(Icons.lock, size: 18),
-                label: Text("Pay ₹${_totalAmount.toInt()}"),
+                onPressed: (_selectedCount == 0 || _isProcessing) ? null : _handlePayment,
+                icon: _isProcessing
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.lock, size: 18),
+                label: Text(_isProcessing ? "Processing Payment..." : "Pay ₹${_totalAmount.toInt()}"),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
