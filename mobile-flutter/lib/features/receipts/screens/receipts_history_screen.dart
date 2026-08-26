@@ -102,38 +102,40 @@ class _ReceiptsHistoryScreenState extends State<ReceiptsHistoryScreen> {
       body: Column(
         children: [
           // Filter Chips
-          SizedBox(
-            height: 56,
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              itemCount: _filters.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
-              itemBuilder: (context, index) {
-                final filter = _filters[index];
-                final isSelected = _selectedFilter == filter;
-                return GestureDetector(
-                  onTap: () => setState(() => _selectedFilter = filter),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isSelected ? AppColors.primary : AppColors.surface,
+              child: Row(
+                children: _filters.map((filter) {
+                  final isSelected = _selectedFilter == filter;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: InkWell(
+                      onTap: () => setState(() => _selectedFilter = filter),
                       borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: isSelected ? AppColors.primary : AppColors.border,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isSelected ? AppColors.primary : AppColors.surface,
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: isSelected ? AppColors.primary : AppColors.border,
+                          ),
+                        ),
+                        child: Text(
+                          filter,
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: isSelected ? Colors.white : AppColors.textSecondary,
+                          ),
+                        ),
                       ),
                     ),
-                    child: Text(
-                      filter,
-                      style: GoogleFonts.inter(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: isSelected ? Colors.white : AppColors.textSecondary,
-                      ),
-                    ),
-                  ),
-                );
-              },
+                  );
+                }).toList(),
+              ),
             ),
           ),
 
