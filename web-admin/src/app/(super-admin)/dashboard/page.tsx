@@ -183,8 +183,8 @@ export default function DashboardPage() {
                   <td className="py-3 px-4">
                     <StatusBadge status={mahal.status} />
                   </td>
-                  <td className="py-3 px-4 font-medium text-text-primary">{mahal.memberCount}</td>
-                  <td className="py-3 px-4 font-semibold text-text-primary">₹{(mahal.collectionsMtd / 1000).toFixed(1)}k</td>
+                  <td className="py-3 px-4 font-medium text-text-primary">{mahal.members}</td>
+                  <td className="py-3 px-4 font-semibold text-text-primary">{mahal.collections}</td>
                   <td className="py-3 px-4 text-right">
                     <button className="text-text-muted hover:text-text-primary p-1 rounded hover:bg-surface-variant/50">
                       <span className="material-symbols-outlined text-[18px]">more_vert</span>

@@ -85,10 +85,14 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
           bottom: BorderSide(color: AppColors.border, width: 1),
         ),
       ),
-      body: RefreshIndicator(
-        onRefresh: _loadDashboardData,
-        color: AppColors.primary,
-        child: SingleChildScrollView(
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            )
+          : RefreshIndicator(
+              onRefresh: _loadDashboardData,
+              color: AppColors.primary,
+              child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
           child: Column(
