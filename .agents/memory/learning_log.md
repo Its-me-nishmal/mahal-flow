@@ -100,4 +100,20 @@
 
 ---
 
+## 7. Flutter Mobile App Learnings
+
+### Entry 018: Flutter Screen Module Pattern
+- **Context**: Building 22+ screens across auth, member, and admin flows required consistent patterns.
+- **Rule**: Each feature gets its own directory under `lib/features/<feature>/screens/`. All screens are `StatefulWidget` with `GoogleFonts.inter()` for text. Import `AppColors` from `core/theme/app_theme.dart` — never hardcode colors. Use relative imports (`../../../core/theme/app_theme.dart`).
+
+### Entry 019: Dart Map Type Inference Gotcha
+- **Context**: `List<Map>` without explicit type parameters creates `List<Map<dynamic, dynamic>>`, causing `t["key"]!` null-assertion errors on `dynamic` values.
+- **Rule**: Always declare map types explicitly: `List<Map<String, String>>` or cast values: `t["name"] as String`. Use string comparison (`t["paid"] == "true"`) instead of boolean map values to avoid type issues.
+
+### Entry 020: Flutter Switch.activeColor Deprecation (3.41+)
+- **Context**: `Switch(activeColor:)` was deprecated in Flutter 3.31+.
+- **Rule**: Use `Switch(activeThumbColor:)` instead. Also prefer `.withValues(alpha:)` over `.withOpacity()` to avoid precision loss warnings.
+
+---
+
 ## 4. Git & Monorepo Workflow

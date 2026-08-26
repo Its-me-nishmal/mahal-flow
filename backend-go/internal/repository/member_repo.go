@@ -4,19 +4,18 @@ import (
 	"context"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/mahalflow/backend-go/internal/domain"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 type MemberRepository interface {
 	GetByID(ctx context.Context, mahalID, memberID string) (*domain.Member, error)
 	GetByPhone(ctx context.Context, mahalID, phone string) (*domain.Member, error)
+	ListByMahal(ctx context.Context, mahalID string, limit, skip int64) ([]domain.Member, int64, error)
 	ApplyPaidMonths(ctx context.Context, memberID string, paidMonths []string, amount float64) error
-	GetOverdueMembers(ctx context.Context, mahalID string) ([]domain.Member, error)
-	GetAllByMahal(ctx context.Context, mahalID string) ([]domain.Member, error)
-	UpsertMembers(ctx context.Context, mahalID string, members []domain.Member) (inserted int, updated int, duplicates int, err error)
+	GetMemberStats(ctx context.Context, mahalID string) (totalMembers int64, paidCount int64, pendingCount int64, totalPendingAmount float64, err error)
 }
 
 type mongoMemberRepo struct {
@@ -45,6 +44,28 @@ func (r *mongoMemberRepo) GetByPhone(ctx context.Context, mahalID, phone string)
 	return &member, nil
 }
 
+func (r *mongoMemberRepo) ListByMahal(ctx context.Context, mahalID string, limit, skip int64) ([]domain.Member, int64, error) {
+	filter := bson.M{"mahal_id": mahalID}
+	total, err := r.coll.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	opts := options.Find().SetLimit(limit).SetSkip(skip).SetSort(bson.D{{Key: "created_at", Value: -1}})
+	cursor, err := r.coll.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cursor.Close(ctx)
+
+	var members []domain.Member
+	if err := cursor.All(ctx, &members); err != nil {
+		return nil, 0, err
+	}
+
+	return members, total, nil
+}
+
 func (r *mongoMemberRepo) ApplyPaidMonths(ctx context.Context, memberID string, paidMonths []string, amount float64) error {
 	if len(paidMonths) == 0 {
 		return nil
@@ -66,65 +87,36 @@ func (r *mongoMemberRepo) ApplyPaidMonths(ctx context.Context, memberID string, 
 	return err
 }
 
-func (r *mongoMemberRepo) GetOverdueMembers(ctx context.Context, mahalID string) ([]domain.Member, error) {
-	currentMonth := time.Now().UTC().Format("2006-01")
-	filter := bson.M{
-		"mahal_id": mahalID,
-		"status":   "ACTIVE",
-		"$and": []bson.M{
-			{"last_paid_month": bson.M{"$ne": currentMonth}},
-			{"last_paid_month": bson.M{"$lt": currentMonth}},
-		},
-	}
-	cursor, err := r.coll.Find(ctx, filter)
+func (r *mongoMemberRepo) GetMemberStats(ctx context.Context, mahalID string) (totalMembers int64, paidCount int64, pendingCount int64, totalPendingAmount float64, err error) {
+	filter := bson.M{"mahal_id": mahalID}
+	totalMembers, err = r.coll.CountDocuments(ctx, filter)
 	if err != nil {
-		return nil, err
+		return 0, 0, 0, 0, err
 	}
-	defer cursor.Close(ctx)
-	var members []domain.Member
-	if err := cursor.All(ctx, &members); err != nil {
-		return nil, err
-	}
-	return members, nil
-}
 
-func (r *mongoMemberRepo) GetAllByMahal(ctx context.Context, mahalID string) ([]domain.Member, error) {
-	filter := bson.M{"mahal_id": mahalID, "status": "ACTIVE"}
-	cursor, err := r.coll.Find(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-	var members []domain.Member
-	if err := cursor.All(ctx, &members); err != nil {
-		return nil, err
-	}
-	return members, nil
-}
+	paidFilter := bson.M{"mahal_id": mahalID, "outstanding_balance": 0.0}
+	paidCount, _ = r.coll.CountDocuments(ctx, paidFilter)
 
-func (r *mongoMemberRepo) UpsertMembers(ctx context.Context, mahalID string, members []domain.Member) (inserted int, updated int, duplicates int, err error) {
-	for _, m := range members {
-		m.MahalID = mahalID
-		existing, findErr := r.GetByPhone(ctx, mahalID, m.Phone)
-		if findErr == nil && existing != nil {
-			duplicates++
-			continue
-		}
-		if m.ID == "" {
-			m.ID = "MEM_" + uuid.New().String()
-		}
-		m.CreatedAt = time.Now().UTC()
-		m.UpdatedAt = time.Now().UTC()
-		m.Version = 1
-		if m.Status == "" {
-			m.Status = "ACTIVE"
-		}
-		_, insertErr := r.coll.InsertOne(ctx, m)
-		if insertErr != nil {
-			err = insertErr
-			return
-		}
-		inserted++
+	pendingCount = totalMembers - paidCount
+
+	// Calculate total outstanding balance
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: filter}},
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: nil},
+			{Key: "totalPending", Value: bson.D{{Key: "$sum", Value: "$outstanding_balance"}}},
+		}}},
 	}
-	return
+
+	cursor, err := r.coll.Aggregate(ctx, pipeline)
+	if err == nil && cursor.Next(ctx) {
+		var res struct {
+			TotalPending float64 `bson:"totalPending"`
+		}
+		if err := cursor.Decode(&res); err == nil {
+			totalPendingAmount = res.TotalPending
+		}
+	}
+
+	return totalMembers, paidCount, pendingCount, totalPendingAmount, nil
 }

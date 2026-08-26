@@ -2,7 +2,6 @@ package logger
 
 import (
 	"os"
-	"strings"
 	"time"
 
 	"github.com/rs/zerolog"

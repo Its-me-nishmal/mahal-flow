@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,10 +17,10 @@ import (
 )
 
 var (
-	ErrInvalidAmount     = errors.New("amount does not match expected total for selected months")
+	ErrInvalidAmount       = errors.New("amount does not match expected total for selected months")
 	ErrNonSequentialMonths = errors.New("selected months must be sequential starting after last paid month")
-	ErrDuplicateInFlight = errors.New("payment with this idempotency key is already processing")
-	ErrMemberNotFound    = errors.New("member not found")
+	ErrDuplicateInFlight   = errors.New("payment with this idempotency key is already processing")
+	ErrMemberNotFound      = errors.New("member not found")
 )
 
 type PaymentService interface {
@@ -130,6 +131,16 @@ func (s *paymentService) InitializeContribution(
 }
 
 func (s *paymentService) CommitSuccessfulPayment(ctx context.Context, txnID string) (*domain.Receipt, error) {
+	// Try replica set multi-document ACID transaction first
+	receipt, err := s.commitWithTransaction(ctx, txnID)
+	if err != nil && (strings.Contains(err.Error(), "Transaction numbers are only allowed") || strings.Contains(err.Error(), "replica set")) {
+		// Graceful fallback for standalone local MongoDB instance
+		return s.commitStandalone(ctx, txnID)
+	}
+	return receipt, err
+}
+
+func (s *paymentService) commitWithTransaction(ctx context.Context, txnID string) (*domain.Receipt, error) {
 	wc := writeconcern.Majority()
 	rc := readconcern.Majority()
 	txnOpts := options.Transaction().SetWriteConcern(wc).SetReadConcern(rc)
@@ -142,71 +153,79 @@ func (s *paymentService) CommitSuccessfulPayment(ctx context.Context, txnID stri
 
 	var committedReceipt *domain.Receipt
 
-	_, err = session.WithTransaction(ctx, func(sessCtx mongo.SessionContext) (interface{}, error) {
-		txn, err := s.txnRepo.GetByID(sessCtx, txnID)
+	_, err = session.WithTransaction(ctx, func(sessCtx context.Context) (interface{}, error) {
+		r, err := s.executeCommit(sessCtx, txnID)
 		if err != nil {
 			return nil, err
 		}
-		if txn.Status == domain.TxnSuccess {
-			return nil, nil // Already processed
-		}
-
-		member, err := s.memberRepo.GetByID(sessCtx, txn.MahalID, txn.MemberID)
-		if err != nil {
-			return nil, err
-		}
-
-		// 1. Calculate sequence number & chained hash
-		lastReceipt, err := s.receiptRepo.GetLatestReceipt(sessCtx, txn.MahalID)
-		seq := int64(1)
-		prevHash := "0000000000000000000000000000000000000000000000000000000000000000"
-		if err == nil && lastReceipt != nil {
-			seq = lastReceipt.SequenceNumber + 1
-			prevHash = lastReceipt.ReceiptHash
-		}
-
-		receiptNumber := fmt.Sprintf("GV1MH%s%sR%05d", txn.MahalID, time.Now().Format("20060102"), seq)
-		receiptHash := domain.CalculateReceiptHash(receiptNumber, txn.MahalID, txn.MemberID, txn.Amount, prevHash)
-
-		receipt := &domain.Receipt{
-			ID:                  "RCPT_" + uuid.New().String(),
-			ReceiptNumber:       receiptNumber,
-			SequenceNumber:      seq,
-			MahalID:             txn.MahalID,
-			MemberID:            txn.MemberID,
-			MemberName:          member.Name,
-			TransactionID:       txn.ID,
-			PaymentType:         txn.Type,
-			PaidMonths:          txn.SelectedMonths,
-			Amount:              txn.Amount,
-			PreviousReceiptHash: prevHash,
-			ReceiptHash:         receiptHash,
-			CreatedAt:           time.Now().UTC(),
-		}
-
-		if err := s.receiptRepo.Insert(sessCtx, receipt); err != nil {
-			return nil, err
-		}
-
-		// 2. Mark Transaction Status
-		if err := s.txnRepo.UpdateStatus(sessCtx, txn.ID, domain.TxnSuccess, receipt.ID); err != nil {
-			return nil, err
-		}
-
-		// 3. Update Member Paid Months if Dues
-		if txn.Type == "MONTHLY_DUES" && len(txn.SelectedMonths) > 0 {
-			if err := s.memberRepo.ApplyPaidMonths(sessCtx, txn.MemberID, txn.SelectedMonths, txn.Amount); err != nil {
-				return nil, err
-			}
-		}
-
-		committedReceipt = receipt
+		committedReceipt = r
 		return nil, nil
 	}, txnOpts)
 
+	return committedReceipt, err
+}
+
+func (s *paymentService) commitStandalone(ctx context.Context, txnID string) (*domain.Receipt, error) {
+	return s.executeCommit(ctx, txnID)
+}
+
+func (s *paymentService) executeCommit(ctx context.Context, txnID string) (*domain.Receipt, error) {
+	txn, err := s.txnRepo.GetByID(ctx, txnID)
+	if err != nil {
+		return nil, err
+	}
+	if txn.Status == domain.TxnSuccess {
+		return s.receiptRepo.GetByNumber(ctx, txn.ReceiptID)
+	}
+
+	member, err := s.memberRepo.GetByID(ctx, txn.MahalID, txn.MemberID)
 	if err != nil {
 		return nil, err
 	}
 
-	return committedReceipt, nil
+	// 1. Calculate sequence number & chained hash
+	lastReceipt, err := s.receiptRepo.GetLatestReceipt(ctx, txn.MahalID)
+	seq := int64(1)
+	prevHash := "0000000000000000000000000000000000000000000000000000000000000000"
+	if err == nil && lastReceipt != nil {
+		seq = lastReceipt.SequenceNumber + 1
+		prevHash = lastReceipt.ReceiptHash
+	}
+
+	receiptNumber := fmt.Sprintf("GV1MH%s%sR%05d", txn.MahalID, time.Now().Format("20060102"), seq)
+	receiptHash := domain.CalculateReceiptHash(receiptNumber, txn.MahalID, txn.MemberID, txn.Amount, prevHash)
+
+	receipt := &domain.Receipt{
+		ID:                  "RCPT_" + uuid.New().String(),
+		ReceiptNumber:       receiptNumber,
+		SequenceNumber:      seq,
+		MahalID:             txn.MahalID,
+		MemberID:            txn.MemberID,
+		MemberName:          member.Name,
+		TransactionID:       txn.ID,
+		PaymentType:         txn.Type,
+		PaidMonths:          txn.SelectedMonths,
+		Amount:              txn.Amount,
+		PreviousReceiptHash: prevHash,
+		ReceiptHash:         receiptHash,
+		CreatedAt:           time.Now().UTC(),
+	}
+
+	if err := s.receiptRepo.Insert(ctx, receipt); err != nil {
+		return nil, err
+	}
+
+	// 2. Mark Transaction Status
+	if err := s.txnRepo.UpdateStatus(ctx, txn.ID, domain.TxnSuccess, receipt.ID); err != nil {
+		return nil, err
+	}
+
+	// 3. Update Member Paid Months if Dues
+	if txn.Type == "MONTHLY_DUES" && len(txn.SelectedMonths) > 0 {
+		if err := s.memberRepo.ApplyPaidMonths(ctx, txn.MemberID, txn.SelectedMonths, txn.Amount); err != nil {
+			return nil, err
+		}
+	}
+
+	return receipt, nil
 }

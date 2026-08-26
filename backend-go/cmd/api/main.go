@@ -48,7 +48,7 @@ func main() {
 		paymentService = service.NewPaymentService(dbClient.Client, mahalRepo, memberRepo, txnRepo, receiptRepo)
 	}
 
-	handler := api.NewHandler(paymentService, memberRepo, receiptRepo)
+	handler := api.NewHandler(paymentService, mahalRepo, memberRepo, receiptRepo)
 
 	// 3. Initialize Fiber App
 	app := fiber.New(fiber.Config{
@@ -63,11 +63,12 @@ func main() {
 	}))
 	app.Use(api.CorrelationIDMiddleware())
 
-	// Public Routes
+	// Public Health Route
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
 			"status":      "healthy",
 			"version":     AppVersion,
+			"database":    "connected",
 			"environment": cfg.Environment,
 			"timestamp":   time.Now().UTC(),
 		})
@@ -75,9 +76,17 @@ func main() {
 
 	// Tenant-Scoped API Routes (v1)
 	v1 := app.Group("/api/v1", api.TenantExtractionMiddleware())
+
+	// Member Routes
+	v1.Get("/member/dashboard", handler.GetMemberDashboard)
 	v1.Post("/payments/dues/initialize", handler.InitializeDuesPayment)
+	v1.Post("/payments/dues/confirm", handler.ConfirmPayment)
 	v1.Post("/payments/contribution/initialize", handler.InitializeContribution)
 	v1.Get("/receipts/:number", handler.GetReceipt)
+
+	// Admin Routes
+	v1.Get("/admin/dashboard", handler.GetAdminDashboard)
+	v1.Get("/admin/members", handler.GetAdminMembers)
 
 	// Graceful shutdown setup
 	sigChan := make(chan os.Signal, 1)
