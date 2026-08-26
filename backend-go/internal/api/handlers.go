@@ -9,6 +9,7 @@ import (
 	"github.com/mahalflow/backend-go/internal/domain"
 	"github.com/mahalflow/backend-go/internal/repository"
 	"github.com/mahalflow/backend-go/internal/service"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 type Handler struct {
@@ -108,8 +109,47 @@ func (h *Handler) GetMemberProfile(c *fiber.Ctx) error {
 	return c.JSON(member)
 }
 
+type UpdateProfileRequest struct {
+	Name    string `json:"name"`
+	Email   string `json:"email"`
+	Address string `json:"address"`
+	City    string `json:"city"`
+	State   string `json:"state"`
+	Pincode string `json:"pincode"`
+}
+
 func (h *Handler) UpdateMemberProfile(c *fiber.Ctx) error {
-	return c.JSON(fiber.Map{"status": "UPDATED", "updated_at": time.Now().UTC()})
+	tenantID, _ := c.Locals("tenant_id").(string)
+	memberID := c.Params("id", "MEM_001_9910")
+
+	var req UpdateProfileRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	updates := bson.M{}
+	if req.Name != "" {
+		updates["name"] = req.Name
+	}
+	if req.Email != "" {
+		updates["email"] = req.Email
+	}
+	if req.Address != "" {
+		updates["house_name"] = req.Address
+	}
+
+	if h.memberRepo != nil && len(updates) > 0 {
+		if err := h.memberRepo.UpdateProfile(c.Context(), tenantID, memberID, updates); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+	}
+
+	return c.JSON(fiber.Map{
+		"status":     "UPDATED",
+		"member_id":  memberID,
+		"name":       req.Name,
+		"updated_at": time.Now().UTC(),
+	})
 }
 
 // -------------------------------------------------------------

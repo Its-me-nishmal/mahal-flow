@@ -16,6 +16,7 @@ type MemberRepository interface {
 	ListByMahal(ctx context.Context, mahalID string, limit, skip int64) ([]domain.Member, int64, error)
 	ApplyPaidMonths(ctx context.Context, memberID string, paidMonths []string, amount float64) error
 	GetMemberStats(ctx context.Context, mahalID string) (totalMembers int64, paidCount int64, pendingCount int64, totalPendingAmount float64, err error)
+	UpdateProfile(ctx context.Context, mahalID, memberID string, updates bson.M) error
 }
 
 type mongoMemberRepo struct {
@@ -119,4 +120,14 @@ func (r *mongoMemberRepo) GetMemberStats(ctx context.Context, mahalID string) (t
 	}
 
 	return totalMembers, paidCount, pendingCount, totalPendingAmount, nil
+}
+
+func (r *mongoMemberRepo) UpdateProfile(ctx context.Context, mahalID, memberID string, updates bson.M) error {
+	updates["updated_at"] = time.Now().UTC()
+	_, err := r.coll.UpdateOne(
+		ctx,
+		bson.M{"_id": memberID, "mahal_id": mahalID},
+		bson.M{"$set": updates},
+	)
+	return err
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/member_bottom_nav_bar.dart';
+import '../../../core/network/api_service.dart';
 import 'edit_personal_details_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -12,6 +13,7 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  final ApiService _apiService = ApiService();
   String _memberName = "Muhammed Ameen";
   String _phone = "+91 98765 43210";
   String _email = "muhammed@example.com";
@@ -49,6 +51,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _state = updated['state'] ?? _state;
         _pincode = updated['pincode'] ?? _pincode;
       });
+
+      _apiService.updateMemberProfile(
+        name: _memberName,
+        email: _email,
+        address: _address1,
+        city: _city,
+        state: _state,
+        pincode: _pincode,
+      );
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Profile details updated successfully!")),
       );

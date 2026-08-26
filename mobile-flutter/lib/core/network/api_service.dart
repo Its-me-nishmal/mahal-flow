@@ -81,4 +81,32 @@ class ApiService {
     }
     return null;
   }
+
+  // 4. Update Member Profile
+  Future<bool> updateMemberProfile({
+    String memberId = "MEM_001_9910",
+    required String name,
+    String? email,
+    String? address,
+    String? city,
+    String? state,
+    String? pincode,
+  }) async {
+    try {
+      final response = await _dio.put(
+        "/members/profile/$memberId",
+        data: {
+          "name": name,
+          "email": email,
+          "address": address,
+          "city": city,
+          "state": state,
+          "pincode": pincode,
+        },
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
 }
