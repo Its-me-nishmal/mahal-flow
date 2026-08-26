@@ -4,6 +4,7 @@
 - Read .agents/memory/learning_log.md for project lessons and gotchas.
 - Backend: Go 1.22 + Fiber + official mongo-driver/v2.
 - Mobile: Flutter + Riverpod + AppColors.primary (#146C5B).
+- Stitch Fidelity: Frontends (Flutter/Next.js) MUST 100% match `screen.png` and `code.html` in `stitch_mahal_financial_integrity_system/<screen_name>/`.
 - Financial Invariant: Never allow partial dues. Months must be paid in full sequential order.
 - Tenancy: Always filter by `mahal_id`.
 - Commit format: Conventional Commits (`feat:`, `fix:`, `agent:`, `chore:`).

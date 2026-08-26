@@ -12,4 +12,5 @@ See [AGENTS.md](file:///d:/Random/MahalFlow/AGENTS.md) for the master context, u
    - Never update/delete receipts; use append-only ledger + SHA-256 receipt hash chaining.
 3. Tech Stack: Go (Fiber) + MongoDB 7 + Flutter (Riverpod) + Next.js.
 4. Colors: `#146C5B` Emerald, Inter typography, 8px grid.
-5. On completing tasks or learning new project patterns, update `.agents/memory/learning_log.md`.
+5. **Stitch UI Fidelity**: All Flutter & Next.js screens MUST 100% replicate the corresponding `screen.png` and `code.html` in `stitch_mahal_financial_integrity_system/<screen_name>/`.
+6. On completing tasks or learning new project patterns, update `.agents/memory/learning_log.md`.

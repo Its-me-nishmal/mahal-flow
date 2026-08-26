@@ -39,6 +39,10 @@
 - **Context**: Members must never be presented with an open amount input box for monthly dues.
 - **Rule**: Render full month checkboxes (`[x] June ₹500`, `[x] July ₹500`), auto-calculating the exact total.
 
+### Entry 008: 100% Stitch UI & HTML Prototype Fidelity
+- **Context**: 35 pre-designed screens exist in `stitch_mahal_financial_integrity_system/`.
+- **Rule**: Never design from imagination or invent layouts. The coding agent MUST inspect the specific screen folder's `screen.png` and `code.html` before creating Flutter widgets or React components to ensure pixel-perfect fidelity.
+
 ---
 
 ## 4. Git & Monorepo Workflow

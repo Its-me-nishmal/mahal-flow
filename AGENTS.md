@@ -48,6 +48,11 @@
   - `REFUNDED` -> Blue (`#3478B8`, bg: `#EAF3FB`)
 - **Typography**: Inter / System UI, 8px grid spacing, 10px button border radius.
 
+### 3.1 MANDATORY: 100% Stitch UI & HTML Prototype Fidelity
+> **CRITICAL**: The visual designs MUST strictly match the corresponding `screen.png` and `code.html` in `stitch_mahal_financial_integrity_system/<screen_name>/`.
+> - Never invent arbitrary layouts, colors, or navigation.
+> - Before building any screen in Flutter or Next.js, view the corresponding Stitch mockup and replicate its layout, typography hierarchy, and spacing exactly.
+
 ---
 
 ## 4. Coding Agent Self-Learning Protocol
