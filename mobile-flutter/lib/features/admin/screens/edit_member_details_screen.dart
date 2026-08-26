@@ -20,10 +20,21 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.member["name"]);
-    _phoneController = TextEditingController(text: widget.member["phone"]);
-    _amountController = TextEditingController(text: "500");
-    _selectedStatus = widget.member["status"];
+    _nameController = TextEditingController(text: widget.member["name"]?.toString() ?? "");
+    _phoneController = TextEditingController(text: widget.member["phone"]?.toString() ?? "");
+    final rawAmount = widget.member["amount"]?.toString().replaceAll(RegExp(r'[^0-9]'), '') ?? "500";
+    _amountController = TextEditingController(text: rawAmount.isEmpty ? "500" : rawAmount);
+
+    final rawStatus = widget.member["status"]?.toString() ?? "Active";
+    if (rawStatus.toLowerCase().contains("grace")) {
+      _selectedStatus = "Grace Period";
+    } else if (rawStatus.toLowerCase().contains("suspend")) {
+      _selectedStatus = "Suspended";
+    } else if (rawStatus.toLowerCase().contains("read")) {
+      _selectedStatus = "ReadOnly";
+    } else {
+      _selectedStatus = "Active";
+    }
   }
 
   @override
@@ -43,12 +54,18 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: AppColors.primary),
-          onPressed: () => Navigator.of(context).maybePop(),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              Navigator.of(context).pushReplacementNamed('/admin/members');
+            }
+          },
         ),
         title: Text(
           "Edit Member",
           style: GoogleFonts.inter(
-            fontSize: 24,
+            fontSize: 22,
             fontWeight: FontWeight.w700,
             color: AppColors.primary,
           ),
@@ -74,7 +91,16 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
               width: double.infinity,
               height: 48,
               child: ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Member details updated successfully")),
+                  );
+                  if (Navigator.of(context).canPop()) {
+                    Navigator.of(context).pop();
+                  } else {
+                    Navigator.of(context).pushReplacementNamed('/admin/members');
+                  }
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
@@ -96,7 +122,37 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
               width: double.infinity,
               height: 48,
               child: OutlinedButton(
-                onPressed: () {},
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      backgroundColor: AppColors.surface,
+                      title: Text("Deactivate Member?", style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+                      content: Text("Are you sure you want to deactivate ${_nameController.text}?"),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          child: const Text("Cancel"),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+                          onPressed: () {
+                            Navigator.of(ctx).pop();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("Member deactivated")),
+                            );
+                            if (Navigator.of(context).canPop()) {
+                              Navigator.of(context).pop();
+                            } else {
+                              Navigator.of(context).pushReplacementNamed('/admin/members');
+                            }
+                          },
+                          child: const Text("Deactivate", style: TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                    ),
+                  );
+                },
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size.fromHeight(48),
                   side: const BorderSide(color: AppColors.error),
@@ -225,16 +281,18 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
               fontSize: 14,
               color: AppColors.textPrimary,
             ),
-            items: ["Active", "Grace", "Suspended", "ReadOnly"].map((String value) {
-              return DropdownMenuItem<String>(
-                value: value,
-                child: Text(value),
-              );
-            }).toList(),
+            items: const [
+              DropdownMenuItem(value: "Active", child: Text("Active")),
+              DropdownMenuItem(value: "Grace Period", child: Text("Grace Period")),
+              DropdownMenuItem(value: "Suspended", child: Text("Suspended")),
+              DropdownMenuItem(value: "ReadOnly", child: Text("ReadOnly")),
+            ],
             onChanged: (String? newValue) {
-              setState(() {
-                _selectedStatus = newValue!;
-              });
+              if (newValue != null) {
+                setState(() {
+                  _selectedStatus = newValue;
+                });
+              }
             },
           ),
         ),
