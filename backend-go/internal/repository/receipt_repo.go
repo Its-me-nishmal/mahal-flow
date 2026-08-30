@@ -13,6 +13,8 @@ type ReceiptRepository interface {
 	Insert(ctx context.Context, receipt *domain.Receipt) error
 	GetLatestReceipt(ctx context.Context, mahalID string) (*domain.Receipt, error)
 	GetNextSequenceNumber(ctx context.Context, mahalID string) (int64, error)
+	AllocateAtomicReceiptSequence(ctx context.Context, mahalID string) (seq int64, prevHash string, err error)
+	UpdateLedgerHeadHash(ctx context.Context, mahalID string, seq int64, newHash string) error
 	GetByNumber(ctx context.Context, receiptNumber string) (*domain.Receipt, error)
 	GetByMemberID(ctx context.Context, mahalID, memberID string) ([]domain.Receipt, error)
 	GetAllByMahal(ctx context.Context, mahalID string, limit int64) ([]domain.Receipt, error)
@@ -36,23 +38,51 @@ func (r *mongoReceiptRepo) Insert(ctx context.Context, receipt *domain.Receipt) 
 	return err
 }
 
-func (r *mongoReceiptRepo) GetNextSequenceNumber(ctx context.Context, mahalID string) (int64, error) {
+func (r *mongoReceiptRepo) AllocateAtomicReceiptSequence(ctx context.Context, mahalID string) (int64, string, error) {
 	filter := bson.M{"mahal_id": mahalID, "counter_type": "RECEIPT"}
-	update := bson.M{"$inc": bson.M{"seq": int64(1)}}
+	update := bson.M{
+		"$inc": bson.M{"seq": int64(1)},
+		"$setOnInsert": bson.M{
+			"last_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+		},
+	}
 	opts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)
 
 	var doc struct {
-		Seq int64 `bson:"seq"`
+		Seq      int64  `bson:"seq"`
+		LastHash string `bson:"last_hash"`
 	}
 	err := r.counters.FindOneAndUpdate(ctx, filter, update, opts).Decode(&doc)
 	if err != nil {
 		latest, lErr := r.GetLatestReceipt(ctx, mahalID)
 		if lErr == nil && latest != nil {
-			return latest.SequenceNumber + 1, nil
+			return latest.SequenceNumber + 1, latest.ReceiptHash, nil
 		}
-		return 1, nil
+		return 1, "0000000000000000000000000000000000000000000000000000000000000000", nil
 	}
-	return doc.Seq, nil
+
+	prevHash := doc.LastHash
+	if prevHash == "" {
+		if latest, lErr := r.GetLatestReceipt(ctx, mahalID); lErr == nil && latest != nil {
+			prevHash = latest.ReceiptHash
+		} else {
+			prevHash = "0000000000000000000000000000000000000000000000000000000000000000"
+		}
+	}
+
+	return doc.Seq, prevHash, nil
+}
+
+func (r *mongoReceiptRepo) UpdateLedgerHeadHash(ctx context.Context, mahalID string, seq int64, newHash string) error {
+	filter := bson.M{"mahal_id": mahalID, "counter_type": "RECEIPT"}
+	update := bson.M{"$set": bson.M{"last_hash": newHash, "last_seq": seq}}
+	_, err := r.counters.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (r *mongoReceiptRepo) GetNextSequenceNumber(ctx context.Context, mahalID string) (int64, error) {
+	seq, _, err := r.AllocateAtomicReceiptSequence(ctx, mahalID)
+	return seq, err
 }
 
 func (r *mongoReceiptRepo) GetLatestReceipt(ctx context.Context, mahalID string) (*domain.Receipt, error) {

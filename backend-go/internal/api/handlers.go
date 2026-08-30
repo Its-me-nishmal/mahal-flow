@@ -54,6 +54,7 @@ func NewHandler(
 type LoginRequest struct {
 	Phone    string `json:"phone"`
 	Password string `json:"password"`
+	MahalID  string `json:"mahal_id"`
 }
 
 func (h *Handler) Login(c *fiber.Ctx) error {
@@ -62,19 +63,47 @@ func (h *Handler) Login(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
-	token := "jwt_live_session_" + uuid.New().String()
+	if strings.TrimSpace(req.Phone) == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Phone number is required"})
+	}
+
+	mahalID := req.MahalID
+	if mahalID == "" {
+		mahalID = c.Get("X-Tenant-ID")
+	}
+	if mahalID == "" {
+		mahalID = "MH_001_CALICUT"
+	}
+
+	role := "MAHAL_ADMIN"
+	userID := "USR_ADMIN_" + uuid.New().String()[:8]
+
+	token, err := GenerateJWT(userID, req.Phone, role, mahalID, 24*time.Hour)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate authentication token"})
+	}
+
 	return c.JSON(fiber.Map{
 		"token":      token,
-		"role":       "MAHAL_ADMIN",
+		"role":       role,
 		"phone":      req.Phone,
+		"mahal_id":   mahalID,
 		"expires_in": 86400,
 	})
 }
 
 func (h *Handler) GetCurrentUser(c *fiber.Ctx) error {
 	tenantID, _ := c.Locals("tenant_id").(string)
-	mahalName := "Mahal Administration"
+	userID, _ := c.Locals("user_id").(string)
+	userRole, _ := c.Locals("user_role").(string)
+	if userID == "" {
+		userID = "USR_ADMIN_01"
+	}
+	if userRole == "" {
+		userRole = "MAHAL_ADMIN"
+	}
 
+	mahalName := "Mahal Administration"
 	if h.mahalRepo != nil && tenantID != "" {
 		if m, err := h.mahalRepo.GetByID(c.Context(), tenantID); err == nil && m != nil {
 			mahalName = m.Name
@@ -82,9 +111,9 @@ func (h *Handler) GetCurrentUser(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{
-		"user_id":    "USR_ADMIN_01",
+		"user_id":    userID,
 		"name":       "Admin - " + mahalName,
-		"role":       "MAHAL_ADMIN",
+		"role":       userRole,
 		"mahal_id":   tenantID,
 		"mahal_name": mahalName,
 		"status":     "ACTIVE",

@@ -54,17 +54,57 @@ func NewPaymentService(
 	}
 }
 
-// Validates that months are formatted as YYYY-MM
+func getNextMonth(currentMonth string) (string, error) {
+	t, err := time.Parse("2006-01", currentMonth)
+	if err != nil {
+		return "", fmt.Errorf("%w: %s", ErrInvalidMonthFormat, currentMonth)
+	}
+	next := time.Date(t.Year(), t.Month()+1, 15, 0, 0, 0, 0, time.UTC)
+	return next.Format("2006-01"), nil
+}
+
+// Validates that selected months form an unbroken contiguous sequence starting immediately after lastPaidMonth
 func ValidateContiguousMonths(lastPaidMonth string, selectedMonths []string) error {
 	if len(selectedMonths) == 0 {
 		return errors.New("at least one month must be selected")
 	}
 
+	// 1. Format check and duplicate detection
+	seen := make(map[string]bool)
 	for _, m := range selectedMonths {
 		if _, err := time.Parse("2006-01", m); err != nil {
 			return fmt.Errorf("%w: %s", ErrInvalidMonthFormat, m)
 		}
+		if seen[m] {
+			return fmt.Errorf("duplicate month %s in selection", m)
+		}
+		seen[m] = true
 	}
+
+	// 2. Continuity check with lastPaidMonth
+	if lastPaidMonth != "" {
+		expected, err := getNextMonth(lastPaidMonth)
+		if err != nil {
+			return err
+		}
+		if selectedMonths[0] != expected {
+			return fmt.Errorf("%w: first selected month %s must immediately follow last paid month %s (expected %s)",
+				ErrNonSequentialMonths, selectedMonths[0], lastPaidMonth, expected)
+		}
+	}
+
+	// 3. Internal sequence continuity check (e.g. 2026-06 -> 2026-07 -> 2026-08)
+	for i := 1; i < len(selectedMonths); i++ {
+		expected, err := getNextMonth(selectedMonths[i-1])
+		if err != nil {
+			return err
+		}
+		if selectedMonths[i] != expected {
+			return fmt.Errorf("%w: month %s must immediately follow %s (expected %s)",
+				ErrNonSequentialMonths, selectedMonths[i], selectedMonths[i-1], expected)
+		}
+	}
+
 	return nil
 }
 
@@ -228,15 +268,11 @@ func (s *paymentService) executeCommit(ctx context.Context, txnID string) (*doma
 		return nil, err
 	}
 
-	// 1. Atomic sequence number & chained cryptographic hash
-	seq, err := s.receiptRepo.GetNextSequenceNumber(ctx, txn.MahalID)
+	// 1. Atomic sequence number & chained cryptographic hash from atomic ledger head
+	seq, prevHash, err := s.receiptRepo.AllocateAtomicReceiptSequence(ctx, txn.MahalID)
 	if err != nil || seq <= 0 {
 		seq = 1
-	}
-
-	prevHash := "0000000000000000000000000000000000000000000000000000000000000000"
-	if lastReceipt, lErr := s.receiptRepo.GetLatestReceipt(ctx, txn.MahalID); lErr == nil && lastReceipt != nil {
-		prevHash = lastReceipt.ReceiptHash
+		prevHash = "0000000000000000000000000000000000000000000000000000000000000000"
 	}
 
 	receiptNumber := fmt.Sprintf("GV1MH%s%sR%05d", txn.MahalID, time.Now().Format("20060102"), seq)
@@ -262,12 +298,15 @@ func (s *paymentService) executeCommit(ctx context.Context, txnID string) (*doma
 		return nil, err
 	}
 
-	// 2. Mark Transaction Status with Receipt Number
+	// 2. Update Atomic Ledger Head Hash
+	_ = s.receiptRepo.UpdateLedgerHeadHash(ctx, txn.MahalID, seq, receiptHash)
+
+	// 3. Mark Transaction Status with Receipt Number
 	if err := s.txnRepo.UpdateStatus(ctx, txn.ID, domain.TxnSuccess, receipt.ReceiptNumber); err != nil {
 		return nil, err
 	}
 
-	// 3. Update Member Paid Months if Dues
+	// 4. Update Member Paid Months if Dues
 	if txn.Type == "MONTHLY_DUES" && len(txn.SelectedMonths) > 0 {
 		if err := s.memberRepo.ApplyPaidMonths(ctx, txn.MemberID, txn.SelectedMonths, txn.Amount); err != nil {
 			return nil, err

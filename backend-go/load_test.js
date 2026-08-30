@@ -6,6 +6,18 @@ const BASE_URL = 'http://localhost:8080/api/v1';
 const TENANT_A = 'MH_001_CALICUT';
 const TENANT_B = 'MH_002_KOCHI';
 
+let adminToken = '';
+
+async function getAdminToken() {
+  const res = await fetch(`${BASE_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': TENANT_A },
+    body: JSON.stringify({ phone: '+919847111222', password: 'adminPassword123' }),
+  });
+  const data = await res.json();
+  return data.token;
+}
+
 async function measureRequest(name, fn) {
   const start = performance.now();
   try {
@@ -55,7 +67,10 @@ async function runScenario1_ConcurrentReads() {
     promises.push(
       measureRequest(ep.name, async () => {
         const res = await fetch(`${BASE_URL}${ep.path}`, {
-          headers: { 'X-Tenant-ID': TENANT_A },
+          headers: {
+            'X-Tenant-ID': TENANT_A,
+            'Authorization': `Bearer ${adminToken}`,
+          },
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return await res.json();
@@ -76,10 +91,24 @@ async function runScenario1_ConcurrentReads() {
   console.log(`⚡ Latency: Avg=${stats.avg}ms | Min=${stats.min}ms | p50=${stats.p50}ms | p95=${stats.p95}ms | p99=${stats.p99}ms | Max=${stats.max}ms`);
 }
 
+function getNextMonthStr(lastPaid) {
+  const [y, m] = lastPaid.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m, 15));
+  return d.toISOString().substring(0, 7);
+}
+
 async function runScenario2_ConcurrentPayments() {
   console.log('\n======================================================');
   console.log('💳 SCENARIO 2: Concurrent Payment & Atomic Receipt Generation (20 Workers)');
   console.log('======================================================');
+
+  // Fetch member profile to get dynamic next unpaid month
+  const memberRes = await fetch(`${BASE_URL}/member/dashboard?member_id=MEM_001_9910`, {
+    headers: { 'X-Tenant-ID': TENANT_A },
+  });
+  const memberData = await memberRes.json();
+  const lastPaid = memberData.last_paid_month || memberData.member?.last_paid_month || '2026-08';
+  const nextMonthStr = getNextMonthStr(lastPaid);
 
   const WORKERS = 20;
   const promises = [];
@@ -88,7 +117,7 @@ async function runScenario2_ConcurrentPayments() {
     const idempKey = `BENCH_PAY_${Date.now()}_${i}_${Math.random().toString(36).substring(7)}`;
     promises.push(
       measureRequest(`Worker ${i}`, async () => {
-        // Step 1: Initialize Payment
+        // Step 1: Initialize Payment with verified contiguous month
         const initRes = await fetch(`${BASE_URL}/payments/dues/initialize`, {
           method: 'POST',
           headers: {
@@ -97,7 +126,7 @@ async function runScenario2_ConcurrentPayments() {
           },
           body: JSON.stringify({
             member_id: 'MEM_001_9910',
-            selected_months: ['2026-08'],
+            selected_months: [nextMonthStr],
             gateway: 'UPI',
             idempotency_key: idempKey,
           }),
@@ -149,6 +178,14 @@ async function runScenario3_IdempotencyStressTest() {
   console.log('🔒 SCENARIO 3: Simultaneous Duplicate Idempotency Key Collision Test');
   console.log('======================================================');
 
+  // Fetch member profile to get dynamic next unpaid month
+  const memberRes = await fetch(`${BASE_URL}/member/dashboard?member_id=MEM_001_9910`, {
+    headers: { 'X-Tenant-ID': TENANT_A },
+  });
+  const memberData = await memberRes.json();
+  const lastPaid = memberData.last_paid_month || memberData.member?.last_paid_month || '2026-08';
+  const nextMonthStr = getNextMonthStr(lastPaid);
+
   const SHARED_KEY = `STRESS_IDEMP_${Date.now()}_UNIQUE`;
   const CONCURRENT_CALLS = 25;
   const promises = [];
@@ -164,7 +201,7 @@ async function runScenario3_IdempotencyStressTest() {
           },
           body: JSON.stringify({
             member_id: 'MEM_001_9910',
-            selected_months: ['2026-08'],
+            selected_months: [nextMonthStr],
             gateway: 'CASH',
             idempotency_key: SHARED_KEY,
           }),
@@ -225,7 +262,10 @@ async function runScenario5_ReceiptHashChainVerification() {
   console.log('======================================================');
 
   const dashRes = await fetch(`${BASE_URL}/admin/dashboard`, {
-    headers: { 'X-Tenant-ID': TENANT_A },
+    headers: {
+      'X-Tenant-ID': TENANT_A,
+      'Authorization': `Bearer ${adminToken}`,
+    },
   });
   const dash = await dashRes.json();
   const txns = dash.recent_transactions || [];
@@ -245,6 +285,9 @@ async function main() {
   console.log(' Target: http://localhost:8080');
   console.log(' Time:   ' + new Date().toISOString());
   console.log('======================================================');
+
+  adminToken = await getAdminToken();
+  console.log('🔐 Obtained Admin JWT Token successfully.');
 
   await runScenario1_ConcurrentReads();
   await runScenario2_ConcurrentPayments();
