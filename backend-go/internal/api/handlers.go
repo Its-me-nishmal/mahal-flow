@@ -385,15 +385,13 @@ func (h *Handler) InitializeDuesPayment(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	testMode := os.Getenv("PAYMENT_TEST_MODE")
-	if testMode == "ON" || testMode == "true" || testMode == "1" || testMode == "" {
-		// When PAYMENT_TEST_MODE is enabled, automatically commit the payment immediately
+	if req.Gateway == "CASH" {
 		receipt, commitErr := h.paymentService.CommitSuccessfulPayment(c.Context(), txn.ID)
 		if commitErr == nil && receipt != nil {
 			if h.auditRepo != nil {
 				_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
 					MahalID:  receipt.MahalID,
-					Action:   "PAYMENT_COMMITTED_TEST_MODE",
+					Action:   "CASH_PAYMENT_COMMITTED",
 					Actor:    receipt.MemberName,
 					EntityID: receipt.ReceiptNumber,
 					Details:  "Paid " + strconv.FormatFloat(receipt.Amount, 'f', 2, 64) + " for months: " + strconv.Itoa(len(receipt.PaidMonths)),
@@ -406,7 +404,7 @@ func (h *Handler) InitializeDuesPayment(c *fiber.Ctx) error {
 				"selected_months":  txn.SelectedMonths,
 				"status":           "SUCCESS",
 				"receipt":          receipt,
-				"gateway_order_id": "order_test_" + txn.ID[4:12],
+				"gateway_order_id": "order_cash_" + txn.ID[4:12],
 			})
 		}
 	}

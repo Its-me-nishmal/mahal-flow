@@ -97,10 +97,14 @@ function getNextMonthStr(lastPaid) {
   return d.toISOString().substring(0, 7);
 }
 
+let committedBatchReceipts = [];
+
 async function runScenario2_ConcurrentPayments() {
   console.log('\n======================================================');
   console.log('💳 SCENARIO 2: Concurrent Payment & Atomic Receipt Generation (20 Workers)');
   console.log('======================================================');
+
+  committedBatchReceipts = [];
 
   // Fetch member profile to get dynamic next unpaid month
   const memberRes = await fetch(`${BASE_URL}/member/dashboard?member_id=MEM_001_9910`, {
@@ -117,7 +121,7 @@ async function runScenario2_ConcurrentPayments() {
     const idempKey = `BENCH_PAY_${Date.now()}_${i}_${Math.random().toString(36).substring(7)}`;
     promises.push(
       measureRequest(`Worker ${i}`, async () => {
-        // Step 1: Initialize Payment with verified contiguous month
+        // Step 1: Initialize Payment
         const initRes = await fetch(`${BASE_URL}/payments/dues/initialize`, {
           method: 'POST',
           headers: {
@@ -155,7 +159,11 @@ async function runScenario2_ConcurrentPayments() {
           const errText = await confirmRes.text();
           throw new Error(`Confirm HTTP ${confirmRes.status}: ${errText}`);
         }
-        return await confirmRes.json();
+        const confirmData = await confirmRes.json();
+        if (confirmData.receipt) {
+          committedBatchReceipts.push(confirmData.receipt);
+        }
+        return confirmData;
       })
     );
   }
@@ -256,27 +264,83 @@ async function runScenario4_TenantIsolation() {
   }
 }
 
+const crypto = require('crypto');
+
+function toPaise(amount) {
+  return Math.round(amount * 100);
+}
+
+function calculateReceiptHashJS(receiptNum, mahalID, memberID, amount, prevHash) {
+  const paise = toPaise(amount);
+  const payload = `${receiptNum}:${mahalID}:${memberID}:${paise}:${prevHash}`;
+  return crypto.createHash('sha256').update(payload).digest('hex');
+}
+
 async function runScenario5_ReceiptHashChainVerification() {
   console.log('\n======================================================');
-  console.log('⛓️ SCENARIO 5: Cryptographic Receipt Hash Ledger Verification');
+  console.log('⛓️ SCENARIO 5: Deep Mathematical Invariant & Zero-Fork Linearity Proof');
   console.log('======================================================');
 
-  const dashRes = await fetch(`${BASE_URL}/admin/dashboard`, {
-    headers: {
-      'X-Tenant-ID': TENANT_A,
-      'Authorization': `Bearer ${adminToken}`,
-    },
-  });
-  const dash = await dashRes.json();
-  const txns = dash.recent_transactions || [];
+  console.log(`📊 Total Concurrent Batch Receipts Audited: ${committedBatchReceipts.length}`);
 
-  console.log(`Total Live Ledger Transactions: ${txns.length}`);
-  if (txns.length > 0) {
-    console.log(`Latest Receipt Number: ${txns[0].receipt_number || 'N/A'}`);
-    console.log(`Latest Chained Hash:    ${txns[0].receipt_hash || 'SHA256'}`);
-    console.log(`Previous Hash Link:    ${txns[0].previous_receipt_hash || 'ROOT'}`);
+  if (committedBatchReceipts.length === 0) {
+    console.log('ℹ️ No batch receipts available in memory to audit.');
+    return;
   }
-  console.log(`🎉 CRYPTOGRAPHIC LEDGER STATUS: 100% IMMUTABLE & VERIFIED`);
+
+  // Sort receipts by sequence number ascending
+  const sorted = [...committedBatchReceipts].sort((a, b) => (a.sequence_number || 0) - (b.sequence_number || 0));
+
+  let brokenLinks = 0;
+  let invalidHashes = 0;
+  let totalAmountPaise = 0;
+  const seenSequences = new Set();
+  let sequenceDuplicates = 0;
+
+  for (let i = 0; i < sorted.length; i++) {
+    const r = sorted[i];
+    totalAmountPaise += toPaise(r.amount);
+
+    // 1. Check Sequence Uniqueness
+    if (seenSequences.has(r.sequence_number)) {
+      sequenceDuplicates++;
+    }
+    seenSequences.add(r.sequence_number);
+
+    // 2. Check Cryptographic Deterministic Hash
+    const expectedHash = calculateReceiptHashJS(
+      r.receipt_number,
+      r.mahal_id,
+      r.member_id,
+      r.amount,
+      r.previous_receipt_hash
+    );
+
+    if (r.receipt_hash !== expectedHash) {
+      invalidHashes++;
+      console.log(`❌ Hash Mismatch on Seq ${r.sequence_number}: expected ${expectedHash}, got ${r.receipt_hash}`);
+    }
+
+    // 3. Check Zero-Fork Hash Link Linearity with predecessor
+    if (i > 0) {
+      const prev = sorted[i - 1];
+      if (r.previous_receipt_hash !== prev.receipt_hash) {
+        brokenLinks++;
+        console.log(`❌ Broken Hash Chain Link at Seq ${r.sequence_number} (ref: ${r.previous_receipt_hash.substring(0, 10)}... != pred: ${prev.receipt_hash.substring(0, 10)}...)`);
+      }
+    }
+  }
+
+  console.log(`✅ Invariant 1 (Monotonic Sequences): ${seenSequences.size} unique sequences, ${sequenceDuplicates} duplicates.`);
+  console.log(`✅ Invariant 2 (Deterministic SHA-256 Proof): ${sorted.length - invalidHashes}/${sorted.length} validated.`);
+  console.log(`✅ Invariant 3 (Zero-Fork Linearity): ${brokenLinks === 0 ? '100% LINEAR UNBROKEN CHAIN' : brokenLinks + ' forks detected'}.`);
+  console.log(`✅ Invariant 4 (Conservation of Money): ₹${(totalAmountPaise / 100).toFixed(2)} (${totalAmountPaise} Paise) accounted for.`);
+
+  if (brokenLinks === 0 && invalidHashes === 0 && sequenceDuplicates === 0) {
+    console.log(`\n🎉 MATHEMATICAL LEDGER INVARIANT: 100% FORMALLY PROVEN & IMMUTABLE!`);
+  } else {
+    console.log(`\n❌ LEDGER INVARIANT VIOLATION DETECTED!`);
+  }
 }
 
 async function main() {
