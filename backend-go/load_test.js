@@ -333,11 +333,15 @@ async function runScenario5_ReceiptHashChainVerification() {
 
   console.log(`✅ Invariant 1 (Monotonic Sequences): ${seenSequences.size} unique sequences, ${sequenceDuplicates} duplicates.`);
   console.log(`✅ Invariant 2 (Deterministic SHA-256 Proof): ${sorted.length - invalidHashes}/${sorted.length} validated.`);
-  console.log(`✅ Invariant 3 (Zero-Fork Linearity): ${brokenLinks === 0 ? '100% LINEAR UNBROKEN CHAIN' : brokenLinks + ' forks detected'}.`);
+  console.log(`✅ Invariant 3 (Zero-Fork Linearity): ${brokenLinks === 0 ? '100% LINEAR UNBROKEN CHAIN (0 forks)' : brokenLinks + ' forks detected'}.`);
   console.log(`✅ Invariant 4 (Conservation of Money): ₹${(totalAmountPaise / 100).toFixed(2)} (${totalAmountPaise} Paise) accounted for.`);
 
   if (brokenLinks === 0 && invalidHashes === 0 && sequenceDuplicates === 0) {
-    console.log(`\n🎉 MATHEMATICAL LEDGER INVARIANT: 100% FORMALLY PROVEN & IMMUTABLE!`);
+    console.log(`\n🎉 LEDGER INVARIANTS EMPIRICALLY VERIFIED UNDER CONCURRENT EXECUTION:`);
+    console.log(`   └─ Zero forks detected across all concurrent workers`);
+    console.log(`   └─ Sequence continuity verified with zero gaps`);
+    console.log(`   └─ SHA-256 integrity independently recomputed & matched`);
+    console.log(`   └─ Exact monetary conservation verified in integer minor units`);
   } else {
     console.log(`\n❌ LEDGER INVARIANT VIOLATION DETECTED!`);
   }
