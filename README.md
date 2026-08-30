@@ -108,5 +108,24 @@ node security_audit.js
 
 ---
 
+## 📚 Complete Documentation Index (`docs/`)
+
+All architectural and engineering specifications are organized in the [`docs/`](file:///d:/Random/MahalFlow/docs) folder:
+
+| Document | Description |
+| :--- | :--- |
+| **[01-system-architecture.md](file:///d:/Random/MahalFlow/docs/01-system-architecture.md)** | Full-stack domain architecture, multi-tenant patterns, and component topologies. |
+| **[02-agent-self-learning-flow.md](file:///d:/Random/MahalFlow/docs/02-agent-self-learning-flow.md)** | Agent self-learning workflows, rollback mechanics, and knowledge synthesis. |
+| **[03-mongodb-schema-acid.md](file:///d:/Random/MahalFlow/docs/03-mongodb-schema-acid.md)** | MongoDB schema definitions, compound indexes, and ACID transaction boundaries. |
+| **[04-api-and-webhook-contracts.md](file:///d:/Random/MahalFlow/docs/04-api-and-webhook-contracts.md)** | Gateway webhook signatures (Razorpay) and event dispatching. |
+| **[05-git-versioning-and-branching.md](file:///d:/Random/MahalFlow/docs/05-git-versioning-and-branching.md)** | Versioning guidelines, release strategies, and commit conventions. |
+| **[06-logging-observability-and-audit.md](file:///d:/Random/MahalFlow/docs/06-logging-observability-and-audit.md)** | Structured Zerolog logging, correlation IDs, and immutable audit logs. |
+| **[07-validation-and-financial-integrity.md](file:///d:/Random/MahalFlow/docs/07-validation-and-financial-integrity.md)** | Zero-partial payment rules, contiguous month checks, and arithmetic precision. |
+| **[08-security-policy-and-audit.md](file:///d:/Random/MahalFlow/docs/08-security-policy-and-audit.md)** | 10-vector security audit matrix, rate limiting, and threat mitigation. |
+| **[09-load-testing-and-benchmarks.md](file:///d:/Random/MahalFlow/docs/09-load-testing-and-benchmarks.md)** | 100-worker concurrency benchmark results, latency distributions, and test runner. |
+| **[10-api-specification.md](file:///d:/Random/MahalFlow/docs/10-api-specification.md)** | REST API endpoints, JSON schemas, headers, and rate limits. |
+
+---
+
 ## 📄 License & Integrity Guarantee
 MahalFlow is engineered for high-trust financial accounting. Built with ❤️ for community empowerment.
