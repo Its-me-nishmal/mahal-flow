@@ -19,6 +19,7 @@ MahalFlow implements defense-in-depth principles across all application layers.
 | **8** | **Secret Key Protection** | Credential exposure in responses | Gateway API secrets and webhook keys are masked (`••••••••••••••••`) |
 | **9** | **Audit Trail & Correlation** | Untraceable actions | End-to-end `X-Correlation-ID` header tracking and mutation audit logging |
 | **10**| **Panic Recovery Shield** | Stack trace information leakage | Fiber `recover.New()` middleware shields internal Go runtime panics from clients |
+| **11**| **Tiered Rate Limiting & DDoS Shield** | Brute force & API flooding | Global limiter (300 req / 10s per IP) + Strict Auth Limiter (30 req / 1m per IP) returning HTTP 429 |
 
 ---
 

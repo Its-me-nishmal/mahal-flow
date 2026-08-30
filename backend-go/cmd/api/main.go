@@ -69,6 +69,7 @@ func main() {
 		AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-Tenant-ID, X-Correlation-ID, X-Idempotency-Key, X-HTTP-Method-Override",
 	}))
 	app.Use(api.CorrelationIDMiddleware())
+	app.Use(api.GlobalRateLimiterMiddleware())
 
 	// Public Health Route
 	app.Get("/health", func(c *fiber.Ctx) error {
@@ -82,7 +83,7 @@ func main() {
 	})
 
 	// Public Auth & Webhooks
-	app.Post("/api/v1/auth/login", handler.Login)
+	app.Post("/api/v1/auth/login", api.StrictAuthRateLimiterMiddleware(), handler.Login)
 	app.Post("/api/v1/webhooks/razorpay", handler.HandleRazorpayWebhook)
 
 	// Tenant-Scoped API Routes (v1)
