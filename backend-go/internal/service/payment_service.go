@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,7 +23,16 @@ var (
 	ErrDuplicateInFlight   = errors.New("payment with this idempotency key is already processing")
 	ErrMemberNotFound      = errors.New("member not found in this tenant")
 	ErrInvalidMonthFormat  = errors.New("invalid month format, must be YYYY-MM")
+	ErrTxnUnavailable      = errors.New("financial transactions require MongoDB replica set with ACID support")
 )
+
+// Per-tenant serialized ledger locks to guarantee 100% linear hash chains without forking
+var tenantLedgerLocks sync.Map
+
+func getTenantLedgerLock(mahalID string) *sync.Mutex {
+	val, _ := tenantLedgerLocks.LoadOrStore(mahalID, &sync.Mutex{})
+	return val.(*sync.Mutex)
+}
 
 type PaymentService interface {
 	InitializeDuesPayment(ctx context.Context, mahalID, memberID string, months []string, gateway, idempotencyKey string) (*domain.Transaction, error)
@@ -129,7 +139,7 @@ func (s *paymentService) InitializeDuesPayment(
 		return nil, err
 	}
 
-	// 3. Exact Dues Rate Calculation (Zero Partial Payments)
+	// 3. Exact Dues Rate Calculation using Integer Minor Units (Paise)
 	rate := member.MonthlyDuesCustomAmount
 	if rate <= 0 {
 		mahal, err := s.mahalRepo.GetByID(ctx, mahalID)
@@ -139,7 +149,10 @@ func (s *paymentService) InitializeDuesPayment(
 		rate = mahal.Settings.DefaultMonthlyDues
 	}
 
-	totalAmount := float64(len(months)) * rate
+	// Minor-unit integer arithmetic to eliminate floating-point rounding drift
+	ratePaise := domain.ToPaise(rate)
+	totalPaise := domain.MoneyPaise(int64(len(months))) * ratePaise
+	totalAmount := totalPaise.ToRupees()
 
 	txn := &domain.Transaction{
 		ID:             "TXN_" + uuid.New().String(),
@@ -184,13 +197,17 @@ func (s *paymentService) InitializeContribution(
 		return nil, ErrMemberNotFound
 	}
 
+	// Minor unit exact conversion
+	exactPaise := domain.ToPaise(amount)
+	exactAmount := exactPaise.ToRupees()
+
 	txn := &domain.Transaction{
 		ID:             "TXN_" + uuid.New().String(),
 		MahalID:        mahalID,
 		MemberID:       memberID,
 		IdempotencyKey: idempotencyKey,
 		Type:           "CONTRIBUTION",
-		Amount:         amount,
+		Amount:         exactAmount,
 		Currency:       "INR",
 		Gateway:        gateway,
 		Status:         domain.TxnPending,
@@ -211,10 +228,20 @@ func (s *paymentService) InitializeContribution(
 }
 
 func (s *paymentService) CommitSuccessfulPayment(ctx context.Context, txnID string) (*domain.Receipt, error) {
-	// Try replica set multi-document ACID transaction first
+	txn, err := s.txnRepo.GetByID(ctx, txnID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Acquire per-tenant serialization lock to guarantee 100% linear hash chaining (Zero-Fork)
+	lock := getTenantLedgerLock(txn.MahalID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	// Execute with multi-document ACID transaction support
 	receipt, err := s.commitWithTransaction(ctx, txnID)
 	if err != nil && (strings.Contains(err.Error(), "Transaction numbers are only allowed") || strings.Contains(err.Error(), "replica set")) {
-		// Graceful fallback for standalone local MongoDB instance
+		// Single-node local MongoDB development fallback with locked serialization
 		return s.commitStandalone(ctx, txnID)
 	}
 	return receipt, err
@@ -298,8 +325,10 @@ func (s *paymentService) executeCommit(ctx context.Context, txnID string) (*doma
 		return nil, err
 	}
 
-	// 2. Update Atomic Ledger Head Hash
-	_ = s.receiptRepo.UpdateLedgerHeadHash(ctx, txn.MahalID, seq, receiptHash)
+	// 2. Advance Atomic Ledger Head Hash
+	if err := s.receiptRepo.UpdateLedgerHeadHash(ctx, txn.MahalID, seq, receiptHash); err != nil {
+		return nil, err
+	}
 
 	// 3. Mark Transaction Status with Receipt Number
 	if err := s.txnRepo.UpdateStatus(ctx, txn.ID, domain.TxnSuccess, receipt.ReceiptNumber); err != nil {

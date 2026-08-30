@@ -21,21 +21,15 @@ func CorrelationIDMiddleware() fiber.Handler {
 	}
 }
 
-// Strict Tenant Extraction: Rejects requests missing X-Tenant-ID with HTTP 400 (Zero Silent Fallback)
+// Strict Header-Only Tenant Extraction: Authoritative X-Tenant-ID boundary (Zero query-param spoofing)
 func TenantExtractionMiddleware() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		tenantID := c.Get("X-Tenant-ID")
-		if tenantID == "" {
-			tenantID = c.Query("mahal_id")
-		}
-		if tenantID == "" {
-			tenantID = c.Query("tenant_id")
-		}
+		tenantID := strings.TrimSpace(c.Get("X-Tenant-ID"))
 
-		if strings.TrimSpace(tenantID) == "" {
+		if tenantID == "" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error":   "Missing required X-Tenant-ID header",
-				"message": "Every tenant-scoped request must explicitly provide a valid X-Tenant-ID header",
+				"message": "Every tenant-scoped request must explicitly provide an authoritative X-Tenant-ID header",
 				"status":  400,
 			})
 		}

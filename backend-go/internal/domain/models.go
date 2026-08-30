@@ -117,9 +117,23 @@ type Receipt struct {
 	CreatedAt           time.Time `bson:"created_at" json:"created_at"`
 }
 
-// CalculateReceiptHash computes the SHA-256 hash for blockchain-like integrity
+// MoneyPaise represents an integer minor-unit monetary amount (1 INR = 100 Paise) to eliminate floating-point rounding errors
+type MoneyPaise int64
+
+// ToPaise converts a currency amount to integer Paise (e.g. 500.50 -> 50050)
+func ToPaise(amount float64) MoneyPaise {
+	return MoneyPaise(int64(amount*100.0 + 0.5))
+}
+
+// ToRupees converts integer Paise back to standard currency amount (e.g. 50050 -> 500.50)
+func (p MoneyPaise) ToRupees() float64 {
+	return float64(p) / 100.0
+}
+
+// CalculateReceiptHash computes the SHA-256 hash for blockchain-like integrity using exact minor-unit paise
 func CalculateReceiptHash(receiptNum, mahalID, memberID string, amount float64, prevHash string) string {
-	payload := fmt.Sprintf("%s:%s:%s:%.2f:%s", receiptNum, mahalID, memberID, amount, prevHash)
+	paise := ToPaise(amount)
+	payload := fmt.Sprintf("%s:%s:%s:%d:%s", receiptNum, mahalID, memberID, paise, prevHash)
 	hash := sha256.Sum256([]byte(payload))
 	return hex.EncodeToString(hash[:])
 }
