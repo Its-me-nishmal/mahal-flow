@@ -7,12 +7,13 @@ import (
 )
 
 type Config struct {
-	Port        string
-	MongoURI    string
-	DBName      string
-	JWTSecret   string
-	RedisAddr   string
-	Environment string
+	Port            string
+	MongoURI        string
+	DBName          string
+	JWTSecret       string
+	RedisAddr       string
+	Environment     string
+	PaymentTestMode bool
 }
 
 func Load() *Config {
@@ -46,12 +47,16 @@ func Load() *Config {
 		env = "development"
 	}
 
+	paymentTestModeEnv := os.Getenv("PAYMENT_TEST_MODE")
+	paymentTestMode := paymentTestModeEnv == "ON" || paymentTestModeEnv == "true" || paymentTestModeEnv == "1" || paymentTestModeEnv == ""
+
 	return &Config{
-		Port:        port,
-		MongoURI:    mongoURI,
-		DBName:      dbName,
-		JWTSecret:   jwtSecret,
-		RedisAddr:   redisAddr,
-		Environment: env,
+		Port:            port,
+		MongoURI:        mongoURI,
+		DBName:          dbName,
+		JWTSecret:       jwtSecret,
+		RedisAddr:       redisAddr,
+		Environment:     env,
+		PaymentTestMode: paymentTestMode,
 	}
 }

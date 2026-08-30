@@ -1,19 +1,37 @@
-import { PageHeader } from "@/components/ui/PageHeader";
-import { mockAuditLogs } from "@/lib/mock-data";
+"use client";
 
-const typeStyles: Record<string, string> = {
-  warning: "bg-warning-bg text-warning",
-  error: "bg-error-bg text-error",
-  success: "bg-success-bg text-success",
-  info: "bg-info-bg text-info",
-};
+import { useEffect, useState } from "react";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { ApiClient } from "@/lib/api-client";
 
 export default function AuditLogsPage() {
+  const [logs, setLogs] = useState<any[]>([]);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    ApiClient.getAuditLogs("MH_001_CALICUT", 1, 50)
+      .then((res) => {
+        if (res && res.logs) {
+          setLogs(res.logs);
+        }
+      })
+      .catch((err) => console.error("Error loading audit logs:", err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filteredLogs = logs.filter(
+    (l) =>
+      (l.action || "").toLowerCase().includes(search.toLowerCase()) ||
+      (l.actor || "").toLowerCase().includes(search.toLowerCase()) ||
+      (l.entity_id || "").toLowerCase().includes(search.toLowerCase())
+  );
+
   return (
     <>
       <PageHeader
         title="Audit Logs"
-        description="Secure record of all administrative actions and system events."
+        description="Immutable record of administrative actions and live financial events backed by MongoDB."
       />
 
       <div className="flex gap-2 mb-lg flex-wrap">
@@ -23,26 +41,16 @@ export default function AuditLogsPage() {
           </span>
           <input
             className="pl-9 pr-4 py-2 border border-border-base rounded-lg text-body font-body w-full h-[44px] focus:border-primary focus:ring-0 outline-none"
-            placeholder="Search by admin name or action..."
+            placeholder="Search by actor, action, or ID..."
             type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        {["All Events", "Member Update", "Gateway Change", "Destructive"].map((filter, i) => (
-          <button
-            key={filter}
-            className={`h-8 px-4 rounded-full font-button text-small transition-colors whitespace-nowrap ${
-              i === 0
-                ? "bg-primary-container text-on-primary"
-                : "bg-surface border border-border-base text-text-secondary hover:bg-surface-container-low"
-            }`}
-          >
-            {filter}
-          </button>
-        ))}
       </div>
 
       <div className="space-y-3">
-        {mockAuditLogs.map((log) => (
+        {filteredLogs.map((log) => (
           <div
             key={log.id}
             className="bg-surface border border-border-base rounded-xl p-lg hover:-translate-y-0.5 transition-transform duration-200"
@@ -56,29 +64,32 @@ export default function AuditLogsPage() {
                 </div>
                 <div>
                   <p className="font-button text-button text-text-primary">
-                    {log.admin}{" "}
-                    <span className="font-small text-small text-text-muted">({log.adminId})</span>
+                    {log.actor || "System Admin"}
                   </p>
-                  <p className="font-small text-small text-text-muted">{log.time}</p>
+                  <p className="font-small text-small text-text-muted">
+                    {log.timestamp ? new Date(log.timestamp).toLocaleString() : "Recent"}
+                  </p>
                 </div>
               </div>
-              <span className={`inline-flex items-center px-2 py-1 rounded-full font-small text-small gap-1 ${typeStyles[log.type] || "bg-surface-variant text-text-secondary"}`}>
+              <span className="inline-flex items-center px-2.5 py-1 rounded-full font-small text-small bg-primary-light text-primary font-mono text-xs">
                 {log.action}
               </span>
             </div>
-            <p className="font-body text-body text-text-secondary ml-13">{log.detail}</p>
+            <p className="font-body text-body text-text-secondary ml-13">
+              {log.details || `Entity affected: ${log.entity_id || log.id}`}
+            </p>
             <div className="flex items-center gap-2 mt-3 ml-13">
-              <span className="material-symbols-outlined text-[14px] text-text-muted">location_on</span>
-              <span className="font-small text-small text-text-muted">{log.ip}</span>
+              <span className="material-symbols-outlined text-[14px] text-text-muted">security</span>
+              <span className="font-small text-small text-text-muted font-mono text-xs">{log.id}</span>
             </div>
           </div>
         ))}
-      </div>
 
-      <div className="flex justify-center pt-lg">
-        <button className="h-11 px-6 border border-border-base rounded-lg text-text-secondary hover:bg-surface-container-low font-button text-button transition-colors">
-          Load More Logs
-        </button>
+        {filteredLogs.length === 0 && (
+          <div className="bg-surface border border-border-base rounded-xl p-12 text-center text-text-muted">
+            {loading ? "Fetching audit trail from MongoDB..." : "No audit log records found."}
+          </div>
+        )}
       </div>
     </>
   );

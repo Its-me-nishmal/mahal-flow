@@ -11,12 +11,15 @@ import (
 )
 
 type MemberRepository interface {
+	Create(ctx context.Context, member *domain.Member) error
 	GetByID(ctx context.Context, mahalID, memberID string) (*domain.Member, error)
 	GetByPhone(ctx context.Context, mahalID, phone string) (*domain.Member, error)
 	ListByMahal(ctx context.Context, mahalID string, limit, skip int64) ([]domain.Member, int64, error)
 	ApplyPaidMonths(ctx context.Context, memberID string, paidMonths []string, amount float64) error
 	GetMemberStats(ctx context.Context, mahalID string) (totalMembers int64, paidCount int64, pendingCount int64, totalPendingAmount float64, err error)
 	UpdateProfile(ctx context.Context, mahalID, memberID string, updates bson.M) error
+	UpdateStatus(ctx context.Context, mahalID, memberID, status string) error
+	Delete(ctx context.Context, mahalID, memberID string) error
 	GetOverdueMembers(ctx context.Context, mahalID string) ([]domain.Member, error)
 }
 
@@ -96,14 +99,17 @@ func (r *mongoMemberRepo) GetMemberStats(ctx context.Context, mahalID string) (t
 		return 0, 0, 0, 0, err
 	}
 
-	paidFilter := bson.M{"mahal_id": mahalID, "outstanding_balance": 0.0}
+	paidFilter := bson.M{"mahal_id": mahalID, "outstanding_balance": bson.M{"$lte": 0.0}}
 	paidCount, _ = r.coll.CountDocuments(ctx, paidFilter)
 
 	pendingCount = totalMembers - paidCount
 
-	// Calculate total outstanding balance
+	// Calculate total positive outstanding balance only
 	pipeline := mongo.Pipeline{
-		{{Key: "$match", Value: filter}},
+		{{Key: "$match", Value: bson.M{
+			"mahal_id":            mahalID,
+			"outstanding_balance": bson.M{"$gt": 0.0},
+		}}},
 		{{Key: "$group", Value: bson.D{
 			{Key: "_id", Value: nil},
 			{Key: "totalPending", Value: bson.D{{Key: "$sum", Value: "$outstanding_balance"}}},
@@ -133,6 +139,29 @@ func (r *mongoMemberRepo) UpdateProfile(ctx context.Context, mahalID, memberID s
 	return err
 }
 
+func (r *mongoMemberRepo) Create(ctx context.Context, member *domain.Member) error {
+	if member.CreatedAt.IsZero() {
+		member.CreatedAt = time.Now().UTC()
+	}
+	member.UpdatedAt = time.Now().UTC()
+	_, err := r.coll.InsertOne(ctx, member)
+	return err
+}
+
+func (r *mongoMemberRepo) UpdateStatus(ctx context.Context, mahalID, memberID, status string) error {
+	_, err := r.coll.UpdateOne(
+		ctx,
+		bson.M{"_id": memberID, "mahal_id": mahalID},
+		bson.M{"$set": bson.M{"status": status, "updated_at": time.Now().UTC()}},
+	)
+	return err
+}
+
+func (r *mongoMemberRepo) Delete(ctx context.Context, mahalID, memberID string) error {
+	_, err := r.coll.DeleteOne(ctx, bson.M{"_id": memberID, "mahal_id": mahalID})
+	return err
+}
+
 func (r *mongoMemberRepo) GetOverdueMembers(ctx context.Context, mahalID string) ([]domain.Member, error) {
 	filter := bson.M{
 		"mahal_id":            mahalID,
@@ -150,4 +179,5 @@ func (r *mongoMemberRepo) GetOverdueMembers(ctx context.Context, mahalID string)
 	}
 	return members, nil
 }
+
 

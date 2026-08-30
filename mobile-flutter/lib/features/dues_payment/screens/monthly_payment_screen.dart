@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_bottom_sheet.dart';
 import '../../../core/widgets/member_bottom_nav_bar.dart';
 
 class DueMonthItem {
@@ -30,27 +31,66 @@ class MonthlyPaymentScreen extends StatefulWidget {
 class _MonthlyPaymentScreenState extends State<MonthlyPaymentScreen> {
   final ApiService _apiService = ApiService();
   bool _isProcessing = false;
+  List<DueMonthItem> _months = [];
 
-  final List<DueMonthItem> _months = [
-    DueMonthItem(
-      monthKey: "2026-06",
-      displayName: "June 2026",
-      amount: 500,
-      status: "OVERDUE",
-    ),
-    DueMonthItem(
-      monthKey: "2026-07",
-      displayName: "July 2026",
-      amount: 500,
-      status: "DUE_SOON",
-    ),
-    DueMonthItem(
-      monthKey: "2026-08",
-      displayName: "August 2026",
-      amount: 500,
-      status: "UPCOMING",
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadUnpaidMonths();
+  }
+
+  Future<void> _loadUnpaidMonths() async {
+    final data = await _apiService.getMemberDashboard();
+    String lastPaid = data?["last_paid_month"]?.toString() ?? "2026-07";
+
+    DateTime nextMonthDate;
+    try {
+      final parts = lastPaid.split('-');
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      nextMonthDate = DateTime(year, month + 1, 1);
+    } catch (_) {
+      nextMonthDate = DateTime(2026, 8, 1);
+    }
+
+    const monthNames = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+
+    final now = DateTime.now();
+    List<DueMonthItem> generated = [];
+    for (int i = 0; i < 3; i++) {
+      final d = DateTime(nextMonthDate.year, nextMonthDate.month + i, 1);
+      final key = "${d.year}-${d.month.toString().padLeft(2, '0')}";
+      final name = "${monthNames[d.month - 1]} ${d.year}";
+
+      String status;
+      if (d.year < now.year || (d.year == now.year && d.month < now.month)) {
+        status = "OVERDUE";
+      } else if (d.year == now.year && d.month == now.month) {
+        status = "DUE_NOW";
+      } else {
+        status = "UPCOMING";
+      }
+
+      generated.add(
+        DueMonthItem(
+          monthKey: key,
+          displayName: name,
+          amount: 500.0,
+          status: status,
+          isSelected: i == 0,
+        ),
+      );
+    }
+
+    if (mounted) {
+      setState(() {
+        _months = generated;
+      });
+    }
+  }
 
   bool get _isAllSelected => _months.every((m) => m.isSelected);
   int get _selectedCount => _months.where((m) => m.isSelected).length;
@@ -94,47 +134,72 @@ class _MonthlyPaymentScreenState extends State<MonthlyPaymentScreen> {
           final receipt = confirmRes["receipt"] as Map<String, dynamic>?;
           final receiptNum = receipt?["receipt_number"] ?? "Verified";
 
-          showDialog(
+          AppBottomSheet.show(
             context: context,
-            barrierDismissible: false,
-            builder: (ctx) => AlertDialog(
-              backgroundColor: AppColors.surface,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: Row(
-                children: [
-                  const Icon(Icons.check_circle, color: AppColors.success, size: 28),
-                  const SizedBox(width: 8),
-                  Text("Payment Successful", style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
+            title: "Payment Successful",
+            subtitle: "Issued by MahalFlow Treasury",
+            icon: Icons.check_circle_rounded,
+            isDismissible: false,
+            enableDrag: false,
+            builder: (ctx, _) {
+              return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("₹${_totalAmount.toInt()} paid successfully.", style: GoogleFonts.inter(fontSize: 16)),
-                  const SizedBox(height: 8),
-                  Text("Receipt: $receiptNum", style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
-                  const SizedBox(height: 4),
-                  Text("Months: ${selectedKeys.join(', ')}", style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
-                ],
-              ),
-              actions: [
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(ctx).pop();
-                    Navigator.of(context).pushNamedAndRemoveUntil(
-                      '/member/dashboard',
-                      (route) => false,
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryLight,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        Text("Amount Paid", style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
+                        const SizedBox(height: 4),
+                        Text("₹${_totalAmount.toInt()}", style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.w800, color: AppColors.primary)),
+                      ],
+                    ),
                   ),
-                  child: const Text("View Dashboard"),
-                ),
-              ],
-            ),
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text("Receipt Number", style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary)),
+                      Text(receiptNum, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                  const Divider(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text("Months Credited", style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary)),
+                      Text(selectedKeys.join(', '), style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.of(ctx).pop();
+                        Navigator.of(context).pushNamedAndRemoveUntil(
+                          '/member/dashboard',
+                          (route) => false,
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        elevation: 0,
+                      ),
+                      child: Text("Return to Dashboard", style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ],
+              );
+            },
           );
           return;
         }
@@ -160,6 +225,7 @@ class _MonthlyPaymentScreenState extends State<MonthlyPaymentScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.surface,
         elevation: 0,
+        centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: AppColors.primary),
           onPressed: () {
@@ -200,9 +266,59 @@ class _MonthlyPaymentScreenState extends State<MonthlyPaymentScreen> {
                 color: AppColors.textSecondary,
               ),
             ),
+            const SizedBox(height: 14),
+
+            // Special Contribution Quick Banner (Top of upcoming/unpaid months)
+            InkWell(
+              onTap: () => Navigator.of(context).pushNamed('/member/contribution'),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFDF0ED),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE05638).withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE05638).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.volunteer_activism, color: Color(0xFFE05638), size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Make a Special Contribution",
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFFE05638),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            "Donate to Zakat, Masjid, or General Fund",
+                            style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.arrow_forward_ios, size: 14, color: Color(0xFFE05638)),
+                  ],
+                ),
+              ),
+            ),
             const SizedBox(height: 16),
 
-            // Bento Container
+            // Bento Container for Unpaid / Upcoming Months
             Container(
               decoration: BoxDecoration(
                 color: AppColors.surface,
@@ -447,12 +563,13 @@ class _MonthlyPaymentScreenState extends State<MonthlyPaymentScreen> {
               "Overdue",
               style: GoogleFonts.inter(
                 fontSize: 12,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w600,
                 color: AppColors.error,
               ),
             ),
           ],
         );
+      case "DUE_NOW":
       case "DUE_SOON":
         return Row(
           mainAxisSize: MainAxisSize.min,
@@ -460,22 +577,29 @@ class _MonthlyPaymentScreenState extends State<MonthlyPaymentScreen> {
             const Icon(Icons.warning, size: 12, color: AppColors.warning),
             const SizedBox(width: 4),
             Text(
-              "Due Soon",
+              "Due Now",
               style: GoogleFonts.inter(
                 fontSize: 12,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w600,
                 color: AppColors.warning,
               ),
             ),
           ],
         );
       default:
-        return Text(
-          "Upcoming",
-          style: GoogleFonts.inter(
-            fontSize: 12,
-            color: AppColors.textSecondary,
-          ),
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.schedule, size: 12, color: AppColors.textSecondary),
+            const SizedBox(width: 4),
+            Text(
+              "Upcoming",
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
         );
     }
   }

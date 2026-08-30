@@ -1,13 +1,37 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { mockMahals } from "@/lib/mock-data";
+import { ApiClient } from "@/lib/api-client";
 
 export default function MahalDirectoryPage() {
+  const [mahals, setMahals] = useState<any[]>([]);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    ApiClient.getMahals()
+      .then((res) => {
+        if (res && res.mahals) {
+          setMahals(res.mahals);
+        }
+      })
+      .catch((err) => console.error("Error loading mahals:", err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filteredMahals = mahals.filter((m) =>
+    (m.name || "").toLowerCase().includes(search.toLowerCase()) ||
+    (m.id || "").toLowerCase().includes(search.toLowerCase()) ||
+    (m.contact?.address || "").toLowerCase().includes(search.toLowerCase())
+  );
+
   return (
     <>
       <PageHeader
         title="Mahal Directory"
-        description="Manage all registered Mahals across the platform."
+        description="Manage all registered Mahals across the platform from live database."
         actions={
           <a
             href="/mahals/new"
@@ -30,12 +54,10 @@ export default function MahalDirectoryPage() {
                 className="pl-9 pr-4 py-2 border border-border-base rounded-lg text-body font-body w-full sm:w-72 h-[44px] focus:border-primary focus:ring-0 outline-none"
                 placeholder="Search Mahals..."
                 type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <button className="h-[44px] px-3 border border-border-base rounded-lg text-text-secondary hover:bg-surface-container-low transition-colors flex items-center justify-center gap-2">
-              <span className="material-symbols-outlined">filter_list</span>
-              Filter
-            </button>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -52,7 +74,7 @@ export default function MahalDirectoryPage() {
                   STATUS
                 </th>
                 <th className="font-small text-small text-text-secondary py-3 px-lg font-semibold whitespace-nowrap">
-                  MEMBERS
+                  PHONE
                 </th>
                 <th className="font-small text-small text-text-secondary py-3 px-lg font-semibold whitespace-nowrap">
                   PLAN
@@ -63,7 +85,7 @@ export default function MahalDirectoryPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border-base">
-              {mockMahals.map((mahal) => (
+              {filteredMahals.map((mahal) => (
                 <tr key={mahal.id} className="hover:bg-surface-bright transition-colors">
                   <td className="py-4 px-lg">
                     <div className="flex items-center gap-3">
@@ -83,16 +105,16 @@ export default function MahalDirectoryPage() {
                     </div>
                   </td>
                   <td className="py-4 px-lg font-body text-body text-text-primary">
-                    {mahal.location}
+                    {mahal.contact?.address || "Calicut, Kerala"}
                   </td>
                   <td className="py-4 px-lg">
-                    <StatusBadge status={mahal.status} />
+                    <StatusBadge status={mahal.subscription?.status || "ACTIVE"} />
                   </td>
                   <td className="py-4 px-lg font-body text-body text-text-primary">
-                    {mahal.members.toLocaleString()}
+                    {mahal.contact?.phone || "N/A"}
                   </td>
                   <td className="py-4 px-lg font-body text-body text-text-secondary">
-                    {mahal.plan}
+                    {mahal.subscription?.plan || "STANDARD"}
                   </td>
                   <td className="py-4 px-lg text-right">
                     <div className="flex items-center justify-end gap-1">
@@ -102,34 +124,24 @@ export default function MahalDirectoryPage() {
                       >
                         <span className="material-symbols-outlined">visibility</span>
                       </a>
-                      <a
-                        href={`/mahals/${mahal.id}/edit`}
-                        className="text-text-secondary hover:text-primary p-2 rounded-lg hover:bg-surface-container-low transition-colors"
-                      >
-                        <span className="material-symbols-outlined">edit</span>
-                      </a>
                     </div>
                   </td>
                 </tr>
               ))}
+              {filteredMahals.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-text-muted">
+                    {loading ? "Loading Mahals from live MongoDB..." : "No Mahals match your criteria."}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
         <div className="p-md border-t border-border-base flex items-center justify-between bg-surface-container-lowest">
           <p className="font-small text-small text-text-secondary">
-            Showing 1 to {mockMahals.length} of {mockMahals.length} entries
+            Showing {filteredMahals.length} of {mahals.length} entries
           </p>
-          <div className="flex gap-1">
-            <button className="h-8 px-3 bg-primary-container text-on-primary font-button text-small rounded-lg">
-              1
-            </button>
-            <button className="h-8 px-3 text-text-secondary hover:bg-surface-container-low font-button text-small rounded-lg">
-              2
-            </button>
-            <button className="h-8 px-3 text-text-secondary hover:bg-surface-container-low font-button text-small rounded-lg">
-              3
-            </button>
-          </div>
         </div>
       </div>
     </>

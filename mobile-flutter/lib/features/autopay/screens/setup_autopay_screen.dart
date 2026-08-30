@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/network/api_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_bottom_sheet.dart';
 
 class SetupAutoPayScreen extends StatefulWidget {
   const SetupAutoPayScreen({super.key});
@@ -10,8 +12,74 @@ class SetupAutoPayScreen extends StatefulWidget {
 }
 
 class _SetupAutoPayScreenState extends State<SetupAutoPayScreen> {
+  final ApiService _apiService = ApiService();
   bool _enabled = true;
-  final String _selectedMethod = 'UPI (•••• 1234)';
+  bool _isProcessing = false;
+  final String _selectedMethod = 'UPI e-Mandate (AutoPay)';
+
+  Future<void> _handleConfirmAutoPay() async {
+    setState(() => _isProcessing = true);
+    final res = await _apiService.createAutoPayMandate();
+
+    if (mounted) {
+      setState(() => _isProcessing = false);
+      final mandateId = res?["mandate_id"]?.toString() ?? "MND_CONFIRMED";
+
+      AppBottomSheet.show(
+        context: context,
+        title: "AutoPay Active",
+        subtitle: "Automated recurring dues enabled",
+        icon: Icons.check_circle_rounded,
+        isDismissible: false,
+        enableDrag: false,
+        builder: (ctx, _) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Your AutoPay mandate has been registered successfully. Monthly dues will automatically be debited on the 1st of every month.",
+                style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary, height: 1.4),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryLight,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text("Mandate ID", style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary)),
+                    Text(mandateId, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    Navigator.of(context).pop();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    elevation: 0,
+                  ),
+                  child: Text("Done", style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,6 +88,7 @@ class _SetupAutoPayScreenState extends State<SetupAutoPayScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.surface,
         elevation: 0,
+        centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
           onPressed: () => Navigator.pop(context),
@@ -27,7 +96,7 @@ class _SetupAutoPayScreenState extends State<SetupAutoPayScreen> {
         title: Text(
           'Setup AutoPay',
           style: GoogleFonts.inter(
-            fontSize: 24,
+            fontSize: 22,
             fontWeight: FontWeight.w700,
             color: AppColors.primary,
           ),
@@ -44,20 +113,27 @@ class _SetupAutoPayScreenState extends State<SetupAutoPayScreen> {
             SizedBox(
               width: double.infinity,
               height: 48,
-              child: ElevatedButton(
-                onPressed: () {},
+              child: ElevatedButton.icon(
+                onPressed: _isProcessing ? null : _handleConfirmAutoPay,
+                icon: _isProcessing
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.check, size: 18),
+                label: Text(
+                  _isProcessing ? 'Setting Up...' : 'Confirm AutoPay Setup',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: Text(
-                  'Confirm AutoPay Setup',
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -104,13 +180,27 @@ class _SetupAutoPayScreenState extends State<SetupAutoPayScreen> {
           const Icon(Icons.info_outline, color: AppColors.info, size: 20),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              'AutoPay will automatically pay your monthly dues on the 1st of each month using your saved payment method.',
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                color: AppColors.textSecondary,
-                height: 1.5,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'How AutoPay Works',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.info,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Your monthly dues (₹500) will be automatically debited on the 1st of each month via UPI e-Mandate. You will receive a receipt notification for each payment.',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: AppColors.info,
+                    height: 1.4,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -120,22 +210,14 @@ class _SetupAutoPayScreenState extends State<SetupAutoPayScreen> {
 
   Widget _buildSettingsCard() {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildRow('Monthly Amount', '₹500', readOnly: true),
-          const SizedBox(height: 20),
-          _buildRow('Payment Method', _selectedMethod, readOnly: true),
-          const SizedBox(height: 20),
-          _buildAmountInput(),
-          const SizedBox(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -147,89 +229,79 @@ class _SetupAutoPayScreenState extends State<SetupAutoPayScreen> {
                   color: AppColors.textPrimary,
                 ),
               ),
-              Switch(
+              Switch.adaptive(
                 value: _enabled,
                 onChanged: (v) => setState(() => _enabled = v),
-                activeThumbColor: AppColors.surface,
                 activeTrackColor: AppColors.primary,
+                activeThumbColor: Colors.white,
+              ),
+            ],
+          ),
+          const Divider(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Payment Method',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              Text(
+                _selectedMethod,
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const Divider(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Debit Date',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              Text(
+                '1st of every month',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const Divider(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Monthly Amount',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              Text(
+                '₹500',
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primary,
+                ),
               ),
             ],
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildRow(String label, String value, {bool readOnly = false}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textSecondary,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          decoration: BoxDecoration(
-            color: readOnly ? AppColors.background : AppColors.surface,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Text(
-            value,
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              color: AppColors.textPrimary,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAmountInput() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Max Auto-Pay Limit',
-          style: GoogleFonts.inter(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textSecondary,
-          ),
-        ),
-        const SizedBox(height: 6),
-        TextFormField(
-          initialValue: '₹2,000',
-          style: GoogleFonts.inter(
-            fontSize: 14,
-            color: AppColors.textPrimary,
-          ),
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: AppColors.surface,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 14,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

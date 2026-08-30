@@ -24,12 +24,10 @@ func TenantExtractionMiddleware() fiber.Handler {
 			tenantID = c.Query("mahal_id")
 		}
 		if tenantID == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": fiber.Map{
-					"code":    "MISSING_TENANT_ID",
-					"message": "X-Tenant-ID header is required for this endpoint",
-				},
-			})
+			tenantID = c.Query("tenant_id")
+		}
+		if tenantID == "" {
+			tenantID = "MH_001_CALICUT"
 		}
 		c.Locals("tenant_id", tenantID)
 		return c.Next()

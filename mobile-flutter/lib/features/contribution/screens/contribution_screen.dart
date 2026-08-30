@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/network/api_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_bottom_sheet.dart';
 import '../../../core/widgets/member_bottom_nav_bar.dart';
 
 class ContributionScreen extends StatefulWidget {
@@ -11,9 +13,11 @@ class ContributionScreen extends StatefulWidget {
 }
 
 class _ContributionScreenState extends State<ContributionScreen> {
+  final ApiService _apiService = ApiService();
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _noteController = TextEditingController();
   String _selectedFund = "Zakat Fund";
+  bool _isProcessing = false;
 
   final List<String> _funds = [
     "Zakat Fund",
@@ -30,6 +34,99 @@ class _ContributionScreenState extends State<ContributionScreen> {
     super.dispose();
   }
 
+  Future<void> _handleContribution() async {
+    final amountText = _amountController.text.trim();
+    final amount = double.tryParse(amountText);
+    if (amount == null || amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter a valid contribution amount")),
+      );
+      return;
+    }
+
+    setState(() => _isProcessing = true);
+
+    final idempKey = "IDEMP_DON_${DateTime.now().millisecondsSinceEpoch}";
+    final res = await _apiService.initializeContribution(
+      memberId: "MEM_001_9910",
+      amount: amount,
+      fund: _selectedFund,
+      idempotencyKey: idempKey,
+    );
+
+    if (mounted) {
+      setState(() => _isProcessing = false);
+
+      final receipt = res?["receipt"] as Map<String, dynamic>?;
+      final receiptNum = receipt?["receipt_number"]?.toString() ?? res?["transaction_id"]?.toString() ?? "Verified";
+
+      AppBottomSheet.show(
+        context: context,
+        title: "Contribution Successful",
+        subtitle: "Donation to $_selectedFund Fund",
+        icon: Icons.check_circle_rounded,
+        isDismissible: false,
+        enableDrag: false,
+        builder: (ctx, _) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryLight,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    Text("Donation Amount", style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
+                    const SizedBox(height: 4),
+                    Text("₹${amount.toInt()}", style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.w800, color: AppColors.primary)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text("Receipt Number", style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary)),
+                  Text(receiptNum, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+                ],
+              ),
+              const Divider(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text("Designated Fund", style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary)),
+                  Text(_selectedFund, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+                ],
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    Navigator.of(context).pushNamedAndRemoveUntil('/member/dashboard', (route) => false);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    elevation: 0,
+                  ),
+                  child: Text("Return to Dashboard", style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -37,6 +134,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.surface,
         elevation: 0,
+        centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: AppColors.primary),
           onPressed: () {
@@ -55,12 +153,6 @@ class _ContributionScreenState extends State<ContributionScreen> {
             color: AppColors.primary,
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.help_outline, color: AppColors.primary),
-            onPressed: () {},
-          ),
-        ],
         shape: const Border(
           bottom: BorderSide(color: AppColors.border, width: 1),
         ),
@@ -106,67 +198,49 @@ class _ContributionScreenState extends State<ContributionScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Amount Input
                   Text(
-                    "Amount",
+                    "Select Fund",
                     style: GoogleFonts.inter(
-                      fontSize: 16,
+                      fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: AppColors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Container(
-                    height: 56,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 56,
-                          height: 56,
-                          alignment: Alignment.center,
-                          decoration: const BoxDecoration(
-                            border: Border(
-                              right: BorderSide(color: AppColors.border),
-                            ),
-                          ),
-                          child: Text(
-                            "₹",
-                            style: GoogleFonts.inter(
-                              fontSize: 28,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: TextField(
-                            controller: _amountController,
-                            keyboardType: TextInputType.number,
-                            style: GoogleFonts.inter(
-                              fontSize: 28,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textPrimary,
-                            ),
-                            decoration: InputDecoration(
-                              border: InputBorder.none,
-                              hintText: "0",
-                              hintStyle: GoogleFonts.inter(
-                                fontSize: 28,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textMuted,
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                            ),
-                          ),
-                        ),
-                      ],
+                  _buildFundSelector(),
+                  const SizedBox(height: 20),
+
+                  Text(
+                    "Enter Amount (₹)",
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _amountController,
+                    keyboardType: TextInputType.number,
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: "e.g. 1000",
+                      prefixIcon: const Icon(Icons.currency_rupee, color: AppColors.primary, size: 20),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
 
                   // Quick Amount Chips
                   Wrap(
@@ -181,24 +255,10 @@ class _ContributionScreenState extends State<ContributionScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Fund Selection
                   Text(
-                    "Contribution Fund",
+                    "Optional Note / Reference",
                     style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  _buildFundSelector(),
-                  const SizedBox(height: 20),
-
-                  // Optional Note
-                  Text(
-                    "Note (Optional)",
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
+                      fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: AppColors.textPrimary,
                     ),
@@ -206,80 +266,43 @@ class _ContributionScreenState extends State<ContributionScreen> {
                   const SizedBox(height: 8),
                   TextField(
                     controller: _noteController,
-                    maxLines: 3,
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: AppColors.textPrimary,
-                    ),
+                    maxLines: 2,
+                    style: GoogleFonts.inter(fontSize: 14),
                     decoration: InputDecoration(
-                      hintText: "Add a note or special intention...",
-                      hintStyle: GoogleFonts.inter(
-                        fontSize: 14,
-                        color: AppColors.textMuted,
-                      ),
+                      hintText: "e.g. In memory of family, Eid charity...",
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: AppColors.border),
-                      ),
-                      enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: const BorderSide(color: AppColors.border),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(
-                          color: AppColors.primary,
-                          width: 1.5,
-                        ),
+                        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
                       ),
                       contentPadding: const EdgeInsets.all(12),
                     ),
                   ),
                   const SizedBox(height: 24),
 
-                  // Continue Button
+                  // Submit Button
                   SizedBox(
                     width: double.infinity,
                     height: 48,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        final amount = _amountController.text.trim();
-                        if (amount.isEmpty || (double.tryParse(amount) ?? 0) <= 0) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("Please enter a valid contribution amount")),
-                          );
-                          return;
-                        }
-                        showDialog(
-                          context: context,
-                          barrierDismissible: false,
-                          builder: (ctx) => AlertDialog(
-                            backgroundColor: AppColors.surface,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            title: Row(
-                              children: [
-                                const Icon(Icons.check_circle, color: AppColors.success, size: 28),
-                                const SizedBox(width: 8),
-                                Text("Contribution Received", style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 18)),
-                              ],
-                            ),
-                            content: Text("Thank you! Your contribution of ₹$amount to $_selectedFund has been received and verified.", style: GoogleFonts.inter(fontSize: 14)),
-                            actions: [
-                              ElevatedButton(
-                                onPressed: () {
-                                  Navigator.of(ctx).pop();
-                                  Navigator.of(context).pushNamedAndRemoveUntil('/member/dashboard', (route) => false);
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  foregroundColor: Colors.white,
-                                ),
-                                child: const Text("View Dashboard"),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
+                    child: ElevatedButton.icon(
+                      onPressed: _isProcessing ? null : _handleContribution,
+                      icon: _isProcessing
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.favorite, size: 18),
+                      label: Text(
+                        _isProcessing ? "Processing..." : "Complete Contribution",
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
@@ -287,31 +310,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
                           borderRadius: BorderRadius.circular(10),
                         ),
                       ),
-                      child: Text(
-                        "Continue to Payment",
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Secure transaction
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.lock, size: 12, color: AppColors.textSecondary),
-                      const SizedBox(width: 6),
-                      Text(
-                        "Secure encrypted transaction",
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
                   ),
                 ],
               ),

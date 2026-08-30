@@ -12,22 +12,47 @@ import (
 type ReceiptRepository interface {
 	Insert(ctx context.Context, receipt *domain.Receipt) error
 	GetLatestReceipt(ctx context.Context, mahalID string) (*domain.Receipt, error)
+	GetNextSequenceNumber(ctx context.Context, mahalID string) (int64, error)
 	GetByNumber(ctx context.Context, receiptNumber string) (*domain.Receipt, error)
+	GetByMemberID(ctx context.Context, mahalID, memberID string) ([]domain.Receipt, error)
 	GetAllByMahal(ctx context.Context, mahalID string, limit int64) ([]domain.Receipt, error)
 	VerifyReceiptChain(ctx context.Context, mahalID string) (int64, int64, error)
 }
 
 type mongoReceiptRepo struct {
-	coll *mongo.Collection
+	coll     *mongo.Collection
+	counters *mongo.Collection
 }
 
 func NewReceiptRepository(db *mongo.Database) ReceiptRepository {
-	return &mongoReceiptRepo{coll: db.Collection("receipts")}
+	return &mongoReceiptRepo{
+		coll:     db.Collection("receipts"),
+		counters: db.Collection("counters"),
+	}
 }
 
 func (r *mongoReceiptRepo) Insert(ctx context.Context, receipt *domain.Receipt) error {
 	_, err := r.coll.InsertOne(ctx, receipt)
 	return err
+}
+
+func (r *mongoReceiptRepo) GetNextSequenceNumber(ctx context.Context, mahalID string) (int64, error) {
+	filter := bson.M{"mahal_id": mahalID, "counter_type": "RECEIPT"}
+	update := bson.M{"$inc": bson.M{"seq": int64(1)}}
+	opts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)
+
+	var doc struct {
+		Seq int64 `bson:"seq"`
+	}
+	err := r.counters.FindOneAndUpdate(ctx, filter, update, opts).Decode(&doc)
+	if err != nil {
+		latest, lErr := r.GetLatestReceipt(ctx, mahalID)
+		if lErr == nil && latest != nil {
+			return latest.SequenceNumber + 1, nil
+		}
+		return 1, nil
+	}
+	return doc.Seq, nil
 }
 
 func (r *mongoReceiptRepo) GetLatestReceipt(ctx context.Context, mahalID string) (*domain.Receipt, error) {
@@ -47,6 +72,30 @@ func (r *mongoReceiptRepo) GetByNumber(ctx context.Context, receiptNumber string
 		return nil, err
 	}
 	return &receipt, nil
+}
+
+func (r *mongoReceiptRepo) GetByMemberID(ctx context.Context, mahalID, memberID string) ([]domain.Receipt, error) {
+	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}})
+	filter := bson.M{}
+	if mahalID != "" {
+		filter["mahal_id"] = mahalID
+	}
+	if memberID != "" {
+		filter["member_id"] = memberID
+	}
+	cursor, err := r.coll.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var receipts []domain.Receipt
+	if err := cursor.All(ctx, &receipts); err != nil {
+		return nil, err
+	}
+	if receipts == nil {
+		receipts = []domain.Receipt{}
+	}
+	return receipts, nil
 }
 
 func (r *mongoReceiptRepo) GetAllByMahal(ctx context.Context, mahalID string, limit int64) ([]domain.Receipt, error) {

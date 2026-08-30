@@ -1,6 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_filex/open_filex.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/pdf_generator.dart';
 
 class ReceiptDetailsScreen extends StatelessWidget {
   final String title;
@@ -23,6 +28,178 @@ class ReceiptDetailsScreen extends StatelessWidget {
     this.date = "15 Aug 2026 • 10:24 AM",
     this.paymentMethod = "UPI",
   });
+
+  Future<void> _downloadAndOpenReceipt(BuildContext context) async {
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final sanitizedName = receiptNumber.replaceAll(RegExp(r'[^\w\-]'), '_');
+      final file = File('${tempDir.path}/Receipt_$sanitizedName.pdf');
+
+      final pdfBytes = SimplePdfGenerator.generateReceiptPdf(
+        receiptNumber: receiptNumber,
+        memberName: memberName,
+        amount: amount,
+        paymentType: title,
+        subtitle: subtitle,
+        date: date,
+        paymentMethod: paymentMethod,
+        status: status,
+      );
+
+      await file.writeAsBytes(pdfBytes);
+      await OpenFilex.open(file.path);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("PDF Receipt downloaded: Receipt_$sanitizedName.pdf"),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error generating PDF receipt: $e")),
+        );
+      }
+    }
+  }
+
+  Future<void> _shareReceipt(BuildContext context) async {
+    final sanitizedName = receiptNumber.replaceAll(RegExp(r'[^\w\-]'), '_');
+    File? pdfFile;
+
+    try {
+      final tempDir = await getTemporaryDirectory();
+      pdfFile = File('${tempDir.path}/Receipt_$sanitizedName.pdf');
+      final pdfBytes = SimplePdfGenerator.generateReceiptPdf(
+        receiptNumber: receiptNumber,
+        memberName: memberName,
+        amount: amount,
+        paymentType: title,
+        subtitle: subtitle,
+        date: date,
+        paymentMethod: paymentMethod,
+        status: status,
+      );
+      await pdfFile.writeAsBytes(pdfBytes);
+    } catch (_) {}
+
+    final shareText = '''
+🕌 *MahalFlow Official Payment Receipt*
+━━━━━━━━━━━━━━━━━━━━
+🧾 *Receipt No:* `$receiptNumber`
+👤 *Member:* $memberName
+💰 *Amount:* $amount
+📌 *Type:* $title ($subtitle)
+📅 *Date:* $date
+💳 *Payment Mode:* $paymentMethod
+🔒 *Status:* $status (Cryptographically Signed)
+━━━━━━━━━━━━━━━━━━━━
+*MahalFlow Financial Integrity*
+''';
+
+    await Clipboard.setData(ClipboardData(text: shareText));
+
+    if (!context.mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.share, color: AppColors.primary, size: 24),
+                const SizedBox(width: 10),
+                Text(
+                  "Share Receipt (PDF & Text)",
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 18),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.picture_as_pdf, size: 16, color: Color(0xFFC93B3B)),
+                      const SizedBox(width: 6),
+                      Text(
+                        "Receipt_$sanitizedName.pdf",
+                        style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    shareText,
+                    style: GoogleFonts.inter(fontSize: 12, height: 1.4, color: AppColors.textPrimary),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: shareText));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Receipt text copied to clipboard!")),
+                      );
+                    },
+                    icon: const Icon(Icons.copy, size: 16, color: AppColors.primary),
+                    label: const Text("Copy Text"),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: AppColors.primary),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      if (pdfFile != null) {
+                        OpenFilex.open(pdfFile.path);
+                      }
+                      Navigator.of(ctx).pop();
+                    },
+                    icon: const Icon(Icons.open_in_new, size: 16, color: Colors.white),
+                    label: const Text("Share PDF"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +230,7 @@ class ReceiptDetailsScreen extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         child: Column(
           children: [
-            // Receipt Card matching Stitch
+            // Receipt Card
             Container(
               width: double.infinity,
               decoration: BoxDecoration(
@@ -71,7 +248,6 @@ class ReceiptDetailsScreen extends StatelessWidget {
               child: Column(
                 children: [
                   const SizedBox(height: 28),
-                  // Check icon
                   Container(
                     width: 56,
                     height: 56,
@@ -114,7 +290,6 @@ class ReceiptDetailsScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 24),
 
-                  // Ticket dashed line
                   _buildDashedDivider(),
                   const SizedBox(height: 20),
 
@@ -137,11 +312,9 @@ class ReceiptDetailsScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 24),
 
-                  // Bottom dashed line
                   _buildDashedDivider(),
                   const SizedBox(height: 20),
 
-                  // MahalFlow Footer Note
                   Text(
                     "MahalFlow",
                     style: GoogleFonts.inter(
@@ -174,14 +347,10 @@ class ReceiptDetailsScreen extends StatelessWidget {
               width: double.infinity,
               height: 48,
               child: ElevatedButton.icon(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Downloading PDF receipt...")),
-                  );
-                },
+                onPressed: () => _downloadAndOpenReceipt(context),
                 icon: const Icon(Icons.download, size: 18),
                 label: Text(
-                  "Download PDF",
+                  "Download PDF Receipt",
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -202,11 +371,7 @@ class ReceiptDetailsScreen extends StatelessWidget {
               width: double.infinity,
               height: 48,
               child: OutlinedButton.icon(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Sharing receipt link...")),
-                  );
-                },
+                onPressed: () => _shareReceipt(context),
                 icon: const Icon(Icons.share_outlined, size: 18, color: AppColors.primary),
                 label: Text(
                   "Share Receipt",

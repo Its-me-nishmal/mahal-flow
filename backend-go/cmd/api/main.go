@@ -25,12 +25,12 @@ func main() {
 	cfg := config.Load()
 	logger.InitLogger("mahalflow-api", cfg.Environment != "production")
 
-	log.Info().Str("version", AppVersion).Msg("Starting MahalFlow API Server")
+	log.Info().Str("version", AppVersion).Msg("Starting MahalFlow Live API Server")
 
 	// 1. Connect MongoDB
 	dbClient, err := database.Connect(cfg.MongoURI, cfg.DBName)
 	if err != nil {
-		log.Warn().Err(err).Msg("MongoDB connection pending or offline, running in mock fallback mode")
+		log.Warn().Err(err).Msg("MongoDB connection pending or offline")
 	}
 
 	// 2. Initialize Repositories & Services
@@ -38,6 +38,9 @@ func main() {
 	var memberRepo repository.MemberRepository
 	var txnRepo repository.TransactionRepository
 	var receiptRepo repository.ReceiptRepository
+	var auditRepo repository.AuditLogRepository
+	var alertRepo repository.AlertRepository
+	var refundRepo repository.RefundRepository
 	var paymentService service.PaymentService
 
 	if dbClient != nil {
@@ -45,10 +48,13 @@ func main() {
 		memberRepo = repository.NewMemberRepository(dbClient.DB)
 		txnRepo = repository.NewTransactionRepository(dbClient.DB)
 		receiptRepo = repository.NewReceiptRepository(dbClient.DB)
+		auditRepo = repository.NewAuditLogRepository(dbClient.DB)
+		alertRepo = repository.NewAlertRepository(dbClient.DB)
+		refundRepo = repository.NewRefundRepository(dbClient.DB)
 		paymentService = service.NewPaymentService(dbClient.Client, mahalRepo, memberRepo, txnRepo, receiptRepo)
 	}
 
-	handler := api.NewHandler(paymentService, mahalRepo, memberRepo, receiptRepo)
+	handler := api.NewHandler(paymentService, mahalRepo, memberRepo, receiptRepo, txnRepo, auditRepo, alertRepo, refundRepo)
 
 	// 3. Initialize Fiber App
 	app := fiber.New(fiber.Config{
@@ -89,6 +95,7 @@ func main() {
 
 	// Member Routes
 	v1.Get("/member/dashboard", handler.GetMemberDashboard)
+	v1.Get("/member/receipts", handler.GetMemberReceipts)
 	v1.Post("/payments/dues/initialize", handler.InitializeDuesPayment)
 	v1.Post("/payments/dues/confirm", handler.ConfirmPayment)
 	v1.Post("/payments/contribution/initialize", handler.InitializeContribution)
@@ -99,15 +106,29 @@ func main() {
 	v1.Post("/autopay/mandate/create", handler.CreateAutoPayMandate)
 	v1.Get("/autopay/mandate/status", handler.GetAutoPayStatus)
 
-	// Admin Routes (Supports standard GET & Structured Query Engine)
+	// Admin Routes (Live MongoDB Data)
 	v1.Get("/admin/dashboard", handler.GetAdminDashboard)
+	v1.Get("/admin/mahals", handler.GetMahals)
+	v1.Post("/admin/mahals", handler.CreateMahal)
+	v1.Get("/admin/mahals/:id", handler.GetMahalByID)
 	v1.Get("/admin/members", handler.GetAdminMembers)
-	v1.Post("/admin/members/query", handler.QueryAdminMembers) // RFC 10008 Query Engine
+	v1.Post("/admin/members", handler.CreateMember)
+	v1.Delete("/admin/members/:id", handler.DeleteMember)
+	v1.Post("/admin/members/query", handler.QueryAdminMembers)
+	v1.Get("/admin/payments", handler.GetPayments)
+	v1.Get("/admin/subscriptions", handler.GetSubscriptions)
+	v1.Get("/admin/refunds", handler.GetRefunds)
+	v1.Post("/admin/refunds/:id/action", handler.ProcessRefund)
 	v1.Get("/admin/reports/financial", handler.GetFinancialReports)
-	v1.Post("/admin/reports/financial/query", handler.QueryFinancialReports) // RFC 10008 Query Engine
+	v1.Post("/admin/reports/financial/query", handler.QueryFinancialReports)
 	v1.Get("/admin/gateways", handler.GetGateways)
 	v1.Get("/admin/audit-logs", handler.GetAuditLogs)
 	v1.Get("/admin/alerts", handler.GetAlerts)
+	v1.Post("/admin/alerts", handler.CreateAlert)
+	v1.Post("/admin/alerts/:id/ack", handler.AcknowledgeAlert)
+	v1.Delete("/admin/alerts/:id", handler.DismissAlert)
+	v1.Delete("/admin/alerts", handler.ClearAllAlerts)
+	v1.Post("/admin/alerts/mark-all-read", handler.MarkAllAlertsRead)
 	v1.Post("/admin/excel/upload-preview", handler.UploadExcelPreview)
 	v1.Post("/admin/excel/commit-import", handler.CommitExcelImport)
 

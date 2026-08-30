@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/member_bottom_nav_bar.dart';
-import '../../dues_payment/screens/monthly_payment_screen.dart';
 
 class MemberDashboardScreen extends StatefulWidget {
   const MemberDashboardScreen({super.key});
@@ -16,9 +15,10 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
   final ApiService _apiService = ApiService();
   bool _isLoading = true;
 
-  String _memberName = "Muhammed";
+  String _memberName = "Member";
   String _mahalName = "Central Juma Masjid Mahal";
-  double _outstanding = 1500;
+  double _outstanding = 0.0;
+  double _advanceCredit = 0.0;
   Map<String, dynamic>? _latestReceipt;
 
   @override
@@ -32,11 +32,15 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
     final data = await _apiService.getMemberDashboard();
     if (mounted) {
       setState(() {
-        final fullName = data["member_name"]?.toString() ?? "Muhammed Ameen";
-        _memberName = fullName.split(' ').first; // Display first name in greeting
-        _mahalName = data["mahal_name"]?.toString() ?? "Central Juma Masjid Mahal";
-        _outstanding = (data["outstanding_balance"] as num?)?.toDouble() ?? 1500.0;
-        _latestReceipt = data["latest_payment"] as Map<String, dynamic>?;
+        if (data != null) {
+          final fullName = data["member_name"]?.toString() ?? "Member";
+          _memberName = fullName.split(' ').first;
+          _mahalName = data["mahal_name"]?.toString() ?? "Central Juma Masjid Mahal";
+          final rawOut = (data["outstanding_balance"] as num?)?.toDouble() ?? 0.0;
+          _outstanding = rawOut > 0 ? rawOut : 0.0;
+          _advanceCredit = (data["advance_credit"] as num?)?.toDouble() ?? 0.0;
+          _latestReceipt = data["latest_payment"] as Map<String, dynamic>?;
+        }
         _isLoading = false;
       });
     }
@@ -145,7 +149,18 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                     _buildLatestPaymentCard(),
                     const SizedBox(height: 16),
 
-                    // 4. Quick Action: Payment History Card
+                    // 4. Quick Action: Make a Contribution Card
+                    _buildQuickActionCard(
+                      icon: Icons.volunteer_activism,
+                      iconBg: const Color(0xFFFDF0ED),
+                      iconColor: const Color(0xFFE05638),
+                      title: "Make a Contribution",
+                      subtitle: "Donate to Zakat, General Fund, or Masjid Renovation.",
+                      onTap: () => Navigator.of(context).pushNamed('/member/contribution'),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // 5. Quick Action: Payment History Card
                     _buildQuickActionCard(
                       icon: Icons.history,
                       iconBg: const Color(0xFFEAF3FB),
@@ -156,13 +171,13 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                     ),
                     const SizedBox(height: 12),
 
-                    // 5. Quick Action: Mahal Announcements Card
+                    // 6. Quick Action: Mahal Announcements Card
                     _buildQuickActionCard(
                       icon: Icons.article_outlined,
                       iconBg: const Color(0xFFE6E9E6),
                       iconColor: AppColors.primary,
                       title: "Mahal Announcements",
-                      subtitle: "2 unread notices from the committee.",
+                      subtitle: "Important alerts and notices from committee.",
                       onTap: () => Navigator.of(context).pushNamed('/member/alerts'),
                     ),
                     const SizedBox(height: 24),
@@ -197,7 +212,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                "Outstanding Dues",
+                _outstanding > 0 ? "Outstanding Dues" : "Monthly Dues",
                 style: GoogleFonts.inter(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
@@ -223,7 +238,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            "₹${_outstanding.toInt()}",
+            "₹${_outstanding > 0 ? _outstanding.toInt() : 0}",
             style: GoogleFonts.inter(
               fontSize: 32,
               fontWeight: FontWeight.w700,
@@ -234,7 +249,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
           const SizedBox(height: 4),
           Text(
             _outstanding > 0
-                ? "For the past 3 months (Jun, Jul, Aug)"
+                ? "Pending monthly dues balance"
                 : "All monthly dues paid in full",
             style: GoogleFonts.inter(
               fontSize: 14,
@@ -242,6 +257,32 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
               color: AppColors.textSecondary,
             ),
           ),
+          if (_advanceCredit > 0) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.stars_rounded, size: 14, color: AppColors.primary),
+                  const SizedBox(width: 5),
+                  Text(
+                    "Advance Credit: ₹${_advanceCredit.toInt()}",
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
           if (_outstanding > 0)
             SizedBox(
@@ -249,11 +290,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
               height: 48,
               child: ElevatedButton(
                 onPressed: () async {
-                  await Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const MonthlyPaymentScreen(),
-                    ),
-                  );
+                  await Navigator.of(context).pushNamed('/member/pay');
                   _loadDashboardData();
                 },
                 style: ElevatedButton.styleFrom(
@@ -287,7 +324,27 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
   }
 
   Widget _buildLatestPaymentCard() {
-    final amount = (_latestReceipt?["amount"] as num?)?.toInt() ?? 500;
+    if (_latestReceipt == null) {
+      return const SizedBox.shrink();
+    }
+
+    final amount = (_latestReceipt?["amount"] as num?)?.toInt() ?? 0;
+    final paymentType = _latestReceipt?["payment_type"]?.toString() ?? "MONTHLY_DUES";
+    final paidMonthsList = (_latestReceipt?["paid_months"] as List?)?.map((e) => e.toString()).toList() ?? [];
+    final paidMonthsStr = paidMonthsList.isNotEmpty ? paidMonthsList.join(", ") : "Contribution";
+    final receiptNum = _latestReceipt?["receipt_number"]?.toString() ?? "Verified";
+
+    String formattedDate = "Recently Paid";
+    final rawDate = _latestReceipt?["created_at"]?.toString();
+    if (rawDate != null) {
+      final parsed = DateTime.tryParse(rawDate);
+      if (parsed != null) {
+        const monthsNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        formattedDate = "Paid on ${monthsNames[parsed.month - 1]} ${parsed.day}, ${parsed.year}";
+      }
+    }
+
+    final title = paymentType == "MONTHLY_DUES" ? "Monthly Dues ($paidMonthsStr)" : "Mahal Contribution";
 
     return Container(
       width: double.infinity,
@@ -353,7 +410,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            "August 2026 Contribution",
+            title,
             style: GoogleFonts.inter(
               fontSize: 14,
               fontWeight: FontWeight.w400,
@@ -367,7 +424,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                "Paid on Aug 15, 2026",
+                formattedDate,
                 style: GoogleFonts.inter(
                   fontSize: 13,
                   fontWeight: FontWeight.w400,
@@ -380,7 +437,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      "Receipt",
+                      receiptNum.length > 18 ? "${receiptNum.substring(0, 16)}..." : receiptNum,
                       style: GoogleFonts.inter(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,

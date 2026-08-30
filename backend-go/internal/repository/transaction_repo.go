@@ -7,11 +7,13 @@ import (
 	"github.com/mahalflow/backend-go/internal/domain"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 type TransactionRepository interface {
 	Create(ctx context.Context, txn *domain.Transaction) error
 	GetByID(ctx context.Context, id string) (*domain.Transaction, error)
+	ListAll(ctx context.Context, mahalID string, limit, skip int64) ([]domain.Transaction, int64, error)
 	UpdateStatus(ctx context.Context, id string, status domain.PaymentStatus, receiptID string) error
 	FindPendingOlderThan(ctx context.Context, threshold time.Duration) ([]domain.Transaction, error)
 	FindByIDempotencyKey(ctx context.Context, key string) (*domain.Transaction, error)
@@ -19,6 +21,7 @@ type TransactionRepository interface {
 	CountFailedByDevice(ctx context.Context, deviceID string, within time.Duration) (int64, error)
 	GetRecentRefundsByMahal(ctx context.Context, mahalID string, since time.Time) ([]domain.Transaction, error)
 	GetTotalCollectionByMahal(ctx context.Context, mahalID string, since time.Time) (float64, error)
+	GetFinancialSummary(ctx context.Context, mahalID string) (totalCollected, duesCollected, donations float64, err error)
 }
 
 type mongoTxnRepo struct {
@@ -27,6 +30,31 @@ type mongoTxnRepo struct {
 
 func NewTransactionRepository(db *mongo.Database) TransactionRepository {
 	return &mongoTxnRepo{coll: db.Collection("transactions")}
+}
+
+func (r *mongoTxnRepo) ListAll(ctx context.Context, mahalID string, limit, skip int64) ([]domain.Transaction, int64, error) {
+	filter := bson.M{}
+	if mahalID != "" {
+		filter["mahal_id"] = mahalID
+	}
+	total, err := r.coll.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	opts := options.Find().SetLimit(limit).SetSkip(skip).SetSort(bson.D{{Key: "created_at", Value: -1}})
+	cursor, err := r.coll.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cursor.Close(ctx)
+	var txns []domain.Transaction
+	if err := cursor.All(ctx, &txns); err != nil {
+		return nil, 0, err
+	}
+	if txns == nil {
+		txns = []domain.Transaction{}
+	}
+	return txns, total, nil
 }
 
 func (r *mongoTxnRepo) Create(ctx context.Context, txn *domain.Transaction) error {
@@ -124,6 +152,44 @@ func (r *mongoTxnRepo) GetRecentRefundsByMahal(ctx context.Context, mahalID stri
 	return txns, nil
 }
 
+func (r *mongoTxnRepo) GetFinancialSummary(ctx context.Context, mahalID string) (totalCollected, duesCollected, donations float64, err error) {
+	match := bson.M{"status": domain.TxnSuccess}
+	if mahalID != "" {
+		match["mahal_id"] = mahalID
+	}
+
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: match}},
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: "$type"},
+			{Key: "sum", Value: bson.D{{Key: "$sum", Value: "$amount"}}},
+		}}},
+	}
+
+	cursor, err := r.coll.Aggregate(ctx, pipeline)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	defer cursor.Close(ctx)
+
+	for cursor.Next(ctx) {
+		var item struct {
+			Type string  `bson:"_id"`
+			Sum  float64 `bson:"sum"`
+		}
+		if err := cursor.Decode(&item); err == nil {
+			totalCollected += item.Sum
+			switch item.Type {
+			case "MONTHLY_DUES":
+				duesCollected += item.Sum
+			case "CONTRIBUTION":
+				donations += item.Sum
+			}
+		}
+	}
+	return totalCollected, duesCollected, donations, nil
+}
+
 func (r *mongoTxnRepo) GetTotalCollectionByMahal(ctx context.Context, mahalID string, since time.Time) (float64, error) {
 	pipeline := mongo.Pipeline{
 		{{Key: "$match", Value: bson.M{
@@ -152,3 +218,4 @@ func (r *mongoTxnRepo) GetTotalCollectionByMahal(ctx context.Context, mahalID st
 	}
 	return result.Total, nil
 }
+

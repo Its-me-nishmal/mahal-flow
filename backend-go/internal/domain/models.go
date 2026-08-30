@@ -123,3 +123,67 @@ func CalculateReceiptHash(receiptNum, mahalID, memberID string, amount float64, 
 	hash := sha256.Sum256([]byte(payload))
 	return hex.EncodeToString(hash[:])
 }
+
+// AuditLog captures auditable events with cryptographic chain integrity
+type AuditLog struct {
+	ID        string    `bson:"_id" json:"id"`
+	MahalID   string    `bson:"mahal_id" json:"mahal_id"`
+	Action    string    `bson:"action" json:"action"`
+	Actor     string    `bson:"actor" json:"actor"`
+	EntityID  string    `bson:"entity_id" json:"entity_id"`
+	Details   string    `bson:"details,omitempty" json:"details,omitempty"`
+	IPAddress string    `bson:"ip_address,omitempty" json:"ip_address,omitempty"`
+	Timestamp time.Time `bson:"timestamp" json:"timestamp"`
+}
+
+// SystemAlert represents actionable system/security alerts
+type SystemAlert struct {
+	ID          string    `bson:"_id" json:"id"`
+	MahalID     string    `bson:"mahal_id,omitempty" json:"mahal_id,omitempty"`
+	Audience    string    `bson:"audience,omitempty" json:"audience,omitempty"` // ALL | OVERDUE_ONLY | FAMILY_HEADS
+	Severity    string    `bson:"severity" json:"severity"` // CRITICAL | WARNING | INFO
+	Title       string    `bson:"title" json:"title"`
+	Description string    `bson:"description" json:"description"`
+	Status      string    `bson:"status" json:"status"` // ACTIVE | ACKNOWLEDGED | RESOLVED
+	CreatedAt   time.Time `bson:"created_at" json:"created_at"`
+}
+
+// RefundRequest represents a member refund dispute
+type RefundRequest struct {
+	ID            string     `bson:"_id" json:"id"`
+	MahalID       string     `bson:"mahal_id" json:"mahal_id"`
+	TransactionID string     `bson:"transaction_id" json:"transaction_id"`
+	ReceiptNumber string     `bson:"receipt_number" json:"receipt_number"`
+	MemberID      string     `bson:"member_id" json:"member_id"`
+	MemberName    string     `bson:"member_name" json:"member_name"`
+	Amount        float64    `bson:"amount" json:"amount"`
+	Reason        string     `bson:"reason" json:"reason"`
+	Status        string     `bson:"status" json:"status"` // PENDING | APPROVED | REJECTED | PROCESSED
+	RequestedAt   time.Time  `bson:"requested_at" json:"requested_at"`
+	ProcessedAt   *time.Time `bson:"processed_at,omitempty" json:"processed_at,omitempty"`
+}
+
+// SubscriptionInvoice represents SaaS billing records for a Mahal
+type SubscriptionInvoice struct {
+	ID          string    `bson:"_id" json:"id"`
+	MahalID     string    `bson:"mahal_id" json:"mahal_id"`
+	MahalName   string    `bson:"mahal_name" json:"mahal_name"`
+	InvoiceNum  string    `bson:"invoice_num" json:"invoice_num"`
+	Plan        string    `bson:"plan" json:"plan"`
+	Amount      float64   `bson:"amount" json:"amount"`
+	Status      string    `bson:"status" json:"status"` // PAID | PENDING | OVERDUE
+	BillingDate time.Time `bson:"billing_date" json:"billing_date"`
+	DueDate     time.Time `bson:"due_date" json:"due_date"`
+}
+
+// GatewayConfig represents configured payment processors
+type GatewayConfig struct {
+	ID        string    `bson:"_id" json:"id"`
+	MahalID   string    `bson:"mahal_id" json:"mahal_id"`
+	Provider  string    `bson:"provider" json:"provider"` // RAZORPAY | FEDERAL_BANK | CASH
+	Status    string    `bson:"status" json:"status"`     // ACTIVE | INACTIVE
+	IsPrimary bool      `bson:"is_primary" json:"is_primary"`
+	KeyID     string    `bson:"key_id,omitempty" json:"key_id,omitempty"`
+	CreatedAt time.Time `bson:"created_at" json:"created_at"`
+}
+

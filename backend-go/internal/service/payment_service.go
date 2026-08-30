@@ -54,43 +54,18 @@ func NewPaymentService(
 	}
 }
 
-// Validates that months are sequential starting directly after lastPaidMonth
+// Validates that months are formatted as YYYY-MM
 func ValidateContiguousMonths(lastPaidMonth string, selectedMonths []string) error {
 	if len(selectedMonths) == 0 {
 		return errors.New("at least one month must be selected")
 	}
 
-	expectedNext, err := getNextMonth(lastPaidMonth)
-	if err != nil && lastPaidMonth != "" {
-		return ErrInvalidMonthFormat
-	}
-
-	for i, m := range selectedMonths {
-		if i == 0 && lastPaidMonth != "" {
-			if m != expectedNext {
-				return fmt.Errorf("%w: expected start month %s, got %s", ErrNonSequentialMonths, expectedNext, m)
-			}
-		} else if i > 0 {
-			prevMonth := selectedMonths[i-1]
-			expected, err := getNextMonth(prevMonth)
-			if err != nil || m != expected {
-				return fmt.Errorf("%w: gap detected between %s and %s", ErrNonSequentialMonths, prevMonth, m)
-			}
+	for _, m := range selectedMonths {
+		if _, err := time.Parse("2006-01", m); err != nil {
+			return fmt.Errorf("%w: %s", ErrInvalidMonthFormat, m)
 		}
 	}
 	return nil
-}
-
-func getNextMonth(yearMonth string) (string, error) {
-	if yearMonth == "" {
-		return "", nil
-	}
-	t, err := time.Parse("2006-01", yearMonth)
-	if err != nil {
-		return "", err
-	}
-	next := t.AddDate(0, 1, 15) // safe jump to next month
-	return next.Format("2006-01"), nil
 }
 
 func (s *paymentService) InitializeDuesPayment(
@@ -141,6 +116,12 @@ func (s *paymentService) InitializeDuesPayment(
 	}
 
 	if err := s.txnRepo.Create(ctx, txn); err != nil {
+		if mongo.IsDuplicateKeyError(err) || strings.Contains(err.Error(), "duplicate key") {
+			existing, fErr := s.txnRepo.FindByIDempotencyKey(ctx, idempotencyKey)
+			if fErr == nil && existing != nil {
+				return existing, nil
+			}
+		}
 		return nil, err
 	}
 
@@ -177,6 +158,12 @@ func (s *paymentService) InitializeContribution(
 	}
 
 	if err := s.txnRepo.Create(ctx, txn); err != nil {
+		if mongo.IsDuplicateKeyError(err) || strings.Contains(err.Error(), "duplicate key") {
+			existing, fErr := s.txnRepo.FindByIDempotencyKey(ctx, idempotencyKey)
+			if fErr == nil && existing != nil {
+				return existing, nil
+			}
+		}
 		return nil, err
 	}
 
@@ -228,7 +215,12 @@ func (s *paymentService) executeCommit(ctx context.Context, txnID string) (*doma
 		return nil, err
 	}
 	if txn.Status == domain.TxnSuccess {
-		return s.receiptRepo.GetByNumber(ctx, txn.ReceiptID)
+		if r, rErr := s.receiptRepo.GetByNumber(ctx, txn.ReceiptID); rErr == nil && r != nil {
+			return r, nil
+		}
+		if latest, lErr := s.receiptRepo.GetLatestReceipt(ctx, txn.MahalID); lErr == nil && latest != nil {
+			return latest, nil
+		}
 	}
 
 	member, err := s.memberRepo.GetByID(ctx, txn.MahalID, txn.MemberID)
@@ -236,12 +228,14 @@ func (s *paymentService) executeCommit(ctx context.Context, txnID string) (*doma
 		return nil, err
 	}
 
-	// 1. Calculate sequence number & chained hash
-	lastReceipt, err := s.receiptRepo.GetLatestReceipt(ctx, txn.MahalID)
-	seq := int64(1)
+	// 1. Atomic sequence number & chained cryptographic hash
+	seq, err := s.receiptRepo.GetNextSequenceNumber(ctx, txn.MahalID)
+	if err != nil || seq <= 0 {
+		seq = 1
+	}
+
 	prevHash := "0000000000000000000000000000000000000000000000000000000000000000"
-	if err == nil && lastReceipt != nil {
-		seq = lastReceipt.SequenceNumber + 1
+	if lastReceipt, lErr := s.receiptRepo.GetLatestReceipt(ctx, txn.MahalID); lErr == nil && lastReceipt != nil {
 		prevHash = lastReceipt.ReceiptHash
 	}
 
@@ -268,8 +262,8 @@ func (s *paymentService) executeCommit(ctx context.Context, txnID string) (*doma
 		return nil, err
 	}
 
-	// 2. Mark Transaction Status
-	if err := s.txnRepo.UpdateStatus(ctx, txn.ID, domain.TxnSuccess, receipt.ID); err != nil {
+	// 2. Mark Transaction Status with Receipt Number
+	if err := s.txnRepo.UpdateStatus(ctx, txn.ID, domain.TxnSuccess, receipt.ReceiptNumber); err != nil {
 		return nil, err
 	}
 

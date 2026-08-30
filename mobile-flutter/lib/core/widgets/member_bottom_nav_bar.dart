@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../network/api_service.dart';
 import '../theme/app_theme.dart';
 
 class MemberBottomNavBar extends StatelessWidget {
@@ -46,42 +47,55 @@ class MemberBottomNavBar extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: Container(
+        child: SizedBox(
           height: 64,
-          padding: const EdgeInsets.symmetric(vertical: 4),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildNavItem(
-                context,
-                index: 0,
-                icon: currentIndex == 0 ? Icons.home : Icons.home_outlined,
-                label: "Home",
+              Expanded(
+                child: _buildNavItem(
+                  context,
+                  index: 0,
+                  icon: currentIndex == 0 ? Icons.home : Icons.home_outlined,
+                  label: "Home",
+                ),
               ),
-              _buildNavItem(
-                context,
-                index: 1,
-                icon: currentIndex == 1 ? Icons.payments : Icons.payments_outlined,
-                label: "Payments",
+              Expanded(
+                child: _buildNavItem(
+                  context,
+                  index: 1,
+                  icon: currentIndex == 1 ? Icons.payments : Icons.payments_outlined,
+                  label: "Payments",
+                ),
               ),
-              _buildNavItem(
-                context,
-                index: 2,
-                icon: currentIndex == 2 ? Icons.receipt_long : Icons.receipt_long_outlined,
-                label: "Receipts",
+              Expanded(
+                child: _buildNavItem(
+                  context,
+                  index: 2,
+                  icon: currentIndex == 2 ? Icons.receipt_long : Icons.receipt_long_outlined,
+                  label: "Receipts",
+                ),
               ),
-              _buildNavItem(
-                context,
-                index: 3,
-                icon: currentIndex == 3 ? Icons.notifications : Icons.notifications_none_outlined,
-                label: "Alerts",
-                showBadge: true,
+              Expanded(
+                child: ValueListenableBuilder<int>(
+                  valueListenable: ApiService.unreadAlertsCount,
+                  builder: (context, unreadCount, _) {
+                    return _buildNavItem(
+                      context,
+                      index: 3,
+                      icon: currentIndex == 3 ? Icons.notifications : Icons.notifications_none_outlined,
+                      label: "Alerts",
+                      showBadge: unreadCount > 0,
+                    );
+                  },
+                ),
               ),
-              _buildNavItem(
-                context,
-                index: 4,
-                icon: currentIndex == 4 ? Icons.person : Icons.person_outline,
-                label: "Profile",
+              Expanded(
+                child: _buildNavItem(
+                  context,
+                  index: 4,
+                  icon: currentIndex == 4 ? Icons.person : Icons.person_outline,
+                  label: "Profile",
+                ),
               ),
             ],
           ),
@@ -104,46 +118,43 @@ class MemberBottomNavBar extends StatelessWidget {
       onTap: () => _onItemTapped(context, index),
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Icon(
-                  icon,
-                  size: 24,
-                  color: color,
-                ),
-                if (showBadge)
-                  Positioned(
-                    top: -1,
-                    right: -2,
-                    child: Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: AppColors.error,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+      child: Column(
+        mainAxisSize: MainAxisSize.max,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Icon(
+                icon,
+                size: 24,
                 color: color,
               ),
+              if (showBadge)
+                Positioned(
+                  top: -1,
+                  right: -2,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: AppColors.error,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 3),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+              color: color,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
