@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../theme/app_theme.dart';
 
+import '../theme/app_theme.dart';
+import '../theme/app_tokens.dart';
+import 'app_buttons.dart';
+
+/// "Nothing here yet" state. Pairs with [AppErrorStateView]: same shape, same
+/// spacing, different meaning — empty is normal, an error is not.
 class EmptyStateView extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -22,59 +26,41 @@ class EmptyStateView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(AppSpacing.xl),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Container(
               width: 72,
               height: 72,
+              alignment: Alignment.center,
               decoration: const BoxDecoration(
                 color: AppColors.primaryLight,
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, size: 36, color: AppColors.primary),
+              child: Icon(icon, size: 34, color: AppColors.primary),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
-              ),
+              style: AppTextStyles.sectionTitle,
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: AppSpacing.sm),
             Text(
               description,
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                fontSize: 13,
+              style: AppTextStyles.body.copyWith(
                 color: AppColors.textSecondary,
-                height: 1.4,
               ),
             ),
             if (actionLabel != null && onAction != null) ...[
-              const SizedBox(height: 20),
-              ElevatedButton(
+              const SizedBox(height: AppSpacing.lg),
+              AppPrimaryButton(
+                label: actionLabel!,
+                expand: false,
+                height: 48,
                 onPressed: onAction,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: Text(
-                  actionLabel!,
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
               ),
             ],
           ],

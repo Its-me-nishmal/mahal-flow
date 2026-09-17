@@ -1,9 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:payu_checkoutpro_flutter/payu_checkoutpro_flutter.dart';
+import 'package:payu_checkoutpro_flutter/PayUConstantKeys.dart';
+
 import '../../../core/network/api_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_tokens.dart';
+import '../../../core/utils/currency_format.dart';
 import '../../../core/widgets/app_bottom_sheet.dart';
+import '../../../core/widgets/app_buttons.dart';
+import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_page_scaffold.dart';
 import '../../../core/widgets/member_bottom_nav_bar.dart';
+import '../../../core/widgets/shimmer_loading.dart';
 
 class DueMonthItem {
   final String monthKey;
@@ -28,14 +36,21 @@ class MonthlyPaymentScreen extends StatefulWidget {
   State<MonthlyPaymentScreen> createState() => _MonthlyPaymentScreenState();
 }
 
-class _MonthlyPaymentScreenState extends State<MonthlyPaymentScreen> {
+class _MonthlyPaymentScreenState extends State<MonthlyPaymentScreen>
+    implements PayUCheckoutProProtocol {
   final ApiService _apiService = ApiService();
+  late final PayUCheckoutProFlutter _checkoutPro;
   bool _isProcessing = false;
+  bool _isLoading = true;
   List<DueMonthItem> _months = [];
+  String? _activeTxnId;
+  List<String> _activeSelectedKeys = [];
+  Map<String, dynamic>? _activePayUData;
 
   @override
   void initState() {
     super.initState();
+    _checkoutPro = PayUCheckoutProFlutter(this);
     _loadUnpaidMonths();
   }
 
@@ -88,13 +103,16 @@ class _MonthlyPaymentScreenState extends State<MonthlyPaymentScreen> {
     if (mounted) {
       setState(() {
         _months = generated;
+        _isLoading = false;
       });
     }
   }
 
-  bool get _isAllSelected => _months.every((m) => m.isSelected);
+  bool get _isAllSelected =>
+      _months.isNotEmpty && _months.every((m) => m.isSelected);
   int get _selectedCount => _months.where((m) => m.isSelected).length;
-  double get _totalAmount => _months.where((m) => m.isSelected).fold(0, (sum, m) => sum + m.amount);
+  double get _totalAmount =>
+      _months.where((m) => m.isSelected).fold(0, (sum, m) => sum + m.amount);
 
   void _toggleSelectAll(bool? val) {
     setState(() {
@@ -112,7 +130,8 @@ class _MonthlyPaymentScreenState extends State<MonthlyPaymentScreen> {
   }
 
   Future<void> _handlePayment() async {
-    final selectedKeys = _months.where((m) => m.isSelected).map((m) => m.monthKey).toList();
+    final selectedKeys =
+        _months.where((m) => m.isSelected).map((m) => m.monthKey).toList();
     if (selectedKeys.isEmpty) return;
 
     setState(() => _isProcessing = true);
@@ -122,86 +141,67 @@ class _MonthlyPaymentScreenState extends State<MonthlyPaymentScreen> {
       memberId: "MEM_001_9910",
       selectedMonths: selectedKeys,
       idempotencyKey: idempKey,
+      gateway: "PAYU",
     );
 
     if (initRes != null && initRes["transaction_id"] != null) {
       final txnId = initRes["transaction_id"] as String;
-      final confirmRes = await _apiService.confirmPayment(txnId);
+      final orderId = initRes["gateway_order_id"] as String? ?? "ORD_$txnId";
 
-      if (mounted) {
-        setState(() => _isProcessing = false);
-        if (confirmRes != null && confirmRes["status"] == "SUCCESS") {
-          final receipt = confirmRes["receipt"] as Map<String, dynamic>?;
-          final receiptNum = receipt?["receipt_number"] ?? "Verified";
+      _activeTxnId = txnId;
+      _activeSelectedKeys = selectedKeys;
 
-          AppBottomSheet.show(
-            context: context,
-            title: "Payment Successful",
-            subtitle: "Issued by MahalFlow Treasury",
-            icon: Icons.check_circle_rounded,
-            isDismissible: false,
-            enableDrag: false,
-            builder: (ctx, _) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryLight,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      children: [
-                        Text("Amount Paid", style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
-                        const SizedBox(height: 4),
-                        Text("₹${_totalAmount.toInt()}", style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.w800, color: AppColors.primary)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text("Receipt Number", style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary)),
-                      Text(receiptNum, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
-                    ],
-                  ),
-                  const Divider(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text("Months Credited", style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary)),
-                      Text(selectedKeys.join(', '), style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.of(ctx).pop();
-                        Navigator.of(context).pushNamedAndRemoveUntil(
-                          '/member/dashboard',
-                          (route) => false,
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        elevation: 0,
-                      ),
-                      child: Text("Return to Dashboard", style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700)),
-                    ),
-                  ),
-                ],
-              );
-            },
+      // Fetch PayU parameters and hash
+      final payUData = await _apiService.getPayUCheckoutData(orderId);
+      _activePayUData = payUData;
+
+      if (payUData != null) {
+        final payUPaymentParams = {
+          PayUPaymentParamKey.key: payUData["key"] ?? "XiiFzG",
+          PayUPaymentParamKey.amount: payUData["amount"]?.toString() ??
+              _totalAmount.toStringAsFixed(2),
+          PayUPaymentParamKey.productInfo: payUData["productinfo"] ?? "Mahal Dues",
+          PayUPaymentParamKey.firstName: payUData["firstname"] ?? "Member",
+          PayUPaymentParamKey.email: payUData["email"] ?? "member@mahalflow.org",
+          PayUPaymentParamKey.phone: payUData["phone"] ?? "+919847111222",
+          PayUPaymentParamKey.ios_surl: payUData["surl"] ??
+              "http://localhost:8080/api/v1/webhooks/pg",
+          PayUPaymentParamKey.ios_furl: payUData["furl"] ??
+              "http://localhost:8080/api/v1/webhooks/pg",
+          PayUPaymentParamKey.android_surl: payUData["surl"] ??
+              "http://localhost:8080/api/v1/webhooks/pg",
+          PayUPaymentParamKey.android_furl: payUData["furl"] ??
+              "http://localhost:8080/api/v1/webhooks/pg",
+          PayUPaymentParamKey.environment: "1", // 1 = TEST, 0 = PRODUCTION
+          PayUPaymentParamKey.transactionId: orderId,
+          PayUPaymentParamKey.userCredential: "MEM_001_9910",
+          PayUPaymentParamKey.additionalParam: {
+            PayUAdditionalParamKeys.udf1: payUData["udf1"] ?? txnId,
+            PayUAdditionalParamKeys.udf2: payUData["udf2"] ?? "MH_001_CALICUT",
+            PayUAdditionalParamKeys.udf3: payUData["udf3"] ?? "MEM_001_9910",
+          },
+        };
+
+        final payUCheckoutProConfig = {
+          PayUCheckoutProConfigKeys.primaryColor: "#146C5B",
+          PayUCheckoutProConfigKeys.secondaryColor: "#ffffff",
+          PayUCheckoutProConfigKeys.merchantName: "MahalFlow Treasury",
+          PayUCheckoutProConfigKeys.showExitConfirmationOnCheckoutScreen: false,
+          PayUCheckoutProConfigKeys.showExitConfirmationOnPaymentScreen: false,
+          PayUCheckoutProConfigKeys.upiAppsOrder: "gpay|phonepe|paytm",
+          PayUCheckoutProConfigKeys.enforcePaymentList: [
+            {"payment_type": "UPI", "payment_option": "INTENT"},
+          ],
+        };
+
+        try {
+          _checkoutPro.openCheckoutScreen(
+            payUPaymentParams: payUPaymentParams,
+            payUCheckoutProConfig: payUCheckoutProConfig,
           );
           return;
+        } catch (e) {
+          debugPrint("[PAYU_SDK_ERROR] Failed to open native checkout: $e");
         }
       }
     }
@@ -209,398 +209,440 @@ class _MonthlyPaymentScreenState extends State<MonthlyPaymentScreen> {
     if (mounted) {
       setState(() => _isProcessing = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Payment completed successfully!")),
+        const SnackBar(content: Text("Couldn't open the payment screen. Try again.")),
       );
-      Navigator.of(context).pushNamedAndRemoveUntil(
-        '/member/dashboard',
-        (route) => false,
+    }
+  }
+
+  // --- PayUCheckoutProProtocol Implementation ---
+
+  @override
+  void generateHash(Map response) async {
+    // PayU native SDK queries hash during payment lifecycle
+    final hashName = response[PayUHashConstantsKeys.hashName]?.toString() ?? "";
+    final hashString =
+        response[PayUHashConstantsKeys.hashString]?.toString() ?? "";
+    final hashType = response[PayUHashConstantsKeys.hashType]?.toString();
+    final postSalt = response[PayUHashConstantsKeys.postSalt]?.toString();
+    debugPrint(
+        "[PAYU_HASH_REQ] Requesting hash: $hashName, string: $hashString, type: $hashType");
+
+    if (hashString.isNotEmpty) {
+      try {
+        final generated = await _apiService.generatePayUHash(
+          hashName: hashName,
+          hashString: hashString,
+          hashType: hashType,
+          postSalt: postSalt,
+        );
+        if (generated != null && generated.isNotEmpty) {
+          debugPrint("[PAYU_HASH_SUCCESS] Generated $hashName: $generated");
+          _checkoutPro.hashGenerated(hash: {hashName: generated});
+          return;
+        }
+      } catch (e) {
+        debugPrint("[PAYU_HASH_ERROR] Error generating hash for $hashName: $e");
+      }
+    }
+
+    // Fallback if hash calculation fails or primary hash present
+    if (_activePayUData != null &&
+        _activePayUData!["hash"] != null &&
+        hashName == "payment_hash") {
+      final hash = _activePayUData!["hash"].toString();
+      _checkoutPro.hashGenerated(hash: {hashName: hash});
+    } else {
+      _checkoutPro.hashGenerated(hash: {});
+    }
+  }
+
+  @override
+  void onPaymentSuccess(dynamic response) async {
+    debugPrint("[PAYU_NATIVE_SUCCESS] $response");
+    if (_activeTxnId != null) {
+      final confirmRes = await _apiService.confirmPayment(_activeTxnId!);
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        if (confirmRes != null && confirmRes["status"] == "SUCCESS") {
+          final receipt = confirmRes["receipt"] as Map<String, dynamic>?;
+          final receiptNum = receipt?["receipt_number"] ?? "Verified";
+          _showSuccessSheet(receiptNum);
+          return;
+        }
+      }
+    }
+    if (mounted) {
+      setState(() => _isProcessing = false);
+    }
+  }
+
+  @override
+  void onPaymentFailure(dynamic response) {
+    debugPrint("[PAYU_NATIVE_FAILURE] $response");
+    if (mounted) {
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Payment failed or was cancelled.")),
       );
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        elevation: 0,
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.primary),
-          onPressed: () {
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            } else {
-              Navigator.of(context).pushReplacementNamed('/member/dashboard');
-            }
-          },
-        ),
-        title: Text(
-          "Monthly Dues",
-          style: GoogleFonts.inter(
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: AppColors.primary,
+  void onPaymentCancel(Map? response) {
+    debugPrint("[PAYU_NATIVE_CANCEL] $response");
+    if (mounted) {
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Payment was cancelled.")),
+      );
+    }
+  }
+
+  @override
+  void onError(Map? response) {
+    debugPrint("[PAYU_NATIVE_ERROR] $response");
+    if (mounted) {
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Payment error: ${response?['errorMessage'] ?? 'Unknown error'}",
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.help_outline, color: AppColors.primary),
-            onPressed: () {},
-          ),
-        ],
-        shape: const Border(
-          bottom: BorderSide(color: AppColors.border, width: 1),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      );
+    }
+  }
+
+  void _showSuccessSheet(String receiptNum) {
+    AppBottomSheet.show(
+      context: context,
+      title: "Payment successful",
+      subtitle: "Issued by MahalFlow Treasury",
+      icon: Icons.check_circle_rounded,
+      isDismissible: false,
+      enableDrag: false,
+      builder: (ctx, _) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              "Select the months you wish to pay for.",
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            // Special Contribution Quick Banner (Top of upcoming/unpaid months)
-            InkWell(
-              onTap: () => Navigator.of(context).pushNamed('/member/contribution'),
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFDF0ED),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE05638).withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE05638).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.volunteer_activism, color: Color(0xFFE05638), size: 20),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Make a Special Contribution",
-                            style: GoogleFonts.inter(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: const Color(0xFFE05638),
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            "Donate to Zakat, Masjid, or General Fund",
-                            style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Icon(Icons.arrow_forward_ios, size: 14, color: Color(0xFFE05638)),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Bento Container for Unpaid / Upcoming Months
             Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
               decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color.fromRGBO(23, 32, 29, 0.04),
-                    blurRadius: 8,
-                    offset: Offset(0, 2),
-                  ),
-                ],
+                color: AppColors.successBg,
+                borderRadius: BorderRadius.circular(AppRadius.card),
               ),
               child: Column(
                 children: [
-                  // Header
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFF7FAF7),
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-                      border: Border(
-                        bottom: BorderSide(color: AppColors.border),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          "Unpaid Months",
-                          style: GoogleFonts.inter(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        Row(
-                          children: [
-                            Text(
-                              "Select All",
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Checkbox(
-                              value: _isAllSelected,
-                              activeColor: AppColors.primary,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              onChanged: _toggleSelectAll,
-                            ),
-                          ],
-                        ),
-                      ],
+                  Text('AMOUNT PAID', style: AppTextStyles.label),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    Inr.format(_totalAmount),
+                    style: AppTextStyles.amount.copyWith(
+                      fontSize: 30,
+                      color: AppColors.success,
                     ),
                   ),
-
-                  // Month Items
-                  ...List.generate(_months.length, (index) {
-                    final item = _months[index];
-                    final isLast = index == _months.length - 1;
-
-                    return Container(
-                      decoration: BoxDecoration(
-                        border: isLast
-                            ? null
-                            : const Border(
-                                bottom: BorderSide(color: AppColors.border),
-                              ),
-                      ),
-                      child: InkWell(
-                        onTap: () => _toggleMonth(index, !item.isSelected),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                          child: Row(
-                            children: [
-                              Checkbox(
-                                value: item.isSelected,
-                                activeColor: AppColors.primary,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                onChanged: (v) => _toggleMonth(index, v),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      item.displayName,
-                                      style: GoogleFonts.inter(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.textPrimary,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    _buildStatusChip(item.status),
-                                  ],
-                                ),
-                              ),
-                              Text(
-                                "₹${item.amount.toInt()}",
-                                style: GoogleFonts.inter(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          border: Border(
-            top: BorderSide(color: AppColors.border),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Color.fromRGBO(23, 32, 29, 0.05),
-              blurRadius: 12,
-              offset: Offset(0, -4),
+            const SizedBox(height: AppSpacing.md),
+            AppDetailRow(label: 'Receipt number', value: receiptNum.toString()),
+            const Divider(height: 1, color: AppColors.border),
+            AppDetailRow(
+              label: 'Months credited',
+              value: _activeSelectedKeys.join(', '),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            AppPrimaryButton(
+              label: 'Back to Home',
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                Navigator.of(context).pushNamedAndRemoveUntil(
+                  '/member/dashboard',
+                  (route) => false,
+                );
+              },
             ),
           ],
-        ),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "Selected ($_selectedCount months)",
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              "₹${_totalAmount.toInt()}",
-                              style: GoogleFonts.inter(
-                                fontSize: 28,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              "Processing Fee",
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              "₹0",
-                              style: GoogleFonts.inter(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton.icon(
-                      onPressed: (_selectedCount == 0 || _isProcessing) ? null : _handlePayment,
-                      icon: _isProcessing
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                            )
-                          : const Icon(Icons.lock, size: 18),
-                      label: Text(_isProcessing ? "Processing Payment..." : "Pay ₹${_totalAmount.toInt()}"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size.fromHeight(48),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        textStyle: GoogleFonts.inter(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const MemberBottomNavBar(currentIndex: 1),
-            ],
-          ),
-        ),
+        );
+      },
+    );
+  }
+
+  void _showHelp() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Dues are ₹500 per month. Contact the office for changes.'),
+        duration: Duration(seconds: 3),
       ),
     );
   }
 
-  Widget _buildStatusChip(String status) {
+  @override
+  Widget build(BuildContext context) {
+    return AppPageScaffold(
+      title: 'Monthly Dues',
+      eyebrow: 'Payments',
+      subtitle: 'Choose the months you want to clear.',
+      onBack: () {
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        } else {
+          Navigator.of(context).pushReplacementNamed('/member/dashboard');
+        }
+      },
+      actions: [
+        AppHeaderIconButton(
+          icon: Icons.help_outline_rounded,
+          tooltip: 'Help',
+          onTap: _showHelp,
+        ),
+      ],
+      floatingChild: _summaryCard(),
+      content: [
+        const SizedBox(height: AppSpacing.md),
+        if (_isLoading) _skeleton() else _monthsCard(),
+        const SizedBox(height: AppSpacing.md),
+        AppNoticeCard(
+          icon: Icons.volunteer_activism_outlined,
+          title: 'Make a contribution',
+          message: 'Zakat, Masjid or the general fund.',
+          color: AppColors.warning,
+          background: AppColors.warningBg,
+          actionLabel: 'Open',
+          onAction: () =>
+              Navigator.of(context).pushNamed('/member/contribution'),
+        ),
+      ],
+      bottomBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AppBottomActionBar(
+            applySafeArea: false,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _selectedCount == 1
+                              ? '1 month selected'
+                              : '$_selectedCount months selected',
+                          style: AppTextStyles.small,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          Inr.format(_totalAmount),
+                          style: AppTextStyles.sectionTitle.copyWith(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.6,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    'No processing fee',
+                    style: AppTextStyles.small.copyWith(
+                      color: AppColors.success,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.ms),
+              AppPrimaryButton(
+                label: _isProcessing
+                    ? 'Processing…'
+                    : 'Pay ${Inr.format(_totalAmount)}',
+                icon: Icons.lock_rounded,
+                isLoading: _isProcessing,
+                onPressed: _selectedCount == 0 ? null : _handlePayment,
+              ),
+            ],
+          ),
+          const MemberBottomNavBar(currentIndex: 1),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryCard() {
+    return AppCard.floating(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text('TOTAL SELECTED', style: AppTextStyles.label)),
+              if (_selectedCount > 0)
+                StatusPill(
+                  label: _selectedCount == 1
+                      ? '1 month'
+                      : '$_selectedCount months',
+                  foreground: AppColors.primary,
+                  background: AppColors.primaryLight,
+                  icon: Icons.event_available_rounded,
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.ms),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              Inr.format(_totalAmount),
+              semanticsLabel: 'Total ${Inr.spoken(_totalAmount)}',
+              style: AppTextStyles.amount.copyWith(color: AppColors.primary),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            _selectedCount == 0
+                ? 'Select at least one month below to continue.'
+                : 'Dues are ₹500 per month. Paying ahead is credited forward.',
+            style: AppTextStyles.body.copyWith(color: AppColors.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _monthsCard() {
+    return AppCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md,
+              AppSpacing.ms + 2,
+              AppSpacing.sm,
+              AppSpacing.ms - 2,
+            ),
+            child: Row(
+              children: [
+                Expanded(child: Text('UNPAID MONTHS', style: AppTextStyles.label)),
+                Text('Select all', style: AppTextStyles.small),
+                Checkbox(
+                  value: _isAllSelected,
+                  activeColor: AppColors.primary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppSpacing.xs + 1),
+                  ),
+                  onChanged: _toggleSelectAll,
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: AppColors.border),
+          ...List.generate(_months.length, (index) {
+            final item = _months[index];
+            final isLast = index == _months.length - 1;
+
+            return DecoratedBox(
+              decoration: BoxDecoration(
+                border: isLast
+                    ? null
+                    : const Border(
+                        bottom: BorderSide(color: AppColors.border),
+                      ),
+              ),
+              child: InkWell(
+                onTap: () => _toggleMonth(index, !item.isSelected),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.sm,
+                    AppSpacing.sm,
+                    AppSpacing.md,
+                    AppSpacing.sm,
+                  ),
+                  child: Row(
+                    children: [
+                      Checkbox(
+                        value: item.isSelected,
+                        activeColor: AppColors.primary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppSpacing.xs + 1),
+                        ),
+                        onChanged: (v) => _toggleMonth(index, v),
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.displayName,
+                              style: AppTextStyles.cardTitle.copyWith(
+                                fontSize: 15,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.xs + 1),
+                            _statusPill(item.status),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        Inr.format(item.amount),
+                        style: AppTextStyles.cardTitle.copyWith(fontSize: 16),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _statusPill(String status) {
     switch (status) {
-      case "OVERDUE":
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error, size: 12, color: AppColors.error),
-            const SizedBox(width: 4),
-            Text(
-              "Overdue",
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppColors.error,
-              ),
-            ),
-          ],
+      case 'OVERDUE':
+        return const StatusPill(
+          label: 'Overdue',
+          foreground: AppColors.error,
+          background: AppColors.errorBg,
+          icon: Icons.error_outline_rounded,
         );
-      case "DUE_NOW":
-      case "DUE_SOON":
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.warning, size: 12, color: AppColors.warning),
-            const SizedBox(width: 4),
-            Text(
-              "Due Now",
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppColors.warning,
-              ),
-            ),
-          ],
+      case 'DUE_NOW':
+      case 'DUE_SOON':
+        return const StatusPill(
+          label: 'Due now',
+          foreground: AppColors.warning,
+          background: AppColors.warningBg,
+          icon: Icons.schedule_rounded,
         );
       default:
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.schedule, size: 12, color: AppColors.textSecondary),
-            const SizedBox(width: 4),
-            Text(
-              "Upcoming",
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
+        return const StatusPill(
+          label: 'Upcoming',
+          foreground: AppColors.textSecondary,
+          background: AppColors.neutralBg,
+          icon: Icons.event_outlined,
         );
     }
+  }
+
+  Widget _skeleton() {
+    return ShimmerLoading(
+      child: Column(
+        children: [
+          Container(
+            height: 230,
+            decoration: BoxDecoration(
+              color: AppColors.border.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(AppRadius.card),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

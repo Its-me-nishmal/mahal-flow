@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../../../core/theme/app_theme.dart';
+import 'package:flutter/services.dart';
+
+import '../../../core/theme/app_tokens.dart';
+import '../../../core/widgets/app_buttons.dart';
+import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_page_scaffold.dart';
+import '../../../core/widgets/app_text_field.dart';
 
 class EditPersonalDetailsScreen extends StatefulWidget {
   final String name;
@@ -32,19 +37,21 @@ class EditPersonalDetailsScreen extends StatefulWidget {
 class _EditPersonalDetailsScreenState extends State<EditPersonalDetailsScreen> {
   late TextEditingController _nameController;
   late TextEditingController _emailController;
-  late TextEditingController _phoneController;
   late TextEditingController _address1Controller;
   late TextEditingController _address2Controller;
   late TextEditingController _cityController;
   late TextEditingController _stateController;
   late TextEditingController _pincodeController;
 
+  String? _nameError;
+  String? _emailError;
+
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.name);
+    _nameController = TextEditingController(text: widget.name)
+      ..addListener(() => setState(() {}));
     _emailController = TextEditingController(text: widget.email);
-    _phoneController = TextEditingController(text: widget.phone);
     _address1Controller = TextEditingController(text: widget.address1);
     _address2Controller = TextEditingController(text: widget.address2);
     _cityController = TextEditingController(text: widget.city);
@@ -56,7 +63,6 @@ class _EditPersonalDetailsScreenState extends State<EditPersonalDetailsScreen> {
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
-    _phoneController.dispose();
     _address1Controller.dispose();
     _address2Controller.dispose();
     _cityController.dispose();
@@ -67,17 +73,23 @@ class _EditPersonalDetailsScreenState extends State<EditPersonalDetailsScreen> {
 
   void _saveChanges() {
     final updatedName = _nameController.text.trim();
-    if (updatedName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid name')),
-      );
-      return;
-    }
+    final email = _emailController.text.trim();
+
+    setState(() {
+      _nameError = updatedName.isEmpty ? 'Your name cannot be empty' : null;
+      // An empty email is allowed; a malformed one is not, because the
+      // committee uses it to send receipts.
+      _emailError = email.isNotEmpty && !email.contains('@')
+          ? 'That does not look like an email address'
+          : null;
+    });
+
+    if (_nameError != null || _emailError != null) return;
 
     Navigator.pop(context, {
       'name': updatedName,
-      'email': _emailController.text.trim(),
-      'phone': _phoneController.text.trim(),
+      'email': email,
+      'phone': widget.phone,
       'address1': _address1Controller.text.trim(),
       'address2': _address2Controller.text.trim(),
       'city': _cityController.text.trim(),
@@ -88,179 +100,140 @@ class _EditPersonalDetailsScreenState extends State<EditPersonalDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          'Edit Profile',
-          style: GoogleFonts.inter(
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
-            color: AppColors.primary,
-          ),
-        ),
-        shape: const Border(
-          bottom: BorderSide(color: AppColors.border, width: 1),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            _buildAvatar(),
-            const SizedBox(height: 24),
-            _buildField('Full Name', _nameController),
-            const SizedBox(height: 16),
-            _buildField('Email', _emailController),
-            const SizedBox(height: 16),
-            _buildField('Phone', _phoneController, enabled: false),
-            const SizedBox(height: 16),
-            _buildField('Address Line 1', _address1Controller),
-            const SizedBox(height: 16),
-            _buildField('Address Line 2', _address2Controller),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(child: _buildField('City', _cityController)),
-                const SizedBox(width: 12),
-                Expanded(child: _buildField('State', _stateController)),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _buildField('PIN Code', _pincodeController),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                onPressed: _saveChanges,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: Text(
-                  'Save Changes',
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAvatar() {
-    final initial = _nameController.text.isNotEmpty
-        ? _nameController.text[0].toUpperCase()
+    final initial = _nameController.text.trim().isNotEmpty
+        ? _nameController.text.trim()[0].toUpperCase()
         : 'M';
-    return Center(
-      child: Stack(
-        clipBehavior: Clip.none,
+
+    return AppPageScaffold(
+      title: 'Edit details',
+      eyebrow: 'Profile',
+      subtitle: 'Keep your contact details current so receipts reach you.',
+      headerChild: Row(
         children: [
           Container(
-            width: 104,
-            height: 104,
+            width: 58,
+            height: 58,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.16),
               shape: BoxShape.circle,
-              border: Border.all(color: AppColors.surface, width: 4),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.3),
+                width: 2,
+              ),
             ),
-            child: CircleAvatar(
-              radius: 48,
-              backgroundColor: AppColors.primaryLight,
-              child: Text(
-                initial,
-                style: GoogleFonts.inter(
-                  fontSize: 36,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.primary,
-                ),
+            child: Text(
+              initial,
+              style: AppTextStyles.display.copyWith(
+                color: Colors.white,
+                fontSize: 24,
               ),
             ),
           ),
-          Positioned(
-            bottom: 0,
-            right: 0,
-            child: Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                shape: BoxShape.circle,
-                border: Border.all(color: AppColors.surface, width: 2),
-              ),
-              child: const Icon(
-                Icons.camera_alt,
-                size: 18,
-                color: Colors.white,
+          const SizedBox(width: AppSpacing.ms),
+          Expanded(
+            child: Text(
+              'Your mobile number and member ID are managed by the committee.',
+              style: AppTextStyles.small.copyWith(
+                color: Colors.white.withValues(alpha: 0.74),
               ),
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildField(String label, TextEditingController controller,
-      {bool enabled = true}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textSecondary,
-          ),
+      floatingChild: AppCard.floating(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const AppSectionLabel('Personal'),
+            const SizedBox(height: AppSpacing.md),
+            AppTextField(
+              controller: _nameController,
+              label: 'Full name',
+              icon: Icons.person_outline_rounded,
+              errorText: _nameError,
+              textCapitalization: TextCapitalization.words,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            AppTextField(
+              controller: _emailController,
+              label: 'Email',
+              hint: 'you@example.com',
+              icon: Icons.mail_outline_rounded,
+              keyboardType: TextInputType.emailAddress,
+              errorText: _emailError,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            AppReadOnlyField(
+              label: 'Mobile number',
+              value: widget.phone,
+              icon: Icons.phone_iphone_rounded,
+              note: 'Contact the Mahal office to change this.',
+            ),
+          ],
         ),
-        const SizedBox(height: 6),
-        TextField(
-          controller: controller,
-          enabled: enabled,
-          style: GoogleFonts.inter(
-            fontSize: 14,
-            color: enabled ? AppColors.textPrimary : AppColors.textMuted,
-          ),
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: enabled ? AppColors.surface : AppColors.background,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 14,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            disabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-            ),
+      ),
+      content: [
+        const SizedBox(height: AppSpacing.md),
+        AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const AppSectionLabel('Address'),
+              const SizedBox(height: AppSpacing.md),
+              AppTextField(
+                controller: _address1Controller,
+                label: 'House name or number',
+                icon: Icons.home_outlined,
+                textCapitalization: TextCapitalization.words,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              AppTextField(
+                controller: _address2Controller,
+                label: 'Street or landmark (optional)',
+                textCapitalization: TextCapitalization.words,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Row(
+                children: [
+                  Expanded(
+                    child: AppTextField(
+                      controller: _cityController,
+                      label: 'City',
+                      textCapitalization: TextCapitalization.words,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.ms),
+                  Expanded(
+                    child: AppTextField(
+                      controller: _stateController,
+                      label: 'State',
+                      textCapitalization: TextCapitalization.words,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              AppTextField(
+                controller: _pincodeController,
+                label: 'PIN code',
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              ),
+            ],
           ),
         ),
       ],
+      bottomBar: AppBottomActionBar(
+        children: [
+          AppPrimaryButton(
+            label: 'Save Changes',
+            icon: Icons.check_rounded,
+            onPressed: _saveChanges,
+          ),
+        ],
+      ),
     );
   }
 }

@@ -18,6 +18,9 @@ dependencies:
   cached_network_image: ^3.3.1
   path_provider: ^2.1.3
   open_filex: ^4.5.0
+  url_launcher: ^6.3.2
+  webview_flutter: ^4.14.1
+  payu_checkoutpro_flutter: ^1.4.5
 
 dev_dependencies:
   flutter_test:

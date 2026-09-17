@@ -1,12 +1,20 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../../core/utils/pdf_generator.dart';
+import 'package:path_provider/path_provider.dart';
 
+import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_tokens.dart';
+import '../../../core/utils/pdf_generator.dart';
+import '../../../core/widgets/app_bottom_sheet.dart';
+import '../../../core/widgets/app_buttons.dart';
+import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_page_scaffold.dart';
+
+/// The proof of a payment. Styled as a ticket — a floating card with a dashed
+/// tear line — so it reads as a document, not another app screen.
 class ReceiptDetailsScreen extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -29,13 +37,11 @@ class ReceiptDetailsScreen extends StatelessWidget {
     this.paymentMethod = "UPI",
   });
 
-  Future<void> _downloadAndOpenReceipt(BuildContext context) async {
-    try {
-      final tempDir = await getTemporaryDirectory();
-      final sanitizedName = receiptNumber.replaceAll(RegExp(r'[^\w\-]'), '_');
-      final file = File('${tempDir.path}/Receipt_$sanitizedName.pdf');
+  bool get _isSuccess => status.toUpperCase() == 'SUCCESS';
 
-      final pdfBytes = SimplePdfGenerator.generateReceiptPdf(
+  String get _fileSafeNumber => receiptNumber.replaceAll(RegExp(r'[^\w\-]'), '_');
+
+  List<int> _pdfBytes() => SimplePdfGenerator.generateReceiptPdf(
         receiptNumber: receiptNumber,
         memberName: memberName,
         amount: amount,
@@ -46,13 +52,17 @@ class ReceiptDetailsScreen extends StatelessWidget {
         status: status,
       );
 
-      await file.writeAsBytes(pdfBytes);
+  Future<void> _downloadAndOpenReceipt(BuildContext context) async {
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/Receipt_$_fileSafeNumber.pdf');
+      await file.writeAsBytes(_pdfBytes());
       await OpenFilex.open(file.path);
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("PDF Receipt downloaded: Receipt_$sanitizedName.pdf"),
+            content: Text('Saved Receipt_$_fileSafeNumber.pdf'),
             backgroundColor: AppColors.primary,
           ),
         );
@@ -60,33 +70,13 @@ class ReceiptDetailsScreen extends StatelessWidget {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error generating PDF receipt: $e")),
+          SnackBar(content: Text("Couldn't generate the PDF: $e")),
         );
       }
     }
   }
 
-  Future<void> _shareReceipt(BuildContext context) async {
-    final sanitizedName = receiptNumber.replaceAll(RegExp(r'[^\w\-]'), '_');
-    File? pdfFile;
-
-    try {
-      final tempDir = await getTemporaryDirectory();
-      pdfFile = File('${tempDir.path}/Receipt_$sanitizedName.pdf');
-      final pdfBytes = SimplePdfGenerator.generateReceiptPdf(
-        receiptNumber: receiptNumber,
-        memberName: memberName,
-        amount: amount,
-        paymentType: title,
-        subtitle: subtitle,
-        date: date,
-        paymentMethod: paymentMethod,
-        status: status,
-      );
-      await pdfFile.writeAsBytes(pdfBytes);
-    } catch (_) {}
-
-    final shareText = '''
+  String get _shareText => '''
 🕌 *MahalFlow Official Payment Receipt*
 ━━━━━━━━━━━━━━━━━━━━
 🧾 *Receipt No:* `$receiptNumber`
@@ -100,345 +90,257 @@ class ReceiptDetailsScreen extends StatelessWidget {
 *MahalFlow Financial Integrity*
 ''';
 
-    await Clipboard.setData(ClipboardData(text: shareText));
+  Future<void> _shareReceipt(BuildContext context) async {
+    File? pdfFile;
+    try {
+      final tempDir = await getTemporaryDirectory();
+      pdfFile = File('${tempDir.path}/Receipt_$_fileSafeNumber.pdf');
+      await pdfFile.writeAsBytes(_pdfBytes());
+    } catch (_) {
+      // Sharing the text still works without the attachment.
+    }
 
+    await Clipboard.setData(ClipboardData(text: _shareText));
     if (!context.mounted) return;
 
-    showModalBottomSheet(
+    AppBottomSheet.show(
       context: context,
-      backgroundColor: AppColors.surface,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      title: 'Share this receipt',
+      subtitle: 'The summary is already on your clipboard',
+      icon: Icons.ios_share_rounded,
+      builder: (ctx, _) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.ms),
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(AppRadius.button),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.share, color: AppColors.primary, size: 24),
-                const SizedBox(width: 10),
+                Row(
+                  children: [
+                    const Icon(Icons.picture_as_pdf_rounded,
+                        size: 16, color: AppColors.error),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        'Receipt_$_fileSafeNumber.pdf',
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.small.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
                 Text(
-                  "Share Receipt (PDF & Text)",
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 18),
+                  _shareText.trim(),
+                  style: AppTextStyles.small.copyWith(height: 1.5),
                 ),
               ],
             ),
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.picture_as_pdf, size: 16, color: Color(0xFFC93B3B)),
-                      const SizedBox(width: 6),
-                      Text(
-                        "Receipt_$sanitizedName.pdf",
-                        style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    shareText,
-                    style: GoogleFonts.inter(fontSize: 12, height: 1.4, color: AppColors.textPrimary),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      Clipboard.setData(ClipboardData(text: shareText));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Receipt text copied to clipboard!")),
-                      );
-                    },
-                    icon: const Icon(Icons.copy, size: 16, color: AppColors.primary),
-                    label: const Text("Copy Text"),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppColors.primary),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      if (pdfFile != null) {
-                        OpenFilex.open(pdfFile.path);
-                      }
-                      Navigator.of(ctx).pop();
-                    },
-                    icon: const Icon(Icons.open_in_new, size: 16, color: Colors.white),
-                    label: const Text("Share PDF"),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.primary),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(
-          "Receipt",
-          style: GoogleFonts.inter(
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
-            color: AppColors.primary,
           ),
-        ),
-        shape: const Border(
-          bottom: BorderSide(color: AppColors.border, width: 1),
-        ),
+        ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Column(
-          children: [
-            // Receipt Card
-            Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.border),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color.fromRGBO(23, 32, 29, 0.04),
-                    blurRadius: 16,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  const SizedBox(height: 28),
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFEAF7EF),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.check_circle_outline,
-                      color: Color(0xFF16834B),
-                      size: 32,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    status == "SUCCESS" ? "Payment Successful" : "Payment $status",
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    amount,
-                    style: GoogleFonts.inter(
-                      fontSize: 34,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    date,
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  _buildDashedDivider(),
-                  const SizedBox(height: 20),
-
-                  // Detail Rows
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Column(
-                      children: [
-                        _buildRow("Receipt Number", receiptNumber, isBold: true),
-                        const SizedBox(height: 14),
-                        _buildRow("Member Name", memberName),
-                        const SizedBox(height: 14),
-                        _buildRow("Payment Type", title),
-                        const SizedBox(height: 14),
-                        _buildRow("Months Covered", subtitle),
-                        const SizedBox(height: 14),
-                        _buildRow("Payment Method", paymentMethod),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  _buildDashedDivider(),
-                  const SizedBox(height: 20),
-
-                  Text(
-                    "MahalFlow",
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 28),
-                    child: Text(
-                      "Thank you for your contribution.\nThis is a computer-generated receipt.",
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: AppColors.textMuted,
-                        height: 1.4,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Action Buttons
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton.icon(
-                onPressed: () => _downloadAndOpenReceipt(context),
-                icon: const Icon(Icons.download, size: 18),
-                label: Text(
-                  "Download PDF Receipt",
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: OutlinedButton.icon(
-                onPressed: () => _shareReceipt(context),
-                icon: const Icon(Icons.share_outlined, size: 18, color: AppColors.primary),
-                label: Text(
-                  "Share Receipt",
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.primary,
-                  ),
-                ),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: AppColors.primary),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-            ),
-          ],
+      actions: [
+        AppSecondaryButton(
+          label: 'Copy text',
+          icon: Icons.copy_rounded,
+          height: 46,
+          onPressed: () {
+            Clipboard.setData(ClipboardData(text: _shareText));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Receipt copied to clipboard')),
+            );
+          },
         ),
-      ),
-    );
-  }
-
-  Widget _buildRow(String label, String value, {bool isBold = false}) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            color: AppColors.textSecondary,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Flexible(
-          child: Text(
-            value,
-            textAlign: TextAlign.end,
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
-              color: AppColors.textPrimary,
-            ),
-          ),
+        const SizedBox(width: AppSpacing.ms),
+        AppPrimaryButton(
+          label: 'Open PDF',
+          icon: Icons.open_in_new_rounded,
+          height: 46,
+          onPressed: () {
+            if (pdfFile != null) OpenFilex.open(pdfFile.path);
+            Navigator.of(context).pop();
+          },
         ),
       ],
     );
   }
 
-  Widget _buildDashedDivider() {
+  @override
+  Widget build(BuildContext context) {
+    return AppPageScaffold(
+      title: 'Receipt',
+      eyebrow: title,
+      floatingChild: _receiptCard(context),
+      content: const [
+        SizedBox(height: AppSpacing.md),
+        AppNoticeCard(
+          icon: Icons.verified_user_outlined,
+          title: 'Verified record',
+          message: 'Signed by MahalFlow Treasury. Safe to share.',
+          color: AppColors.success,
+          background: AppColors.successBg,
+        ),
+      ],
+      bottomBar: AppBottomActionBar(
+        children: [
+          AppPrimaryButton(
+            label: 'Download PDF',
+            icon: Icons.download_rounded,
+            onPressed: () => _downloadAndOpenReceipt(context),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AppSecondaryButton(
+            label: 'Share Receipt',
+            icon: Icons.ios_share_rounded,
+            onPressed: () => _shareReceipt(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _receiptCard(BuildContext context) {
+    return AppCard.floating(
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.lg,
+              AppSpacing.lg,
+              AppSpacing.md,
+            ),
+            child: Column(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: _isSuccess ? AppColors.successBg : AppColors.warningBg,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    _isSuccess
+                        ? Icons.check_rounded
+                        : Icons.schedule_rounded,
+                    size: 30,
+                    color: _isSuccess ? AppColors.success : AppColors.warning,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.ms),
+                Text(
+                  _isSuccess ? 'Payment successful' : 'Payment $status',
+                  style: AppTextStyles.body.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(amount, style: AppTextStyles.amount),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(date, style: AppTextStyles.small),
+              ],
+            ),
+          ),
+          const _DashedLine(),
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.sm,
+            ),
+            child: Column(
+              children: [
+                AppDetailRow(
+                  label: 'Receipt number',
+                  value: receiptNumber,
+                  emphasize: true,
+                  copyable: true,
+                  onCopy: () {
+                    Clipboard.setData(ClipboardData(text: receiptNumber));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Receipt number copied'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                ),
+                AppDetailRow(label: 'Member', value: memberName),
+                AppDetailRow(label: 'Payment type', value: title),
+                AppDetailRow(label: 'Covers', value: subtitle),
+                AppDetailRow(label: 'Paid via', value: paymentMethod),
+              ],
+            ),
+          ),
+          const _DashedLine(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.md,
+              AppSpacing.lg,
+              AppSpacing.lg,
+            ),
+            child: Column(
+              children: [
+                Text(
+                  'MahalFlow',
+                  style: AppTextStyles.cardTitle.copyWith(
+                    color: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  'Computer-generated receipt. No signature required.',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.small.copyWith(
+                    color: AppColors.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Tear line across the receipt card.
+class _DashedLine extends StatelessWidget {
+  const _DashedLine();
+
+  @override
+  Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         const dashWidth = 5.0;
         const dashSpace = 4.0;
-        final dashCount = (constraints.constrainWidth() / (dashWidth + dashSpace)).floor();
+        final count =
+            (constraints.constrainWidth() / (dashWidth + dashSpace)).floor();
         return Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(dashCount, (_) {
-            return Container(
+          children: List.generate(
+            count,
+            (_) => Container(
               width: dashWidth,
               height: 1,
-              margin: const EdgeInsets.symmetric(horizontal: 2),
+              margin: const EdgeInsets.symmetric(horizontal: dashSpace / 2),
               color: AppColors.border,
-            );
-          }),
+            ),
+          ),
         );
       },
     );

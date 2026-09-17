@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../../../core/theme/app_theme.dart';
-import 'login_screen.dart';
+import 'package:flutter/services.dart';
 
+import '../../../core/storage/app_prefs.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_tokens.dart';
+import '../../../core/widgets/app_buttons.dart';
+
+/// First-run welcome. Shown once: both Skip and Get Started record the flag
+/// before leaving, so a returning member goes straight from splash to sign in.
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -14,30 +19,39 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
-  final List<_OnboardingPage> _pages = const [
-    _OnboardingPage(
-      icon: Icons.account_balance_wallet,
-      iconBg: AppColors.infoBg,
-      iconColor: AppColors.info,
-      title: "Financial Clarity",
+  static const List<_WelcomeSlide> _slides = [
+    _WelcomeSlide(
+      icon: Icons.account_balance_wallet_outlined,
+      title: 'Know exactly what you owe',
       description:
-          "Easily track your dues, contributions, and outstanding balances in one unified dashboard.",
+          'Your monthly dues, pending months and advance credit — all on one '
+          'screen, updated the moment a payment clears.',
+      highlights: [
+        'Outstanding balance at a glance',
+        'Month-by-month breakdown',
+      ],
     ),
-    _OnboardingPage(
-      icon: Icons.groups,
-      iconBg: AppColors.successBg,
-      iconColor: AppColors.success,
-      title: "Community Growth",
+    _WelcomeSlide(
+      icon: Icons.volunteer_activism_outlined,
+      title: 'Give in a few taps',
       description:
-          "See how your contributions directly support the Mahal and foster community development.",
+          'Pay dues or contribute to the Mahal fund with UPI, cards or net '
+          'banking. AutoPay can handle the monthly dues for you.',
+      highlights: [
+        'UPI, card and net banking',
+        'Optional AutoPay mandate',
+      ],
     ),
-    _OnboardingPage(
-      icon: Icons.verified_user,
-      iconBg: AppColors.warningBg,
-      iconColor: AppColors.warning,
-      title: "Secure Payments",
+    _WelcomeSlide(
+      icon: Icons.verified_outlined,
+      title: 'Every payment has a receipt',
       description:
-          "Experience trusted, reliable, and secure transactions for all your financial commitments.",
+          'Each transaction produces a receipt you can verify, download and '
+          'share — so the committee and you always see the same record.',
+      highlights: [
+        'Cryptographically verifiable',
+        'Download as PDF anytime',
+      ],
     ),
   ];
 
@@ -47,109 +61,171 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     super.dispose();
   }
 
-  void _nextPage() {
-    if (_currentPage < _pages.length - 1) {
-      _pageController.nextPage(
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeInOut,
-      );
-    }
+  Future<void> _finish() async {
+    await AppPrefs.setOnboardingSeen();
+    if (!mounted) return;
+    Navigator.of(context).pushReplacementNamed('/login');
   }
 
-  void _prevPage() {
-    if (_currentPage > 0) {
-      _pageController.previousPage(
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeInOut,
-      );
+  void _next() {
+    if (_currentPage == _slides.length - 1) {
+      _finish();
+      return;
     }
-  }
-
-  void _navigateToLogin() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (context) => const LoginScreen(),
-      ),
+    _pageController.nextPage(
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final isLastPage = _currentPage == _pages.length - 1;
+    final isLast = _currentPage == _slides.length - 1;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Center(
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 400),
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.border),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color.fromRGBO(23, 32, 29, 0.08),
-                  blurRadius: 8,
-                  offset: Offset(0, 2),
-                ),
-              ],
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: Column(
+          children: [
+            _buildHeader(),
+            Expanded(
+              child: PageView.builder(
+                controller: _pageController,
+                itemCount: _slides.length,
+                onPageChanged: (i) => setState(() => _currentPage = i),
+                itemBuilder: (context, i) => _buildSlide(_slides[i]),
+              ),
             ),
-            child: Column(
-              children: [
-                _buildHeader(isLastPage),
-                Expanded(
-                  child: PageView.builder(
-                    controller: _pageController,
-                    itemCount: _pages.length,
-                    onPageChanged: (index) {
-                      setState(() => _currentPage = index);
-                    },
-                    itemBuilder: (context, index) {
-                      return _buildSlide(_pages[index]);
-                    },
-                  ),
-                ),
-                _buildFooter(isLastPage),
-              ],
-            ),
-          ),
+            _buildFooter(isLast),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildHeader(bool isLastPage) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+  Widget _buildHeader() {
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(gradient: AppGradients.hero),
+      padding: EdgeInsets.only(
+        left: AppSpacing.screenH,
+        right: AppSpacing.sm,
+        top: MediaQuery.paddingOf(context).top + AppSpacing.ms,
+        bottom: AppSpacing.md,
+      ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            "MahalFlow",
-            style: GoogleFonts.inter(
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              color: AppColors.primary,
+          Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(AppRadius.sm + 2),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.24)),
+            ),
+            child: const Icon(Icons.mosque_rounded,
+                size: 18, color: Colors.white),
+          ),
+          const SizedBox(width: AppSpacing.ms),
+          Expanded(
+            child: Text(
+              'MahalFlow',
+              style: AppTextStyles.pageTitle.copyWith(
+                color: Colors.white,
+                fontSize: 18,
+              ),
             ),
           ),
-          if (!isLastPage)
-            TextButton(
-              onPressed: () {
-                _pageController.animateToPage(
-                  _pages.length - 1,
-                  duration: const Duration(milliseconds: 400),
-                  curve: Curves.easeInOut,
-                );
-              },
-              child: Text(
-                "Skip",
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary,
+          TextButton(
+            onPressed: _finish,
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.white,
+              minimumSize: const Size(0, 44),
+            ),
+            child: Text(
+              'Skip',
+              style: AppTextStyles.button.copyWith(
+                fontSize: 14,
+                color: Colors.white.withValues(alpha: 0.86),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSlide(_WelcomeSlide slide) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.xl,
+        AppSpacing.lg,
+        AppSpacing.lg,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 128,
+              height: 128,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight,
+                borderRadius: BorderRadius.circular(36),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.12),
                 ),
+              ),
+              child: Icon(slide.icon, size: 56, color: AppColors.primary),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Text(
+            slide.title,
+            style: AppTextStyles.display.copyWith(fontSize: 26),
+          ),
+          const SizedBox(height: AppSpacing.ms),
+          Text(
+            slide.description,
+            style: AppTextStyles.body.copyWith(
+              color: AppColors.textSecondary,
+              height: 22 / 14,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          for (final highlight in slide.highlights)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.ms),
+              child: Row(
+                children: [
+                  Container(
+                    width: 22,
+                    height: 22,
+                    alignment: Alignment.center,
+                    decoration: const BoxDecoration(
+                      color: AppColors.successBg,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.check_rounded,
+                      size: 14,
+                      color: AppColors.success,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.ms),
+                  Expanded(
+                    child: Text(
+                      highlight,
+                      style: AppTextStyles.body.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
         ],
@@ -157,143 +233,64 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  Widget _buildSlide(_OnboardingPage page) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 192,
-            height: 192,
-            decoration: BoxDecoration(
-              color: page.iconBg,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              page.icon,
-              size: 80,
-              color: page.iconColor,
-            ),
-          ),
-          const SizedBox(height: 32),
-          Text(
-            page.title,
-            style: GoogleFonts.inter(
-              fontSize: 32,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            page.description,
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              fontWeight: FontWeight.w400,
-              color: AppColors.textSecondary,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
+  Widget _buildFooter(bool isLast) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.border)),
       ),
-    );
-  }
-
-  Widget _buildFooter(bool isLastPage) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(_pages.length, (index) {
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                width: _currentPage == index ? 32 : 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: _currentPage == index
-                      ? AppColors.primary
-                      : AppColors.border,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              );
-            }),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.screenH,
+            AppSpacing.md,
+            AppSpacing.screenH,
+            AppSpacing.ms,
           ),
-          const SizedBox(height: 32),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              _currentPage > 0
-                  ? OutlinedButton(
-                      onPressed: _prevPage,
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(0, 44),
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        side: const BorderSide(color: AppColors.border),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      child: Text(
-                        "Back",
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    )
-                  : const SizedBox(width: 80),
-              ElevatedButton(
-                onPressed: isLastPage ? _navigateToLogin : _nextPage,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(0, 44),
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      isLastPage ? "Get Started" : "Next",
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(_slides.length, (i) {
+                  final active = i == _currentPage;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    width: active ? 26 : 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: active ? AppColors.primary : AppColors.border,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
                     ),
-                  ],
-                ),
+                  );
+                }),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              AppPrimaryButton(
+                label: isLast ? 'Get Started' : 'Next',
+                icon: Icons.arrow_forward_rounded,
+                onPressed: _next,
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _OnboardingPage {
+class _WelcomeSlide {
   final IconData icon;
-  final Color iconBg;
-  final Color iconColor;
   final String title;
   final String description;
+  final List<String> highlights;
 
-  const _OnboardingPage({
+  const _WelcomeSlide({
     required this.icon,
-    required this.iconBg,
-    required this.iconColor,
     required this.title,
     required this.description,
+    required this.highlights,
   });
 }

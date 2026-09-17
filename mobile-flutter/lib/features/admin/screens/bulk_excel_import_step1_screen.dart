@@ -1,229 +1,165 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_tokens.dart';
+import '../../../core/widgets/app_buttons.dart';
+import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_page_scaffold.dart';
 import 'bulk_excel_import_preview_screen.dart';
 
 class BulkExcelImportStep1Screen extends StatefulWidget {
   const BulkExcelImportStep1Screen({super.key});
 
   @override
-  State<BulkExcelImportStep1Screen> createState() => _BulkExcelImportStep1ScreenState();
+  State<BulkExcelImportStep1Screen> createState() =>
+      _BulkExcelImportStep1ScreenState();
 }
 
-class _BulkExcelImportStep1ScreenState extends State<BulkExcelImportStep1Screen> {
+class _BulkExcelImportStep1ScreenState
+    extends State<BulkExcelImportStep1Screen> {
   bool _fileSelected = false;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.primary),
-          onPressed: () {
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            } else {
-              Navigator.of(context).pushReplacementNamed('/admin/dashboard');
-            }
-          },
-        ),
-        title: Text(
-          "Import Members",
-          style: GoogleFonts.inter(
-            fontSize: 24,
-            fontWeight: FontWeight.w700,
-            color: AppColors.primary,
-          ),
-        ),
-        shape: const Border(
-          bottom: BorderSide(color: AppColors.border, width: 1),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+    return AppPageScaffold(
+      title: 'Import members',
+      eyebrow: 'Step 1 of 4',
+      subtitle: 'Bring a whole directory in from a spreadsheet.',
+      onBack: () {
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        } else {
+          Navigator.of(context).pushReplacementNamed('/admin/dashboard');
+        }
+      },
+      floatingChild: AppCard.floating(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildStepIndicator(),
-            const SizedBox(height: 32),
-            _buildUploadArea(),
-            const SizedBox(height: 24),
-            Center(
-              child: TextButton(
-                onPressed: () {},
-                child: Text(
-                  "Download template file",
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ),
+            const AppStepIndicator(
+              steps: ['Upload', 'Validate', 'Preview', 'Done'],
+              currentIndex: 0,
             ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                onPressed: _fileSelected
-                    ? () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => const BulkExcelImportPreviewScreen(),
-                          ),
-                        );
-                      }
-                    : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: AppColors.border,
-                  disabledForegroundColor: AppColors.textMuted,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: Text(
-                  "Next: Validate",
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
+            const SizedBox(height: AppSpacing.lg),
+            _uploadArea(),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildStepIndicator() {
-    return Row(
-      children: [
-        _buildStep(1, "Upload", true, true),
-        Expanded(child: Container(height: 2, color: AppColors.border)),
-        _buildStep(2, "Validate", false, false),
-        Expanded(child: Container(height: 2, color: AppColors.border)),
-        _buildStep(3, "Preview", false, false),
-        Expanded(child: Container(height: 2, color: AppColors.border)),
-        _buildStep(4, "Complete", false, false),
-      ],
-    );
-  }
-
-  Widget _buildStep(int number, String label, bool isActive, bool isCompleted) {
-    return Column(
-      children: [
-        Container(
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-            color: isActive ? AppColors.primary : (isCompleted ? AppColors.primary : AppColors.background),
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: isActive ? AppColors.primary : AppColors.border,
-            ),
+      content: [
+        const SizedBox(height: AppSpacing.md),
+        AppCard(
+          onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Template downloaded.')),
           ),
-          child: Center(
-            child: isCompleted
-                ? const Icon(Icons.check, size: 16, color: Colors.white)
-                : Text(
-                    "$number",
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: isActive ? Colors.white : AppColors.textMuted,
+          child: Row(
+            children: [
+              const AppIconChip(
+                icon: Icons.download_rounded,
+                color: AppColors.info,
+                background: AppColors.infoBg,
+              ),
+              const SizedBox(width: AppSpacing.ms),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Download the template',
+                      style: AppTextStyles.cardTitle.copyWith(fontSize: 15),
                     ),
-                  ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Name, phone, house name and monthly dues columns.',
+                      style: AppTextStyles.small,
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded,
+                  size: 20, color: AppColors.textMuted),
+            ],
           ),
         ),
-        const SizedBox(height: 8),
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: isActive ? AppColors.primary : AppColors.textMuted,
-          ),
+        const SizedBox(height: AppSpacing.md),
+        const AppNoticeCard(
+          icon: Icons.info_outline_rounded,
+          title: 'Nothing is saved yet',
+          message:
+              'You will see every row and any problems with it before anything '
+              'is written to the directory.',
+          color: AppColors.info,
+          background: AppColors.infoBg,
         ),
       ],
+      bottomBar: AppBottomActionBar(
+        children: [
+          AppPrimaryButton(
+            label: 'Next: Validate',
+            icon: Icons.arrow_forward_rounded,
+            onPressed: _fileSelected
+                ? () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            const BulkExcelImportPreviewScreen(),
+                      ),
+                    )
+                : null,
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildUploadArea() {
-    return GestureDetector(
-      onTap: () {
-        setState(() => _fileSelected = !_fileSelected);
-      },
+  Widget _uploadArea() {
+    return InkWell(
+      onTap: () => setState(() => _fileSelected = !_fileSelected),
+      borderRadius: BorderRadius.circular(AppRadius.card),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+        padding: const EdgeInsets.symmetric(
+          vertical: AppSpacing.xl,
+          horizontal: AppSpacing.lg,
+        ),
         decoration: BoxDecoration(
-          color: _fileSelected ? AppColors.primaryLight : AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
+          color: _fileSelected ? AppColors.primaryLight : AppColors.background,
+          borderRadius: BorderRadius.circular(AppRadius.card),
           border: Border.all(
             color: _fileSelected ? AppColors.primary : AppColors.border,
-            width: 2,
-            style: _fileSelected ? BorderStyle.solid : BorderStyle.solid,
+            width: 1.5,
           ),
         ),
         child: Column(
           children: [
             Container(
-              width: 64,
-              height: 64,
+              width: 62,
+              height: 62,
+              alignment: Alignment.center,
               decoration: const BoxDecoration(
-                color: AppColors.background,
+                color: AppColors.surface,
                 shape: BoxShape.circle,
               ),
               child: Icon(
-                _fileSelected ? Icons.check_circle : Icons.cloud_upload,
-                size: 48,
+                _fileSelected
+                    ? Icons.check_circle_rounded
+                    : Icons.cloud_upload_outlined,
+                size: 32,
                 color: _fileSelected ? AppColors.primary : AppColors.textMuted,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.ms),
             Text(
-              _fileSelected ? "File Selected" : "Upload Excel File",
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
-              ),
+              _fileSelected ? 'File selected' : 'Choose a spreadsheet',
+              style: AppTextStyles.cardTitle,
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpacing.xs),
             Text(
-              _fileSelected ? "members.xlsx" : "Supports .xlsx and .xls formats",
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                color: AppColors.textMuted,
-              ),
+              _fileSelected ? 'members.xlsx' : 'Accepts .xlsx and .xls files',
+              style: AppTextStyles.small,
             ),
-            if (!_fileSelected) ...[
-              const SizedBox(height: 16),
-              OutlinedButton(
-                onPressed: () {
-                  setState(() => _fileSelected = true);
-                },
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: AppColors.primary),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: Text(
-                  "Choose File",
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.primary,
-                  ),
-                ),
+            if (_fileSelected) ...[
+              const SizedBox(height: AppSpacing.ms),
+              AppTextActionButton(
+                label: 'Choose a different file',
+                onPressed: () => setState(() => _fileSelected = false),
               ),
             ],
           ],

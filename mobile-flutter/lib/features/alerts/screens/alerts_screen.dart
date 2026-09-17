@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import '../../../core/network/api_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/app_bottom_sheet.dart';
+import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_page_scaffold.dart';
+import '../../../core/widgets/empty_state_view.dart';
 import '../../../core/widgets/member_bottom_nav_bar.dart';
+import '../../../core/widgets/shimmer_loading.dart';
 import 'alert_details_screen.dart';
 
 class _AlertData {
@@ -35,6 +40,8 @@ class AlertsScreen extends StatefulWidget {
 
 class _AlertsScreenState extends State<AlertsScreen> {
   final ApiService _apiService = ApiService();
+  static const List<String> _filters = ['All', 'Unread', 'Payment', 'System'];
+
   String _selectedFilter = 'All';
   List<_AlertData> _alerts = [];
   bool _isLoading = true;
@@ -46,7 +53,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
   }
 
   Future<void> _loadAlerts() async {
-    setState(() => _isLoading = true);
+    if (mounted) setState(() => _isLoading = true);
     final rawList = await _apiService.getAlerts();
 
     List<_AlertData> loaded = [];
@@ -54,7 +61,10 @@ class _AlertsScreenState extends State<AlertsScreen> {
       if (item is Map<String, dynamic>) {
         final id = item["id"]?.toString() ?? item["_id"]?.toString() ?? "ALT_00";
         final title = item["title"]?.toString() ?? "Notice";
-        final body = item["description"]?.toString() ?? item["message"]?.toString() ?? item["details"]?.toString() ?? "";
+        final body = item["description"]?.toString() ??
+            item["message"]?.toString() ??
+            item["details"]?.toString() ??
+            "";
         final status = item["status"]?.toString() ?? "ACTIVE";
         final severity = item["severity"]?.toString() ?? "INFO";
 
@@ -79,7 +89,8 @@ class _AlertsScreenState extends State<AlertsScreen> {
           aType = _AlertType.overdue;
         } else if (severity == "SUCCESS") {
           aType = _AlertType.success;
-        } else if (title.toLowerCase().contains("payment") || title.toLowerCase().contains("due")) {
+        } else if (title.toLowerCase().contains("payment") ||
+            title.toLowerCase().contains("due")) {
           aType = _AlertType.payment;
         }
 
@@ -110,23 +121,23 @@ class _AlertsScreenState extends State<AlertsScreen> {
         return _alerts.where((a) => a.unread).toList();
       case 'Payment':
         return _alerts
-            .where((a) => a.type == _AlertType.payment || a.type == _AlertType.overdue)
+            .where((a) =>
+                a.type == _AlertType.payment || a.type == _AlertType.overdue)
             .toList();
       case 'System':
         return _alerts
-            .where((a) => a.type == _AlertType.system || a.type == _AlertType.default_)
+            .where((a) =>
+                a.type == _AlertType.system || a.type == _AlertType.default_)
             .toList();
       default:
         return _alerts;
     }
   }
 
+  int get _unreadCount => _alerts.where((a) => a.unread).length;
+
   Future<void> _markAsRead(_AlertData alert) async {
-    if (mounted) {
-      setState(() {
-        alert.unread = false;
-      });
-    }
+    if (mounted) setState(() => alert.unread = false);
     await _apiService.acknowledgeAlert(alert.id);
   }
 
@@ -141,41 +152,34 @@ class _AlertsScreenState extends State<AlertsScreen> {
     await _apiService.markAllAlertsRead();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("All alerts marked as read")),
+        const SnackBar(content: Text('All notices marked as read')),
       );
     }
   }
 
-  void _clearAllAlerts() async {
+  Future<void> _clearAllAlerts() async {
     final confirmed = await AppBottomSheet.showConfirmation(
       context: context,
-      title: "Clear All Alerts?",
-      message: "This will permanently remove all notification notices from your inbox.",
-      confirmLabel: "Clear All",
+      title: 'Clear all notices?',
+      message: 'This removes every notice from your inbox. It cannot be undone.',
+      confirmLabel: 'Clear All',
       confirmColor: AppColors.error,
       icon: Icons.delete_sweep_rounded,
     );
 
-    if (confirmed == true) {
-      if (mounted) {
-        setState(() {
-          _alerts.clear();
-        });
-      }
-      await _apiService.clearAllAlerts();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("All alerts cleared")),
-        );
-      }
+    if (confirmed != true) return;
+    if (mounted) setState(() => _alerts.clear());
+    await _apiService.clearAllAlerts();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('All notices cleared')),
+      );
     }
   }
 
   Future<void> _removeAlert(int index, _AlertData alert) async {
     if (mounted) {
-      setState(() {
-        _alerts.removeWhere((item) => item.id == alert.id);
-      });
+      setState(() => _alerts.removeWhere((item) => item.id == alert.id));
     }
 
     await _apiService.dismissAlert(alert.id);
@@ -183,14 +187,17 @@ class _AlertsScreenState extends State<AlertsScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("Cleared: ${alert.title}"),
+          content: Text('Cleared: ${alert.title}'),
           action: SnackBarAction(
-            label: "Undo",
+            label: 'Undo',
             textColor: Colors.white,
             onPressed: () {
               if (mounted) {
                 setState(() {
-                  _alerts.insert(index < _alerts.length ? index : _alerts.length, alert);
+                  _alerts.insert(
+                    index < _alerts.length ? index : _alerts.length,
+                    alert,
+                  );
                 });
               }
             },
@@ -200,169 +207,19 @@ class _AlertsScreenState extends State<AlertsScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final displayedAlerts = _filteredAlerts;
-
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () {
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            } else {
-              Navigator.of(context).pushReplacementNamed('/member/dashboard');
-            }
-          },
+  void _openAlert(_AlertData alert) {
+    _markAsRead(alert);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AlertDetailsScreen(
+          title: alert.title,
+          body: alert.body,
+          time: alert.time,
+          type: _mapType(alert.type),
         ),
-        centerTitle: true,
-        title: Text(
-          'Alerts',
-          style: GoogleFonts.inter(
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: AppColors.primary,
-          ),
-        ),
-        actions: [
-          if (_alerts.isNotEmpty) ...[
-            IconButton(
-              icon: const Icon(Icons.done_all, color: AppColors.primary, size: 22),
-              tooltip: "Mark all as read",
-              onPressed: _markAllAsRead,
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete_sweep_outlined, color: AppColors.error, size: 22),
-              tooltip: "Clear all alerts",
-              onPressed: _clearAllAlerts,
-            ),
-          ],
-        ],
-      ),
-      body: Column(
-        children: [
-          _buildFilterRow(),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-                : displayedAlerts.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.notifications_none, size: 48, color: AppColors.textMuted),
-                            const SizedBox(height: 12),
-                            Text(
-                              "No alerts found",
-                              style: GoogleFonts.inter(
-                                color: AppColors.textMuted,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : RefreshIndicator(
-                        onRefresh: _loadAlerts,
-                        color: AppColors.primary,
-                        child: ListView.separated(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          itemCount: displayedAlerts.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 8),
-                          itemBuilder: (context, index) {
-                            final alert = displayedAlerts[index];
-                            return Dismissible(
-                              key: Key(alert.id),
-                              direction: DismissDirection.horizontal,
-                              background: Container(
-                                alignment: Alignment.centerLeft,
-                                padding: const EdgeInsets.symmetric(horizontal: 20),
-                                decoration: BoxDecoration(
-                                  color: AppColors.error,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Icon(Icons.delete, color: Colors.white),
-                              ),
-                              secondaryBackground: Container(
-                                alignment: Alignment.centerRight,
-                                padding: const EdgeInsets.symmetric(horizontal: 20),
-                                decoration: BoxDecoration(
-                                  color: AppColors.error,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Icon(Icons.delete, color: Colors.white),
-                              ),
-                              onDismissed: (direction) => _removeAlert(index, alert),
-                              child: _buildAlertItem(alert),
-                            );
-                          },
-                        ),
-                      ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: const MemberBottomNavBar(currentIndex: 3),
-    );
-  }
-
-  Widget _buildFilterRow() {
-    final filters = ['All', 'Unread', 'Payment', 'System'];
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      color: AppColors.surface,
-      child: Row(
-        children: filters.map((f) {
-          final selected = _selectedFilter == f;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: GestureDetector(
-              onTap: () => setState(() => _selectedFilter = f),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: selected ? AppColors.primary : AppColors.surface,
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: selected ? AppColors.primary : AppColors.border,
-                  ),
-                ),
-                child: Text(
-                  f,
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: selected ? Colors.white : AppColors.textSecondary,
-                  ),
-                ),
-              ),
-            ),
-          );
-        }).toList(),
       ),
     );
-  }
-
-  Color _borderColor(_AlertType type) {
-    switch (type) {
-      case _AlertType.payment:
-        return AppColors.primary;
-      case _AlertType.overdue:
-        return AppColors.error;
-      case _AlertType.success:
-        return AppColors.success;
-      case _AlertType.system:
-        return AppColors.warning;
-      case _AlertType.default_:
-        return AppColors.primary;
-    }
   }
 
   AlertType _mapType(_AlertType type) {
@@ -380,115 +237,234 @@ class _AlertsScreenState extends State<AlertsScreen> {
     }
   }
 
-  Widget _buildAlertItem(_AlertData alert) {
-    final barColor = _borderColor(alert.type);
+  @override
+  Widget build(BuildContext context) {
+    final alerts = _filteredAlerts;
 
-    return GestureDetector(
-      onTap: () {
-        _markAsRead(alert);
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => AlertDetailsScreen(
-              title: alert.title,
-              body: alert.body,
-              time: alert.time,
-              type: _mapType(alert.type),
-            ),
-          ),
-        );
+    return AppPageScaffold(
+      title: 'Notices',
+      eyebrow: 'From the committee',
+      subtitle: _isLoading
+          ? 'Loading your notices…'
+          : _unreadCount == 0
+              ? 'You are all caught up.'
+              : '$_unreadCount unread',
+      onBack: () {
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        } else {
+          Navigator.of(context).pushReplacementNamed('/member/dashboard');
+        }
       },
-      child: Container(
-        decoration: BoxDecoration(
-          color: alert.unread ? const Color(0xFFF7FAF8) : AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: alert.unread ? AppColors.primary.withValues(alpha: 0.3) : AppColors.border,
+      actions: [
+        if (_alerts.isNotEmpty) ...[
+          AppHeaderIconButton(
+            icon: Icons.done_all_rounded,
+            tooltip: 'Mark all as read',
+            onTap: _markAllAsRead,
           ),
-          boxShadow: const [
-            BoxShadow(
-              color: Color.fromRGBO(23, 32, 29, 0.03),
-              blurRadius: 6,
-              offset: Offset(0, 2),
-            ),
-          ],
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                width: 5,
-                color: barColor,
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (alert.unread) ...[
-                        Container(
-                          width: 8,
-                          height: 8,
-                          margin: const EdgeInsets.only(top: 6, right: 8),
-                          decoration: const BoxDecoration(
-                            color: AppColors.primary,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ],
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    alert.title,
-                                    style: GoogleFonts.inter(
-                                      fontSize: 15,
-                                      fontWeight: alert.unread
-                                          ? FontWeight.w700
-                                          : FontWeight.w600,
-                                      color: AppColors.textPrimary,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                Text(
-                                  alert.time,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 11,
-                                    color: AppColors.textMuted,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              alert.body,
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                color: AppColors.textSecondary,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
+          AppHeaderIconButton(
+            icon: Icons.delete_sweep_outlined,
+            tooltip: 'Clear all notices',
+            onTap: _clearAllAlerts,
+          ),
+        ],
+      ],
+      headerChild: AppHeroFilterChips(
+        options: _filters,
+        selected: _selectedFilter,
+        onSelected: (f) => setState(() => _selectedFilter = f),
+      ),
+      expandedChild: RefreshIndicator(
+        onRefresh: _loadAlerts,
+        color: AppColors.primary,
+        backgroundColor: AppColors.surface,
+        child: _isLoading
+            ? _skeleton()
+            : alerts.isEmpty
+                ? _empty()
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.screenH,
+                      AppSpacing.md,
+                      AppSpacing.screenH,
+                      AppSpacing.xl,
+                    ),
+                    itemCount: alerts.length,
+                    separatorBuilder: (_, __) =>
+                        const SizedBox(height: AppSpacing.sm),
+                    itemBuilder: (context, index) {
+                      final alert = alerts[index];
+                      return Dismissible(
+                        key: Key(alert.id),
+                        direction: DismissDirection.horizontal,
+                        background: _dismissBackground(Alignment.centerLeft),
+                        secondaryBackground:
+                            _dismissBackground(Alignment.centerRight),
+                        onDismissed: (_) => _removeAlert(index, alert),
+                        child: _alertCard(alert),
+                      );
+                    },
+                  ),
+      ),
+      bottomNavigationBar: const MemberBottomNavBar(currentIndex: 3),
+    );
+  }
+
+  Widget _dismissBackground(Alignment alignment) {
+    return Container(
+      alignment: alignment,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.error,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+      ),
+      child: const Icon(Icons.delete_outline_rounded, color: Colors.white),
+    );
+  }
+
+  Widget _alertCard(_AlertData alert) {
+    final visual = _visualFor(alert.type);
+
+    return AppCard(
+      onTap: () => _openAlert(alert),
+      padding: const EdgeInsets.all(AppSpacing.md - 2),
+      color: alert.unread ? AppColors.surface : AppColors.surface,
+      borderColor: alert.unread
+          ? visual.color.withValues(alpha: 0.35)
+          : AppColors.border,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppIconChip(
+            icon: visual.icon,
+            color: visual.color,
+            background: visual.background,
+          ),
+          const SizedBox(width: AppSpacing.ms),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        alert.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.cardTitle.copyWith(
+                          fontSize: 15,
+                          fontWeight:
+                              alert.unread ? FontWeight.w700 : FontWeight.w600,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Text(
+                      alert.time,
+                      style: AppTextStyles.small.copyWith(
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
+                if (alert.body.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    alert.body,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.small,
+                  ),
+                ],
+                if (alert.unread) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  StatusPill(
+                    label: 'Unread',
+                    foreground: visual.color,
+                    background: visual.background,
+                    icon: Icons.fiber_manual_record_rounded,
+                  ),
+                ],
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
+
+  _AlertVisual _visualFor(_AlertType type) {
+    switch (type) {
+      case _AlertType.payment:
+        return const _AlertVisual(
+          Icons.payments_outlined,
+          AppColors.info,
+          AppColors.infoBg,
+        );
+      case _AlertType.overdue:
+        return const _AlertVisual(
+          Icons.error_outline_rounded,
+          AppColors.error,
+          AppColors.errorBg,
+        );
+      case _AlertType.success:
+        return const _AlertVisual(
+          Icons.check_circle_outline_rounded,
+          AppColors.success,
+          AppColors.successBg,
+        );
+      case _AlertType.system:
+      case _AlertType.default_:
+        return const _AlertVisual(
+          Icons.campaign_outlined,
+          AppColors.warning,
+          AppColors.warningBg,
+        );
+    }
+  }
+
+  Widget _empty() {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        SizedBox(height: MediaQuery.sizeOf(context).height * 0.08),
+        EmptyStateView(
+          icon: Icons.campaign_outlined,
+          title: _selectedFilter == 'All' ? 'No notices' : 'Nothing here',
+          description: _selectedFilter == 'All'
+              ? 'Announcements and dues reminders from the committee appear here.'
+              : 'Try another filter, or pull down to refresh.',
+        ),
+      ],
+    );
+  }
+
+  Widget _skeleton() {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.screenH,
+        AppSpacing.md,
+        AppSpacing.screenH,
+        AppSpacing.xl,
+      ),
+      children: [
+        for (var i = 0; i < 5; i++)
+          const Padding(
+            padding: EdgeInsets.only(bottom: AppSpacing.sm),
+            child: ShimmerLoading(child: ShimmerCardSkeleton(height: 84)),
+          ),
+      ],
+    );
+  }
+}
+
+class _AlertVisual {
+  final IconData icon;
+  final Color color;
+  final Color background;
+
+  const _AlertVisual(this.icon, this.color, this.background);
 }

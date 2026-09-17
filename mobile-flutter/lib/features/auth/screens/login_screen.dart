@@ -1,7 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../../../core/theme/app_theme.dart';
 
+import '../../../core/storage/app_prefs.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_tokens.dart';
+import '../../../core/widgets/app_buttons.dart';
+import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_page_scaffold.dart';
+import '../../../core/widgets/app_text_field.dart';
+
+/// Sign in. Same gradient header and floating card as the member home, so the
+/// first screen after the welcome already looks like the app.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -11,6 +19,8 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _phoneController = TextEditingController();
+  String? _error;
+  bool _isSubmitting = false;
 
   @override
   void dispose() {
@@ -18,328 +28,189 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  Future<void> _continue() async {
+    final phone = _phoneController.text.trim();
+    // The backend has no OTP endpoint yet; the field still has to reject
+    // obvious nonsense rather than hand a broken session to the dashboard.
+    if (phone.isEmpty) {
+      setState(() => _error = 'Enter your registered mobile number');
+      return;
+    }
+    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    final isDemoAdmin = phone.toLowerCase().contains('admin');
+    if (!isDemoAdmin && digits.length < 10) {
+      setState(() => _error = 'That does not look like a 10-digit number');
+      return;
+    }
+
+    setState(() {
+      _error = null;
+      _isSubmitting = true;
+    });
+
+    final isAdmin = isDemoAdmin || digits == '9847123456';
+    await _enter(isAdmin ? 'admin' : 'member');
+  }
+
+  Future<void> _enter(String role) async {
+    await AppPrefs.setLastRole(role);
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+    Navigator.of(context).pushReplacementNamed(
+      role == 'admin' ? '/admin/dashboard' : '/member/dashboard',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 400),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color.fromRGBO(23, 32, 29, 0.08),
-                    blurRadius: 8,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildHeader(),
-                  _buildForm(),
-                  _buildDivider(),
-                  _buildGoogleButton(),
-                  _buildFooter(),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
+    return AppPageScaffold(
+      title: 'Welcome back',
+      eyebrow: 'MahalFlow',
+      subtitle: 'Sign in to see your dues, pay them and keep your receipts.',
+      showBack: false,
+      floatingChild: _signInCard(),
+      content: [
+        const SizedBox(height: AppSpacing.md),
+        _demoCard(),
+        const SizedBox(height: AppSpacing.md),
+        _terms(),
+      ],
     );
   }
 
-  Widget _buildHeader() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(32),
-      decoration: const BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: AppColors.border),
-        ),
-      ),
+  Widget _signInCard() {
+    return AppCard.floating(
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Image.asset(
-            "assets/images/logo.png",
-            width: 180,
-            fit: BoxFit.contain,
-            errorBuilder: (ctx, err, stack) => Text(
-              "MahalFlow",
-              style: GoogleFonts.inter(
-                fontSize: 28,
-                fontWeight: FontWeight.w700,
-                color: AppColors.primary,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            "Welcome back",
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              fontWeight: FontWeight.w400,
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildForm() {
-    return Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Mobile Number",
-            style: GoogleFonts.inter(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
+          const AppSectionLabel('Sign in'),
+          const SizedBox(height: AppSpacing.md),
+          AppTextField(
             controller: _phoneController,
+            label: 'Mobile number',
+            hint: 'Registered mobile number',
+            icon: Icons.phone_iphone_rounded,
             keyboardType: TextInputType.phone,
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              color: AppColors.textPrimary,
-            ),
-            decoration: InputDecoration(
-              hintText: "Enter your mobile number",
-              hintStyle: GoogleFonts.inter(
-                fontSize: 14,
-                color: AppColors.textMuted,
-              ),
-              prefixIcon: const Icon(
-                Icons.phone_iphone,
-                size: 20,
-                color: AppColors.textMuted,
-              ),
-              filled: true,
-              fillColor: AppColors.surface,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(
-                  color: AppColors.primary,
-                  width: 2,
-                ),
-              ),
-            ),
+            errorText: _error,
+            onChanged: (_) {
+              if (_error != null) setState(() => _error = null);
+            },
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSpacing.lg),
+          AppPrimaryButton(
+            label: 'Continue',
+            icon: Icons.arrow_forward_rounded,
+            isLoading: _isSubmitting,
+            onPressed: _continue,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              const Expanded(child: Divider(color: AppColors.border)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.ms),
+                child: Text('or', style: AppTextStyles.small),
+              ),
+              const Expanded(child: Divider(color: AppColors.border)),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
           SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: ElevatedButton(
-              onPressed: () {
-                final phone = _phoneController.text.trim();
-                if (phone.contains('admin') || phone == '9847123456') {
-                  Navigator.of(context).pushReplacementNamed('/admin/dashboard');
-                } else {
-                  Navigator.of(context).pushReplacementNamed('/member/dashboard');
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
+            height: 50,
+            child: OutlinedButton(
+              onPressed: () => _enter('member'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.textPrimary,
+                backgroundColor: AppColors.surface,
+                side: const BorderSide(color: AppColors.border),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(AppRadius.button),
                 ),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  const SizedBox(width: 20, height: 20, child: _GoogleIcon()),
+                  const SizedBox(width: AppSpacing.ms),
                   Text(
-                    "Continue",
-                    style: GoogleFonts.inter(
+                    'Continue with Google',
+                    style: AppTextStyles.button.copyWith(
                       fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                      color: AppColors.textPrimary,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  const Icon(Icons.arrow_forward, size: 18, color: Colors.white),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pushReplacementNamed('/member/dashboard');
-                },
-                child: Text(
-                  "Demo Member",
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ),
-              const Text("•", style: TextStyle(color: AppColors.textMuted)),
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pushReplacementNamed('/admin/dashboard');
-                },
-                child: Text(
-                  "Demo Admin",
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildDivider() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
-      child: Row(
+  Widget _demoCard() {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Expanded(child: Divider(color: AppColors.border)),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              "or",
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                fontWeight: FontWeight.w400,
-                color: AppColors.textMuted,
-              ),
-            ),
+          const AppSectionLabel('Demo access'),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Open the app with sample data while sign-in is being wired up.',
+            style: AppTextStyles.small,
           ),
-          const Expanded(child: Divider(color: AppColors.border)),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(
+                child: AppSecondaryButton(
+                  label: 'Member',
+                  icon: Icons.person_outline_rounded,
+                  height: 46,
+                  onPressed: () => _enter('member'),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.ms),
+              Expanded(
+                child: AppSecondaryButton(
+                  label: 'Committee',
+                  icon: Icons.admin_panel_settings_outlined,
+                  height: 46,
+                  onPressed: () => _enter('admin'),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildGoogleButton() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 16, 32, 0),
-      child: SizedBox(
-        width: double.infinity,
-        height: 48,
-        child: OutlinedButton(
-          onPressed: () {
-            Navigator.of(context).pushReplacementNamed('/member/dashboard');
-          },
-          style: OutlinedButton.styleFrom(
-            backgroundColor: AppColors.surface,
-            foregroundColor: AppColors.primary,
-            side: const BorderSide(color: AppColors.primary),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
+  Widget _terms() {
+    return Text.rich(
+      TextSpan(
+        text: 'By continuing you agree to our ',
+        style: AppTextStyles.small.copyWith(color: AppColors.textMuted),
+        children: [
+          TextSpan(
+            text: 'Terms of Service',
+            style: AppTextStyles.small.copyWith(
+              color: AppColors.primary,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const SizedBox(
-                width: 20,
-                height: 20,
-                child: _GoogleIcon(),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                "Continue with Google",
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.primary,
-                ),
-              ),
-            ],
+          const TextSpan(text: ' and '),
+          TextSpan(
+            text: 'Privacy Policy',
+            style: AppTextStyles.small.copyWith(
+              color: AppColors.primary,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-        ),
+          const TextSpan(text: '.'),
+        ],
       ),
-    );
-  }
-
-  Widget _buildFooter() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(12),
-          bottomRight: Radius.circular(12),
-        ),
-      ),
-      child: Text.rich(
-        TextSpan(
-          text: "By continuing, you agree to our ",
-          style: GoogleFonts.inter(
-            fontSize: 12,
-            fontWeight: FontWeight.w400,
-            color: AppColors.textMuted,
-          ),
-          children: [
-            TextSpan(
-              text: "Terms of Service",
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                fontWeight: FontWeight.w400,
-                color: AppColors.primary,
-              ),
-            ),
-            TextSpan(
-              text: " & ",
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                fontWeight: FontWeight.w400,
-                color: AppColors.textMuted,
-              ),
-            ),
-            TextSpan(
-              text: "Privacy Policy",
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                fontWeight: FontWeight.w400,
-                color: AppColors.primary,
-              ),
-            ),
-            const TextSpan(text: "."),
-          ],
-        ),
-        textAlign: TextAlign.center,
-      ),
+      textAlign: TextAlign.center,
     );
   }
 }

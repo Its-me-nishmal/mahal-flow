@@ -1,312 +1,195 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_tokens.dart';
+import '../../../core/widgets/app_buttons.dart';
+import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_page_scaffold.dart';
+
+/// One parsed spreadsheet row, with whatever is wrong with it.
+class _ImportRow {
+  final String name;
+  final String phone;
+  final String amount;
+  final String status;
+  final String? error;
+
+  const _ImportRow({
+    required this.name,
+    required this.phone,
+    required this.amount,
+    required this.status,
+    this.error,
+  });
+
+  bool get isValid => status == 'Valid';
+}
 
 class BulkExcelImportPreviewScreen extends StatelessWidget {
   const BulkExcelImportPreviewScreen({super.key});
 
+  static const List<_ImportRow> _rows = [
+    _ImportRow(name: 'Ahmed Khan', phone: '98765 12345', amount: '₹500', status: 'Valid'),
+    _ImportRow(name: 'Yusuf Ali', phone: '98765 67890', amount: '₹500', status: 'Valid'),
+    _ImportRow(name: 'Omar Farooq', phone: '98765 11111', amount: '₹500', status: 'Valid'),
+    _ImportRow(name: 'Hassan Mir', phone: '', amount: '₹500', status: 'Invalid', error: 'No phone number'),
+    _ImportRow(name: 'Irfan Sheikh', phone: '98765 22222', amount: 'abc', status: 'Invalid', error: 'Amount is not a number'),
+    _ImportRow(name: 'Khalid Noor', phone: '98765 33333', amount: '₹500', status: 'Duplicate', error: 'This phone is already registered'),
+    _ImportRow(name: 'Rafiq Ahmed', phone: '98765 44444', amount: '₹500', status: 'Valid'),
+    _ImportRow(name: 'Suleman Patil', phone: '98765 55555', amount: '₹500', status: 'Valid'),
+  ];
+
+  int get _validCount => _rows.where((r) => r.status == 'Valid').length;
+  int get _invalidCount => _rows.where((r) => r.status == 'Invalid').length;
+  int get _duplicateCount => _rows.where((r) => r.status == 'Duplicate').length;
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.primary),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-        title: Text(
-          "Import Preview",
-          style: GoogleFonts.inter(
-            fontSize: 24,
-            fontWeight: FontWeight.w700,
-            color: AppColors.primary,
-          ),
-        ),
-        shape: const Border(
-          bottom: BorderSide(color: AppColors.border, width: 1),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+    return AppPageScaffold(
+      title: 'Check the rows',
+      eyebrow: 'Step 3 of 4',
+      subtitle: 'Only valid rows will be imported.',
+      floatingChild: AppCard.floating(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildStepIndicator(),
-            const SizedBox(height: 24),
-            _buildSummaryStats(),
-            const SizedBox(height: 16),
-            _buildPreviewTable(),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                onPressed: () {},
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: Text(
-                  "Confirm Import (15 members)",
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
+            const AppStepIndicator(
+              steps: ['Upload', 'Validate', 'Preview', 'Done'],
+              currentIndex: 2,
             ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: OutlinedButton(
-                onPressed: () => Navigator.of(context).maybePop(),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48),
-                  side: const BorderSide(color: AppColors.border),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: Text(
-                  "Cancel",
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ),
+            const AppCardDivider(spacing: AppSpacing.md),
+            Row(
+              children: [
+                _stat('Total', '${_rows.length}', AppColors.textPrimary),
+                _stat('Valid', '$_validCount', AppColors.success),
+                _stat('Invalid', '$_invalidCount', AppColors.error),
+                _stat('Duplicate', '$_duplicateCount', AppColors.warning),
+              ],
             ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildStepIndicator() {
-    return Row(
-      children: [
-        _buildStep(1, true),
-        Expanded(child: Container(height: 2, color: AppColors.primary)),
-        _buildStep(2, true),
-        Expanded(child: Container(height: 2, color: AppColors.primary)),
-        _buildStep(3, true),
-        Expanded(child: Container(height: 2, color: AppColors.border)),
-        _buildStep(4, false),
-      ],
-    );
-  }
-
-  Widget _buildStep(int number, bool isCompleted) {
-    return Container(
-      width: 32,
-      height: 32,
-      decoration: BoxDecoration(
-        color: isCompleted ? AppColors.primary : AppColors.background,
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: isCompleted ? AppColors.primary : AppColors.border,
+      content: [
+        const SizedBox(height: AppSpacing.md),
+        if (_invalidCount + _duplicateCount > 0)
+          AppNoticeCard(
+            icon: Icons.report_problem_outlined,
+            title: '${_invalidCount + _duplicateCount} rows will be skipped',
+            message: 'Fix them in the spreadsheet and import again to add them.',
+            color: AppColors.warning,
+            background: AppColors.warningBg,
+          ),
+        const SizedBox(height: AppSpacing.lg),
+        const AppSectionHeader(title: 'Rows in your file'),
+        AppCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: [
+              for (var i = 0; i < _rows.length; i++) ...[
+                if (i > 0) const Divider(height: 1, color: AppColors.border),
+                _row(_rows[i]),
+              ],
+            ],
+          ),
         ),
-      ),
-      child: Center(
-        child: isCompleted
-            ? const Icon(Icons.check, size: 16, color: Colors.white)
-            : Text(
-                "$number",
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textMuted,
+      ],
+      bottomBar: AppBottomActionBar(
+        children: [
+          AppPrimaryButton(
+            label: 'Import $_validCount members',
+            icon: Icons.check_rounded,
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('$_validCount members imported.'),
+                  backgroundColor: AppColors.primary,
                 ),
-              ),
-      ),
-    );
-  }
-
-  Widget _buildSummaryStats() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-        boxShadow: const [
-          BoxShadow(
-            color: Color.fromRGBO(23, 32, 29, 0.03),
-            blurRadius: 8,
-            offset: Offset(0, 2),
+              );
+              Navigator.of(context).popUntil((route) => route.isFirst);
+            },
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AppSecondaryButton(
+            label: 'Cancel',
+            color: AppColors.textSecondary,
+            onPressed: () => Navigator.of(context).maybePop(),
           ),
         ],
       ),
-      child: Row(
-        children: [
-          _buildStatItem("Total", "20", AppColors.textPrimary),
-          _buildStatItem("Valid", "15", AppColors.success),
-          _buildStatItem("Invalid", "3", AppColors.error),
-          _buildStatItem("Duplicates", "2", AppColors.warning),
-        ],
-      ),
     );
   }
 
-  Widget _buildStatItem(String label, String value, Color color) {
+  Widget _stat(String label, String value, Color color) {
     return Expanded(
       child: Column(
         children: [
           Text(
             value,
-            style: GoogleFonts.inter(
-              fontSize: 28,
+            style: AppTextStyles.sectionTitle.copyWith(
+              fontSize: 24,
               fontWeight: FontWeight.w700,
               color: color,
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              color: AppColors.textSecondary,
-            ),
-          ),
+          const SizedBox(height: 2),
+          Text(label, style: AppTextStyles.small.copyWith(fontSize: 11)),
         ],
       ),
     );
   }
 
-  Widget _buildPreviewTable() {
-    final rows = [
-      {"name": "Ahmed Khan", "phone": "98765 12345", "amount": "₹500", "status": "Valid", "valid": true},
-      {"name": "Yusuf Ali", "phone": "98765 67890", "amount": "₹500", "status": "Valid", "valid": true},
-      {"name": "Omar Farooq", "phone": "98765 11111", "amount": "₹500", "status": "Valid", "valid": true},
-      {"name": "Hassan Mir", "phone": "", "amount": "₹500", "status": "Invalid", "valid": false, "error": "Missing phone"},
-      {"name": "Irfan Sheikh", "phone": "98765 22222", "amount": "abc", "status": "Invalid", "valid": false, "error": "Invalid amount"},
-      {"name": "Khalid Noor", "phone": "98765 33333", "amount": "₹500", "status": "Duplicate", "valid": false, "error": "Duplicate phone"},
-      {"name": "Rafiq Ahmed", "phone": "98765 44444", "amount": "₹500", "status": "Valid", "valid": true},
-      {"name": "Suleman Patil", "phone": "98765 55555", "amount": "₹500", "status": "Valid", "valid": true},
-    ];
+  Widget _row(_ImportRow row) {
+    late final Color color;
+    late final Color background;
+    if (row.status == 'Valid') {
+      color = AppColors.success;
+      background = AppColors.successBg;
+    } else if (row.status == 'Invalid') {
+      color = AppColors.error;
+      background = AppColors.errorBg;
+    } else {
+      color = AppColors.warning;
+      background = AppColors.warningBg;
+    }
 
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-        boxShadow: const [
-          BoxShadow(
-            color: Color.fromRGBO(23, 32, 29, 0.03),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
-        ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md - 2,
+        vertical: AppSpacing.ms,
       ),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              "Preview",
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
-              ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  row.name,
+                  style: AppTextStyles.cardTitle.copyWith(fontSize: 15),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${row.phone.isEmpty ? "No phone" : row.phone} · ${row.amount}',
+                  style: AppTextStyles.small,
+                ),
+                if (row.error != null) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    row.error!,
+                    style: AppTextStyles.small.copyWith(color: color),
+                  ),
+                ],
+              ],
             ),
           ),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: DataTable(
-              columnSpacing: 24,
-              headingRowColor: WidgetStateProperty.all(AppColors.background),
-              columns: [
-                DataColumn(label: Text("Name", style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary))),
-                DataColumn(label: Text("Phone", style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary))),
-                DataColumn(label: Text("Amount", style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary))),
-                DataColumn(label: Text("Status", style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary))),
-              ],
-              rows: rows.map((row) {
-                final isValid = row["valid"] as bool;
-                final status = row["status"] as String;
-
-                Color chipColor;
-                Color chipBg;
-                if (status == "Valid") {
-                  chipColor = AppColors.success;
-                  chipBg = AppColors.successBg;
-                } else if (status == "Invalid") {
-                  chipColor = AppColors.error;
-                  chipBg = AppColors.errorBg;
-                } else {
-                  chipColor = AppColors.warning;
-                  chipBg = AppColors.warningBg;
-                }
-
-                return DataRow(
-                  color: WidgetStateProperty.all(
-                    isValid ? null : AppColors.errorBg,
-                  ),
-                  cells: [
-                    DataCell(Text(
-                      row["name"] as String,
-                      style: GoogleFonts.inter(fontSize: 14, color: AppColors.textPrimary),
-                    )),
-                    DataCell(Text(
-                      (row["phone"] as String).isEmpty ? "—" : row["phone"] as String,
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        color: (row["phone"] as String).isEmpty ? AppColors.error : AppColors.textPrimary,
-                      ),
-                    )),
-                    DataCell(Text(
-                      row["amount"] as String,
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        color: (row["amount"] as String) == "abc" ? AppColors.error : AppColors.textPrimary,
-                      ),
-                    )),
-                    DataCell(
-                      Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: chipBg,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              status,
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: chipColor,
-                              ),
-                            ),
-                          ),
-                          if (row["error"] != null) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              row["error"] as String,
-                              style: GoogleFonts.inter(
-                                fontSize: 10,
-                                color: AppColors.error,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              }).toList(),
-            ),
+          const SizedBox(width: AppSpacing.sm),
+          StatusPill(
+            label: row.status,
+            foreground: color,
+            background: background,
+            icon: row.isValid
+                ? Icons.check_circle_rounded
+                : Icons.error_outline_rounded,
           ),
         ],
       ),

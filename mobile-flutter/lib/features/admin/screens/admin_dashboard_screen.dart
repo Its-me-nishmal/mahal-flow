@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import '../../../core/network/api_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_tokens.dart';
+import '../../../core/utils/currency_format.dart';
 import '../../../core/widgets/app_bottom_sheet.dart';
-import '../../../core/widgets/app_metric_card.dart';
+import '../../../core/widgets/app_buttons.dart';
+import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_page_scaffold.dart';
+import '../../../core/widgets/app_text_field.dart';
 import '../../../core/widgets/shimmer_loading.dart';
 import '../widgets/admin_bottom_nav_bar.dart';
 
@@ -39,12 +44,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     if (mounted) {
       setState(() {
         if (data != null) {
-          _totalCollected = (data["total_collected_mtd"] as num?)?.toDouble() ?? 0;
+          _totalCollected =
+              (data["total_collected_mtd"] as num?)?.toDouble() ?? 0;
           _pendingDues = (data["total_pending_dues"] as num?)?.toDouble() ?? 0;
           _paidMembers = (data["paid_members"] as num?)?.toInt() ?? 0;
           _pendingMembers = (data["pending_members"] as num?)?.toInt() ?? 0;
           _totalMembers = (data["total_members"] as num?)?.toInt() ?? 0;
-          _subscriptionStatus = data["subscription_status"]?.toString() ?? "ACTIVE";
+          _subscriptionStatus =
+              data["subscription_status"]?.toString() ?? "ACTIVE";
         }
         if (receipts.isNotEmpty) {
           _recentTransactions = receipts;
@@ -54,229 +61,434 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }
   }
 
+  double get _collectionRate =>
+      _totalMembers > 0 ? (_paidMembers / _totalMembers) : 0.0;
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      key: _scaffoldKey,
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.menu_rounded, color: AppColors.textPrimary),
-          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+    return AppPageScaffold(
+      scaffoldKey: _scaffoldKey,
+      drawer: _buildAdminDrawer(context),
+      title: 'Dashboard',
+      eyebrow: 'Committee',
+      subtitle: 'Central Juma Masjid Mahal · live ledger',
+      leading: AppHeaderIconButton(
+        icon: Icons.menu_rounded,
+        tooltip: 'Menu',
+        onTap: () => _scaffoldKey.currentState?.openDrawer(),
+      ),
+      actions: [
+        AppHeaderIconButton(
+          icon: Icons.refresh_rounded,
+          tooltip: 'Refresh',
+          onTap: () {
+            setState(() => _isLoading = true);
+            _loadAdminData();
+          },
         ),
-        title: Text(
-          "MahalFlow Admin",
-          style: GoogleFonts.inter(
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: AppColors.primary,
-          ),
+      ],
+      onRefresh: _loadAdminData,
+      floatingChild: _collectionCard(),
+      content: [
+        const SizedBox(height: AppSpacing.md),
+        Row(
+          children: [
+            Expanded(
+              child: AppSecondaryButton(
+                label: 'Add member',
+                icon: Icons.person_add_alt_outlined,
+                height: 46,
+                onPressed: () => _openAddMemberDialog(context),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.ms),
+            Expanded(
+              child: AppPrimaryButton(
+                label: 'Record payment',
+                height: 46,
+                onPressed: () => _openRecordDuesDialog(context),
+              ),
+            ),
+          ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: AppColors.primary),
-            tooltip: "Refresh Dashboard",
-            onPressed: () {
-              setState(() => _isLoading = true);
-              _loadAdminData();
-            },
+        const SizedBox(height: AppSpacing.lg),
+        const AppSectionHeader(title: 'This month'),
+        if (_isLoading) _statSkeleton() else _statGrid(),
+        const SizedBox(height: AppSpacing.lg),
+        AppSectionHeader(
+          title: 'Recent transactions',
+          actionLabel: 'View all',
+          onAction: () => Navigator.of(context).pushNamed('/admin/reports'),
+        ),
+        _recentTransactionsCard(),
+        const SizedBox(height: AppSpacing.lg),
+        _broadcastCard(),
+      ],
+      bottomNavigationBar: const AdminBottomNavBar(currentIndex: 0),
+    );
+  }
+
+  // -----------------------------------------------------------------------
+  // Cards
+  // -----------------------------------------------------------------------
+
+  Widget _collectionCard() {
+    final pct = (_collectionRate * 100).toInt();
+    final healthy = _collectionRate >= 0.7;
+
+    return AppCard.floating(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text('COLLECTED THIS MONTH', style: AppTextStyles.label),
+              ),
+              StatusPill(
+                label: _subscriptionStatus == 'ACTIVE'
+                    ? 'Subscription active'
+                    : _subscriptionStatus,
+                foreground: _subscriptionStatus == 'ACTIVE'
+                    ? AppColors.success
+                    : AppColors.warning,
+                background: _subscriptionStatus == 'ACTIVE'
+                    ? AppColors.successBg
+                    : AppColors.warningBg,
+              ),
+            ],
           ),
-          Padding(
-            padding: const EdgeInsets.only(right: 14),
-            child: GestureDetector(
-              onTap: () => _scaffoldKey.currentState?.openDrawer(),
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryLight,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+          const SizedBox(height: AppSpacing.ms),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              Inr.format(_totalCollected),
+              semanticsLabel: 'Collected ${Inr.spoken(_totalCollected)}',
+              style: AppTextStyles.amount.copyWith(color: AppColors.success),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            '${Inr.format(_pendingDues)} still outstanding across the Mahal.',
+            style: AppTextStyles.body.copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(
+                child: Text('Collection rate', style: AppTextStyles.small),
+              ),
+              Text(
+                '$_paidMembers of $_totalMembers members · $pct%',
+                style: AppTextStyles.small.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: healthy ? AppColors.success : AppColors.warning,
                 ),
-                child: const Center(
-                  child: Text(
-                    "A",
-                    style: TextStyle(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                    ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            child: LinearProgressIndicator(
+              value: _collectionRate.clamp(0.0, 1.0),
+              backgroundColor: AppColors.border,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                healthy ? AppColors.success : AppColors.warning,
+              ),
+              minHeight: 7,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statGrid() {
+    return Column(
+      children: [
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: AppStatTile(
+                  label: 'Collected (MTD)',
+                  value: Inr.format(_totalCollected),
+                  icon: Icons.trending_up_rounded,
+                  color: AppColors.success,
+                  background: AppColors.successBg,
+                  onTap: () =>
+                      Navigator.of(context).pushNamed('/admin/reports'),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.ms),
+              Expanded(
+                child: AppStatTile(
+                  label: 'Pending dues',
+                  value: Inr.format(_pendingDues < 0 ? 0 : _pendingDues),
+                  icon: Icons.schedule_rounded,
+                  color: AppColors.warning,
+                  background: AppColors.warningBg,
+                  onTap: () =>
+                      Navigator.of(context).pushNamed('/admin/reports'),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.ms),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: AppStatTile(
+                  label: 'Members paid',
+                  value: '$_paidMembers',
+                  caption: 'of $_totalMembers families',
+                  icon: Icons.check_circle_outline_rounded,
+                  color: AppColors.info,
+                  background: AppColors.infoBg,
+                  onTap: () =>
+                      Navigator.of(context).pushNamed('/admin/members'),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.ms),
+              Expanded(
+                child: AppStatTile(
+                  label: 'Members pending',
+                  value: '$_pendingMembers',
+                  caption: 'need a reminder',
+                  icon: Icons.pending_outlined,
+                  color: AppColors.error,
+                  background: AppColors.errorBg,
+                  onTap: () =>
+                      Navigator.of(context).pushNamed('/admin/members'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _statSkeleton() {
+    Widget block() => Container(
+          height: 116,
+          decoration: BoxDecoration(
+            color: AppColors.border.withValues(alpha: 0.6),
+            borderRadius: BorderRadius.circular(AppRadius.card),
+          ),
+        );
+
+    return ShimmerLoading(
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(child: block()),
+              const SizedBox(width: AppSpacing.ms),
+              Expanded(child: block()),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.ms),
+          Row(
+            children: [
+              Expanded(child: block()),
+              const SizedBox(width: AppSpacing.ms),
+              Expanded(child: block()),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _recentTransactionsCard() {
+    final list = _recentTransactions.take(5).toList();
+
+    if (list.isEmpty) {
+      return AppCard(
+        child: Row(
+          children: [
+            const AppIconChip(
+              icon: Icons.receipt_long_outlined,
+              color: AppColors.textMuted,
+              background: AppColors.neutralBg,
+            ),
+            const SizedBox(width: AppSpacing.ms),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'No transactions yet',
+                    style: AppTextStyles.cardTitle.copyWith(fontSize: 15),
                   ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Recorded payments appear here as they are issued.',
+                    style: AppTextStyles.small,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return AppCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          for (var i = 0; i < list.length; i++) ...[
+            if (i > 0) const Divider(height: 1, color: AppColors.border),
+            _transactionRow(list[i]),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _transactionRow(dynamic t) {
+    final name = t["member_name"]?.toString() ?? 'Member';
+    final receiptTail =
+        (t["receipt_number"] ?? '').toString().split('_').last;
+    final type = t["payment_type"]?.toString() ?? 'Payment';
+    final amount = (t["amount"] as num?)?.toDouble() ?? 0;
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'M';
+
+    return InkWell(
+      onTap: () => _showReceiptDetailsModal(context, t),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md - 2,
+          vertical: AppSpacing.ms,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(
+                color: AppColors.primaryLight,
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                initial,
+                style: AppTextStyles.cardTitle.copyWith(
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.ms),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.cardTitle.copyWith(fontSize: 15),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$type · $receiptTail',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.small,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  Inr.format(amount),
+                  style: AppTextStyles.cardTitle.copyWith(fontSize: 15),
+                ),
+                const SizedBox(height: 3),
+                const StatusPill(
+                  label: 'Paid',
+                  foreground: AppColors.success,
+                  background: AppColors.successBg,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _broadcastCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md + 2),
+      decoration: BoxDecoration(
+        gradient: AppGradients.hero,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.campaign_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                'Broadcast a notice',
+                style: AppTextStyles.cardTitle.copyWith(color: Colors.white),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Send an announcement or a dues reminder to every member, or only '
+            'to those with pending dues.',
+            style: AppTextStyles.small.copyWith(
+              color: Colors.white.withValues(alpha: 0.82),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          SizedBox(
+            height: 44,
+            child: ElevatedButton(
+              onPressed: () => _openBroadcastComposer(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: AppColors.primary,
+                elevation: 0,
+                minimumSize: const Size.fromHeight(44),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.button),
+                ),
+              ),
+              child: Text(
+                'Compose Notice',
+                style: AppTextStyles.button.copyWith(
+                  fontSize: 14,
+                  color: AppColors.primary,
                 ),
               ),
             ),
           ),
         ],
-        shape: const Border(
-          bottom: BorderSide(color: AppColors.border, width: 1),
-        ),
       ),
-      drawer: _buildAdminDrawer(context),
-      body: RefreshIndicator(
-        onRefresh: _loadAdminData,
-        color: AppColors.primary,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "Dashboard Overview",
-                style: GoogleFonts.inter(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                  letterSpacing: -0.4,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                "Real-time ledger & financial tracking for Calicut Central Mahal",
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Action Buttons Row
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _openAddMemberDialog(context),
-                      icon: const Icon(Icons.person_add_outlined, size: 16, color: AppColors.primary),
-                      label: Text(
-                        "Add Member",
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(44),
-                        side: const BorderSide(color: AppColors.primary),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => _openRecordDuesDialog(context),
-                      icon: const Icon(Icons.receipt_long_outlined, size: 16, color: Colors.white),
-                      label: Text(
-                        "Record Payment",
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size.fromHeight(44),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        elevation: 0,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-
-              // Metric Cards Grid with Shimmer support
-              if (_isLoading)
-                ShimmerLoading(
-                  isLoading: true,
-                  child: GridView.count(
-                    crossAxisCount: 2,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: 10,
-                    crossAxisSpacing: 10,
-                    childAspectRatio: 1.65,
-                    children: List.generate(
-                      4,
-                      (_) => Container(
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                      ),
-                    ),
-                  ),
-                )
-              else
-                GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: 10,
-                  childAspectRatio: 1.65,
-                  children: [
-                    AppMetricCard(
-                      title: "Total Collected",
-                      value: "₹${_totalCollected.toInt()}",
-                      color: AppColors.success,
-                      bgColor: AppColors.successBg,
-                      icon: Icons.trending_up_rounded,
-                      onTap: () => Navigator.of(context).pushNamed('/admin/reports'),
-                    ),
-                    AppMetricCard(
-                      title: "Pending Dues",
-                      value: _pendingDues <= 0 ? "₹0" : "₹${_pendingDues.toInt()}",
-                      color: AppColors.warning,
-                      bgColor: AppColors.warningBg,
-                      icon: Icons.schedule_rounded,
-                      onTap: () => Navigator.of(context).pushNamed('/admin/reports'),
-                    ),
-                    AppMetricCard(
-                      title: "Paid Members",
-                      value: "$_paidMembers",
-                      color: AppColors.info,
-                      bgColor: AppColors.infoBg,
-                      icon: Icons.check_circle_outline_rounded,
-                      onTap: () => Navigator.of(context).pushNamed('/admin/members'),
-                    ),
-                    AppMetricCard(
-                      title: "Pending Members",
-                      value: "$_pendingMembers",
-                      color: AppColors.error,
-                      bgColor: AppColors.errorBg,
-                      icon: Icons.pending_outlined,
-                      onTap: () => Navigator.of(context).pushNamed('/admin/members'),
-                    ),
-                  ],
-                ),
-              const SizedBox(height: 18),
-
-              _buildRecentTransactionsCard(),
-              const SizedBox(height: 14),
-
-              _buildSystemStatusCard(),
-              const SizedBox(height: 14),
-
-              _buildAnnouncementCard(),
-              const SizedBox(height: 12),
-            ],
-          ),
-        ),
-      ),
-      bottomNavigationBar: const AdminBottomNavBar(currentIndex: 0),
     );
   }
+
+  // -----------------------------------------------------------------------
+  // Sheets
+  // -----------------------------------------------------------------------
 
   void _openAddMemberDialog(BuildContext context) {
     final nameCtrl = TextEditingController();
@@ -287,102 +499,79 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
     AppBottomSheet.show(
       context: context,
-      title: "Register Member",
-      subtitle: "Add new family record to MahalFlow directory",
+      title: 'Register a member',
+      subtitle: 'Adds a family to the Mahal directory',
       icon: Icons.person_add_rounded,
       builder: (ctx, setDialogState) {
         return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TextField(
+            AppTextField(
               controller: nameCtrl,
-              decoration: InputDecoration(
-                labelText: "Full Name *",
-                hintText: "e.g. Abdul Kareem",
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              ),
+              label: 'Full name',
+              hint: 'e.g. Abdul Kareem',
+              textCapitalization: TextCapitalization.words,
             ),
-            const SizedBox(height: 12),
-            TextField(
+            const SizedBox(height: AppSpacing.md),
+            AppTextField(
               controller: phoneCtrl,
+              label: 'Phone number',
+              hint: '+91 98471 11222',
               keyboardType: TextInputType.phone,
-              decoration: InputDecoration(
-                labelText: "Phone Number *",
-                hintText: "+91 98471 11222",
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              ),
             ),
-            const SizedBox(height: 12),
-            TextField(
+            const SizedBox(height: AppSpacing.md),
+            AppTextField(
               controller: houseCtrl,
-              decoration: InputDecoration(
-                labelText: "House Name",
-                hintText: "e.g. Darussalam",
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              ),
+              label: 'House name (optional)',
+              hint: 'e.g. Darussalam',
+              textCapitalization: TextCapitalization.words,
             ),
-            const SizedBox(height: 12),
-            TextField(
+            const SizedBox(height: AppSpacing.md),
+            AppTextField(
               controller: duesCtrl,
+              label: 'Monthly dues (₹)',
               keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: "Monthly Dues (₹)",
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              ),
             ),
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                onPressed: isSaving
-                    ? null
-                    : () async {
-                        final name = nameCtrl.text.trim();
-                        final phone = phoneCtrl.text.trim();
-                        if (name.isEmpty || phone.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("Please fill name and phone")),
-                          );
-                          return;
-                        }
+            const SizedBox(height: AppSpacing.lg),
+            AppPrimaryButton(
+              label: 'Save Member',
+              isLoading: isSaving,
+              onPressed: () async {
+                final name = nameCtrl.text.trim();
+                final phone = phoneCtrl.text.trim();
+                if (name.isEmpty || phone.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Name and phone number are required'),
+                    ),
+                  );
+                  return;
+                }
 
-                        setDialogState(() => isSaving = true);
-                        final dues = double.tryParse(duesCtrl.text) ?? 500.0;
-                        final res = await _apiService.createMember(
-                          name: name,
-                          phone: phone,
-                          houseName: houseCtrl.text.trim().isNotEmpty ? houseCtrl.text.trim() : null,
-                          duesAmount: dues,
-                        );
+                setDialogState(() => isSaving = true);
+                final dues = double.tryParse(duesCtrl.text) ?? 500.0;
+                final res = await _apiService.createMember(
+                  name: name,
+                  phone: phone,
+                  houseName: houseCtrl.text.trim().isNotEmpty
+                      ? houseCtrl.text.trim()
+                      : null,
+                  duesAmount: dues,
+                );
 
-                        if (context.mounted) {
-                          Navigator.of(ctx).pop();
-                          if (mounted && res != null) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text("✅ Member $name registered successfully!"),
-                                backgroundColor: AppColors.primary,
-                              ),
-                            );
-                            _loadAdminData();
-                          }
-                        }
-                      },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  elevation: 0,
-                ),
-                child: isSaving
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : Text("Save Member", style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700)),
-              ),
+                if (context.mounted) {
+                  Navigator.of(ctx).pop();
+                  if (mounted && res != null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('$name was registered.'),
+                        backgroundColor: AppColors.primary,
+                      ),
+                    );
+                    _loadAdminData();
+                  }
+                }
+              },
             ),
           ],
         );
@@ -396,34 +585,34 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
     if (members.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("No members available in directory")),
+        const SnackBar(content: Text('No members in the directory yet')),
       );
       return;
     }
 
-    String selectedMemberId = (members.first as Map<String, dynamic>)["id"]?.toString() ?? "";
-    String selectedMemberName = (members.first as Map<String, dynamic>)["name"]?.toString() ?? "Member";
+    String selectedMemberId =
+        (members.first as Map<String, dynamic>)["id"]?.toString() ?? "";
+    String selectedMemberName =
+        (members.first as Map<String, dynamic>)["name"]?.toString() ?? "Member";
     String selectedMode = "CASH";
     bool isRecording = false;
 
     AppBottomSheet.show(
       context: context,
-      title: "Record Dues Payment",
-      subtitle: "Issue cryptographically signed receipt",
+      title: 'Record a payment',
+      subtitle: 'Issues a signed receipt in the member\'s name',
       icon: Icons.receipt_long_rounded,
       builder: (ctx, setDialogState) {
         return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text("Select Member", style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
-            const SizedBox(height: 6),
-            DropdownButtonFormField<String>(
-              initialValue: selectedMemberId,
-              isExpanded: true,
-              decoration: InputDecoration(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-              ),
+            Text(
+              'MEMBER',
+              style: AppTextStyles.label,
+            ),
+            const SizedBox(height: AppSpacing.sm - 2),
+            _dropdown<String>(
+              value: selectedMemberId,
               items: members.map((m) {
                 final item = m as Map<String, dynamic>;
                 final mId = item["id"]?.toString() ?? "";
@@ -432,103 +621,107 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 return DropdownMenuItem<String>(
                   value: mId,
                   child: Text(
-                    "$mName ($house)",
+                    house.isEmpty ? mName : '$mName ($house)',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(fontSize: 13),
+                    style: AppTextStyles.body,
                   ),
                 );
               }).toList(),
               onChanged: (val) {
-                if (val != null) {
-                  setDialogState(() {
-                    selectedMemberId = val;
-                    final match = members.firstWhere((m) => (m as Map<String, dynamic>)["id"] == val, orElse: () => null);
-                    if (match != null) {
-                      selectedMemberName = (match as Map<String, dynamic>)["name"]?.toString() ?? "Member";
-                    }
-                  });
-                }
+                if (val == null) return;
+                setDialogState(() {
+                  selectedMemberId = val;
+                  final match = members.firstWhere(
+                    (m) => (m as Map<String, dynamic>)["id"] == val,
+                    orElse: () => null,
+                  );
+                  if (match != null) {
+                    selectedMemberName =
+                        (match as Map<String, dynamic>)["name"]?.toString() ??
+                            "Member";
+                  }
+                });
               },
             ),
-            const SizedBox(height: 14),
-            Text("Payment Method", style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
-            const SizedBox(height: 6),
-            DropdownButtonFormField<String>(
-              initialValue: selectedMode,
-              decoration: InputDecoration(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-              ),
+            const SizedBox(height: AppSpacing.md),
+            Text('PAYMENT METHOD', style: AppTextStyles.label),
+            const SizedBox(height: AppSpacing.sm - 2),
+            _dropdown<String>(
+              value: selectedMode,
               items: const [
-                DropdownMenuItem(value: "CASH", child: Text("Cash (Collected Offline)")),
-                DropdownMenuItem(value: "BANK_TRANSFER", child: Text("Direct Bank Transfer")),
-                DropdownMenuItem(value: "UPI", child: Text("UPI / QR Code")),
+                DropdownMenuItem(value: "CASH", child: Text("Cash (collected offline)")),
+                DropdownMenuItem(value: "BANK_TRANSFER", child: Text("Bank transfer")),
+                DropdownMenuItem(value: "UPI", child: Text("UPI / QR code")),
               ],
               onChanged: (val) {
                 if (val != null) setDialogState(() => selectedMode = val);
               },
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: AppSpacing.md),
             Container(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(AppSpacing.ms + 2),
               decoration: BoxDecoration(
                 color: AppColors.primaryLight,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadius.button),
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text("Dues Amount:", style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
-                  Text("₹500", style: GoogleFonts.inter(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                  Expanded(
+                    child: Text(
+                      'Dues amount',
+                      style: AppTextStyles.body.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    Inr.format(500),
+                    style: AppTextStyles.sectionTitle.copyWith(
+                      color: AppColors.primary,
+                    ),
+                  ),
                 ],
               ),
             ),
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                onPressed: isRecording
-                    ? null
-                    : () async {
-                        setDialogState(() => isRecording = true);
-                        final now = DateTime.now();
-                        final currentMonth = "${now.year}-${now.month.toString().padLeft(2, '0')}";
-                        final idemp = "ADMIN_PAY_${DateTime.now().millisecondsSinceEpoch}";
+            const SizedBox(height: AppSpacing.lg),
+            AppPrimaryButton(
+              label: 'Confirm & Issue Receipt',
+              isLoading: isRecording,
+              onPressed: () async {
+                setDialogState(() => isRecording = true);
+                final now = DateTime.now();
+                final currentMonth =
+                    "${now.year}-${now.month.toString().padLeft(2, '0')}";
+                final idemp =
+                    "ADMIN_PAY_${DateTime.now().millisecondsSinceEpoch}";
 
-                        final res = await _apiService.initializeDuesPayment(
-                          memberId: selectedMemberId,
-                          selectedMonths: [currentMonth],
-                          gateway: selectedMode,
-                          idempotencyKey: idemp,
-                        );
+                final res = await _apiService.initializeDuesPayment(
+                  memberId: selectedMemberId,
+                  selectedMonths: [currentMonth],
+                  gateway: selectedMode,
+                  idempotencyKey: idemp,
+                );
 
-                        if (context.mounted) {
-                          Navigator.of(ctx).pop();
-                          if (mounted) {
-                            final receipt = res?["receipt"] as Map<String, dynamic>?;
-                            final receiptNo = receipt?["receipt_number"] ?? res?["transaction_id"] ?? "Verified";
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text("✅ Payment recorded for $selectedMemberName! Receipt #$receiptNo"),
-                                backgroundColor: AppColors.primary,
-                              ),
-                            );
-                            _loadAdminData();
-                          }
-                        }
-                      },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  elevation: 0,
-                ),
-                child: isRecording
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : Text("Confirm & Issue Receipt", style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700)),
-              ),
+                if (context.mounted) {
+                  Navigator.of(ctx).pop();
+                  if (mounted) {
+                    final receipt = res?["receipt"] as Map<String, dynamic>?;
+                    final receiptNo = receipt?["receipt_number"] ??
+                        res?["transaction_id"] ??
+                        "Verified";
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Recorded for $selectedMemberName · receipt $receiptNo',
+                        ),
+                        backgroundColor: AppColors.primary,
+                      ),
+                    );
+                    _loadAdminData();
+                  }
+                }
+              },
             ),
           ],
         );
@@ -536,88 +729,246 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
+  Widget _dropdown<T>({
+    required T value,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T?> onChanged,
+  }) {
+    return DropdownButtonFormField<T>(
+      initialValue: value,
+      isExpanded: true,
+      style: AppTextStyles.body,
+      decoration: InputDecoration(
+        filled: true,
+        fillColor: AppColors.surface,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md - 2,
+          vertical: AppSpacing.ms + 2,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.button),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.button),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.button),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.6),
+        ),
+      ),
+      items: items,
+      onChanged: onChanged,
+    );
+  }
+
   void _showReceiptDetailsModal(BuildContext context, dynamic transaction) {
     if (transaction is! Map<String, dynamic>) return;
     final rNo = transaction["receipt_number"]?.toString() ?? "N/A";
-    final amt = transaction["amount"]?.toString() ?? "0";
+    final amt = (transaction["amount"] as num?)?.toDouble() ?? 0;
     final mName = transaction["member_name"]?.toString() ?? "Member";
     final date = transaction["created_at"]?.toString() ?? "Recent";
     final hash = transaction["receipt_hash"]?.toString() ?? "3f82a9...c4b2";
 
-    showModalBottomSheet(
+    AppBottomSheet.show(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(22),
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text("Cryptographic Receipt", style: GoogleFonts.inter(fontSize: 17, fontWeight: FontWeight.w700)),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded, size: 20),
-                  onPressed: () => Navigator.of(ctx).pop(),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            _buildModalRow("Receipt Number", rNo),
-            _buildModalRow("Payer Name", mName),
-            _buildModalRow("Amount Paid", "₹$amt"),
-            _buildModalRow("Transaction Date", date.split('T').first),
-            _buildModalRow("Ledger Hash", hash.length > 18 ? "${hash.substring(0, 18)}..." : hash),
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              height: 46,
-              child: ElevatedButton.icon(
-                onPressed: () async {
-                  final verify = await _apiService.verifyReceiptCryptographic(rNo);
-                  if (context.mounted) {
-                    final valid = verify?["cryptographic_valid"] == true;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(valid ? "✅ Blockchain Ledger Hash is Cryptographically Valid!" : "ℹ️ Receipt Verified in Database"),
-                        backgroundColor: valid ? AppColors.success : AppColors.primary,
-                      ),
-                    );
-                  }
-                },
-                icon: const Icon(Icons.verified_rounded, size: 17, color: Colors.white),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                label: Text("Verify On Immutable Ledger", style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 13)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildModalRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      title: 'Receipt',
+      subtitle: 'Signed entry in the Mahal ledger',
+      icon: Icons.verified_outlined,
+      builder: (ctx, _) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(label, style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary)),
-          Text(value, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+          AppDetailRow(label: 'Receipt number', value: rNo, emphasize: true),
+          const Divider(height: 1, color: AppColors.border),
+          AppDetailRow(label: 'Payer', value: mName),
+          const Divider(height: 1, color: AppColors.border),
+          AppDetailRow(label: 'Amount', value: Inr.format(amt)),
+          const Divider(height: 1, color: AppColors.border),
+          AppDetailRow(label: 'Date', value: date.split('T').first),
+          const Divider(height: 1, color: AppColors.border),
+          AppDetailRow(
+            label: 'Ledger hash',
+            value: hash.length > 18 ? '${hash.substring(0, 18)}…' : hash,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          AppPrimaryButton(
+            label: 'Verify on ledger',
+            icon: Icons.verified_rounded,
+            onPressed: () async {
+              final verify = await _apiService.verifyReceiptCryptographic(rNo);
+              if (!context.mounted) return;
+              final valid = verify?["cryptographic_valid"] == true;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    valid
+                        ? 'Signature valid — this receipt has not been altered.'
+                        : 'Receipt found in the database.',
+                  ),
+                  backgroundColor:
+                      valid ? AppColors.success : AppColors.primary,
+                ),
+              );
+            },
+          ),
         ],
       ),
     );
   }
+
+  void _openBroadcastComposer(BuildContext context) {
+    final titleCtrl = TextEditingController();
+    final msgCtrl = TextEditingController();
+    String severity = "INFO";
+    String targetAudience = "ALL";
+    bool isSending = false;
+
+    AppBottomSheet.show(
+      context: context,
+      title: 'Broadcast a notice',
+      subtitle: 'Goes to member phones as an in-app notice',
+      icon: Icons.campaign_rounded,
+      builder: (ctx, setModalState) {
+        Widget audienceChip(String value, String label, bool warning) {
+          final selected = targetAudience == value;
+          return Expanded(
+            child: InkWell(
+              onTap: () => setModalState(() {
+                targetAudience = value;
+                if (value == 'OVERDUE_ONLY') {
+                  severity = 'WARNING';
+                  titleCtrl.text = 'Monthly dues reminder';
+                  msgCtrl.text =
+                      'Respected member, our records show pending dues for '
+                      'your household. You can pay in the MahalFlow app.';
+                } else {
+                  severity = 'INFO';
+                  titleCtrl.text = 'Mahal announcement';
+                  msgCtrl.text = '';
+                }
+              }),
+              borderRadius: BorderRadius.circular(AppRadius.button),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.ms,
+                  vertical: AppSpacing.ms,
+                ),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? (warning ? AppColors.warningBg : AppColors.primaryLight)
+                      : AppColors.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.button),
+                  border: Border.all(
+                    color: selected
+                        ? (warning ? AppColors.warning : AppColors.primary)
+                        : AppColors.border,
+                  ),
+                ),
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.small.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: selected
+                        ? (warning ? AppColors.warning : AppColors.primary)
+                        : AppColors.textSecondary,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('WHO SHOULD GET THIS', style: AppTextStyles.label),
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              children: [
+                audienceChip('ALL', 'All members\n($_totalMembers families)', false),
+                const SizedBox(width: AppSpacing.sm),
+                audienceChip('OVERDUE_ONLY', 'Pending dues only', true),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            AppTextField(
+              controller: titleCtrl,
+              label: 'Notice title',
+              hint: 'e.g. Monthly dues reminder',
+              textCapitalization: TextCapitalization.sentences,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            AppTextField(
+              controller: msgCtrl,
+              label: 'Message',
+              hint: 'Write the full announcement…',
+              maxLines: 4,
+              textCapitalization: TextCapitalization.sentences,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text('PRIORITY', style: AppTextStyles.label),
+            const SizedBox(height: AppSpacing.sm - 2),
+            _dropdown<String>(
+              value: severity,
+              items: const [
+                DropdownMenuItem(value: "INFO", child: Text("Informational")),
+                DropdownMenuItem(value: "WARNING", child: Text("Dues reminder")),
+                DropdownMenuItem(value: "CRITICAL", child: Text("Critical")),
+              ],
+              onChanged: (val) {
+                if (val != null) setModalState(() => severity = val);
+              },
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            AppPrimaryButton(
+              label: 'Send to members',
+              icon: Icons.send_rounded,
+              isLoading: isSending,
+              onPressed: () async {
+                final title = titleCtrl.text.trim();
+                final desc = msgCtrl.text.trim();
+                if (title.isEmpty || desc.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('A title and a message are both required'),
+                    ),
+                  );
+                  return;
+                }
+
+                setModalState(() => isSending = true);
+                final res = await _apiService.createAlert(
+                  title: title,
+                  description: desc,
+                  severity: severity,
+                  audience: targetAudience,
+                );
+
+                if (context.mounted) {
+                  Navigator.of(ctx).pop();
+                  if (res != null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Notice sent to members.'),
+                        backgroundColor: AppColors.primary,
+                      ),
+                    );
+                  }
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // -----------------------------------------------------------------------
+  // Drawer
+  // -----------------------------------------------------------------------
 
   Widget _buildAdminDrawer(BuildContext context) {
     return Drawer(
@@ -625,40 +976,41 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.fromLTRB(20, 52, 20, 22),
-            decoration: const BoxDecoration(
-              color: AppColors.primary,
-            ),
             width: double.infinity,
+            decoration: const BoxDecoration(gradient: AppGradients.hero),
+            padding: EdgeInsets.only(
+              left: AppSpacing.lg,
+              right: AppSpacing.lg,
+              top: MediaQuery.paddingOf(context).top + AppSpacing.lg,
+              bottom: AppSpacing.lg,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const CircleAvatar(
-                  radius: 26,
-                  backgroundColor: Colors.white,
-                  child: Text(
-                    "AD",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primary,
+                Container(
+                  width: 52,
+                  height: 52,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.16),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.28),
                     ),
                   ),
+                  child: const Icon(Icons.mosque_rounded,
+                      size: 26, color: Colors.white),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpacing.ms),
                 Text(
-                  "Central Juma Masjid Mahal",
-                  style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  'Central Juma Masjid Mahal',
+                  style: AppTextStyles.cardTitle.copyWith(color: Colors.white),
                 ),
+                const SizedBox(height: 2),
                 Text(
-                  "Admin Portal • Reg #REG/KL/2024/0912",
-                  style: GoogleFonts.inter(
-                    color: Colors.white.withValues(alpha: 0.8),
-                    fontSize: 11,
+                  'Committee portal · REG/KL/2024/0912',
+                  style: AppTextStyles.small.copyWith(
+                    color: Colors.white.withValues(alpha: 0.74),
                   ),
                 ),
               ],
@@ -666,66 +1018,66 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.symmetric(vertical: 6),
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
               children: [
-                _buildDrawerTile(
+                _drawerTile(
                   icon: Icons.dashboard_outlined,
-                  title: "Dashboard",
+                  title: 'Dashboard',
                   onTap: () => Navigator.pop(context),
                 ),
-                _buildDrawerTile(
+                _drawerTile(
                   icon: Icons.people_outline_rounded,
-                  title: "Member Management",
+                  title: 'Members',
                   onTap: () {
                     Navigator.pop(context);
                     Navigator.of(context).pushNamed('/admin/members');
                   },
                 ),
-                _buildDrawerTile(
+                _drawerTile(
                   icon: Icons.assessment_outlined,
-                  title: "Financial Reports",
+                  title: 'Financial reports',
                   onTap: () {
                     Navigator.pop(context);
                     Navigator.of(context).pushNamed('/admin/reports');
                   },
                 ),
-                _buildDrawerTile(
+                _drawerTile(
                   icon: Icons.campaign_outlined,
-                  title: "Broadcast Notice to Mahal",
+                  title: 'Broadcast a notice',
                   color: AppColors.primary,
                   onTap: () {
                     Navigator.pop(context);
                     _openBroadcastComposer(context);
                   },
                 ),
-                _buildDrawerTile(
+                _drawerTile(
                   icon: Icons.upload_file_outlined,
-                  title: "Bulk Excel Import",
+                  title: 'Bulk import',
                   onTap: () {
                     Navigator.pop(context);
                     Navigator.of(context).pushNamed('/admin/import-step1');
                   },
                 ),
-                _buildDrawerTile(
+                _drawerTile(
                   icon: Icons.account_balance_outlined,
-                  title: "Payment Gateways",
+                  title: 'Payment gateways',
                   onTap: () {
                     Navigator.pop(context);
                     Navigator.of(context).pushNamed('/admin/gateways');
                   },
                 ),
-                _buildDrawerTile(
+                _drawerTile(
                   icon: Icons.history_rounded,
-                  title: "Audit Logs",
+                  title: 'Audit logs',
                   onTap: () {
                     Navigator.pop(context);
                     Navigator.of(context).pushNamed('/admin/audit-logs');
                   },
                 ),
-                const Divider(color: AppColors.border, height: 20),
-                _buildDrawerTile(
+                const Divider(color: AppColors.border, height: AppSpacing.lg),
+                _drawerTile(
                   icon: Icons.swap_horiz_rounded,
-                  title: "Switch to Member View",
+                  title: 'Switch to member view',
                   color: AppColors.info,
                   onTap: () {
                     Navigator.pop(context);
@@ -735,9 +1087,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     );
                   },
                 ),
-                _buildDrawerTile(
+                _drawerTile(
                   icon: Icons.logout_rounded,
-                  title: "Sign Out",
+                  title: 'Sign out',
                   color: AppColors.error,
                   onTap: () {
                     Navigator.pop(context);
@@ -755,7 +1107,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  Widget _buildDrawerTile({
+  Widget _drawerTile({
     required IconData icon,
     required String title,
     required VoidCallback onTap,
@@ -763,472 +1115,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }) {
     final itemColor = color ?? AppColors.textPrimary;
     return ListTile(
-      leading: Icon(icon, color: itemColor, size: 20),
+      leading: Icon(icon, color: itemColor, size: 21),
       title: Text(
         title,
-        style: GoogleFonts.inter(
-          fontSize: 13,
+        style: AppTextStyles.body.copyWith(
           fontWeight: FontWeight.w500,
           color: itemColor,
         ),
       ),
       onTap: onTap,
       dense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 18),
-    );
-  }
-
-  Widget _buildRecentTransactionsCard() {
-    final list = _recentTransactions.take(5).toList();
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-        boxShadow: const [
-          BoxShadow(
-            color: Color.fromRGBO(23, 32, 29, 0.02),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                "Recent Transactions",
-                style: GoogleFonts.inter(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(context).pushNamed('/admin/reports'),
-                style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
-                child: Text(
-                  "View All",
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          if (list.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              child: Text("No transactions recorded yet", style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 12)),
-            ),
-          ...list.map((t) {
-            final name = t["member_name"]?.toString() ?? "Member";
-            final desc = "${t["payment_type"] ?? "Payment"} • ${(t["receipt_number"] ?? "").toString().split('_').last}";
-            final amt = (t["amount"] as num?)?.toInt() ?? 0;
-            return InkWell(
-              onTap: () => _showReceiptDetailsModal(context, t),
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: const BoxDecoration(
-                  border: Border(bottom: BorderSide(color: AppColors.border, width: 0.8)),
-                ),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 18,
-                      backgroundColor: AppColors.primaryLight,
-                      child: Text(
-                        name.isNotEmpty ? name[0].toUpperCase() : "M",
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            name,
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            desc,
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              color: AppColors.textMuted,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          "₹$amt",
-                          style: GoogleFonts.inter(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppColors.successBg,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            "Paid",
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.success,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSystemStatusCard() {
-    final collectionRate = _totalMembers > 0 ? (_paidMembers / _totalMembers) : 0.0;
-    final collectionPct = (collectionRate * 100).toInt();
-    final subColor = _subscriptionStatus == "ACTIVE" ? AppColors.success : AppColors.warning;
-    final subBg = _subscriptionStatus == "ACTIVE" ? AppColors.successBg : AppColors.warningBg;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                "Collection Health",
-                style: GoogleFonts.inter(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: subBg,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  _subscriptionStatus,
-                  style: GoogleFonts.inter(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: subColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                "MTD Rate",
-                style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary),
-              ),
-              Text(
-                "$_paidMembers / $_totalMembers members ($collectionPct%)",
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: collectionRate >= 0.7 ? AppColors.success : AppColors.warning,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: collectionRate.clamp(0.0, 1.0),
-              backgroundColor: AppColors.border,
-              valueColor: AlwaysStoppedAnimation<Color>(
-                collectionRate >= 0.7 ? AppColors.success : AppColors.warning,
-              ),
-              minHeight: 7,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAnnouncementCard() {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.campaign_rounded, color: Colors.white, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                "Broadcast Notice",
-                style: GoogleFonts.inter(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            "Send announcements or dunning notices directly to member phones.",
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              color: Colors.white.withValues(alpha: 0.85),
-            ),
-          ),
-          const SizedBox(height: 14),
-          ElevatedButton(
-            onPressed: () => _openBroadcastComposer(context),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: AppColors.primary,
-              minimumSize: const Size.fromHeight(42),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              elevation: 0,
-            ),
-            child: Text(
-              "Compose Notice",
-              style: GoogleFonts.inter(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _openBroadcastComposer(BuildContext context) {
-    final titleCtrl = TextEditingController();
-    final msgCtrl = TextEditingController();
-    String severity = "INFO";
-    String targetAudience = "ALL";
-    bool isSending = false;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setModalState) {
-          return Container(
-            padding: EdgeInsets.only(
-              left: 20,
-              right: 20,
-              top: 22,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 22,
-            ),
-            decoration: const BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        "Broadcast Notice",
-                        style: GoogleFonts.inter(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close_rounded, color: AppColors.textMuted, size: 20),
-                        onPressed: () => Navigator.of(ctx).pop(),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Text("Target Audience", style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      ChoiceChip(
-                        label: Text("All Members ($_totalMembers Families)", style: GoogleFonts.inter(fontSize: 12)),
-                        selected: targetAudience == "ALL",
-                        selectedColor: AppColors.primaryLight,
-                        onSelected: (selected) {
-                          if (selected) {
-                            setModalState(() {
-                              targetAudience = "ALL";
-                              titleCtrl.text = "Mahal Announcement";
-                              msgCtrl.text = "";
-                            });
-                          }
-                        },
-                      ),
-                      ChoiceChip(
-                        label: Text("Pending Dues Only", style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFFB77900))),
-                        selected: targetAudience == "OVERDUE_ONLY",
-                        selectedColor: const Color(0xFFFFF5DC),
-                        onSelected: (selected) {
-                          if (selected) {
-                            setModalState(() {
-                              targetAudience = "OVERDUE_ONLY";
-                              severity = "WARNING";
-                              titleCtrl.text = "Monthly Dues Notice - August 2026";
-                              msgCtrl.text = "Respected member, our records indicate pending dues for your household. Please pay via the MahalFlow app.";
-                            });
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Text("Notice Title", style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: titleCtrl,
-                    decoration: InputDecoration(
-                      hintText: "e.g. Monthly Dues Notice",
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text("Message Content", style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: msgCtrl,
-                    maxLines: 3,
-                    decoration: InputDecoration(
-                      hintText: "Enter full announcement text...",
-                      contentPadding: const EdgeInsets.all(12),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text("Priority", style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
-                  const SizedBox(height: 6),
-                  DropdownButtonFormField<String>(
-                    initialValue: severity,
-                    decoration: InputDecoration(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: "INFO", child: Text("Informational")),
-                      DropdownMenuItem(value: "WARNING", child: Text("Warning / Due Reminder")),
-                      DropdownMenuItem(value: "CRITICAL", child: Text("Critical")),
-                    ],
-                    onChanged: (val) {
-                      if (val != null) setModalState(() => severity = val);
-                    },
-                  ),
-                  const SizedBox(height: 18),
-                  ElevatedButton(
-                    onPressed: isSending
-                        ? null
-                        : () async {
-                            final title = titleCtrl.text.trim();
-                            final desc = msgCtrl.text.trim();
-                            if (title.isEmpty || desc.isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text("Please fill title and message")),
-                              );
-                              return;
-                            }
-
-                            setModalState(() => isSending = true);
-                            final res = await _apiService.createAlert(
-                              title: title,
-                              description: desc,
-                              severity: severity,
-                              audience: targetAudience,
-                            );
-
-                            if (context.mounted) {
-                              Navigator.of(ctx).pop();
-                              if (res != null) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text("✅ Notice broadcasted successfully!"),
-                                    backgroundColor: AppColors.primary,
-                                  ),
-                                );
-                              }
-                            }
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size.fromHeight(46),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    child: isSending
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : Text(
-                            "Broadcast Notice",
-                            style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700),
-                          ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
     );
   }
 }

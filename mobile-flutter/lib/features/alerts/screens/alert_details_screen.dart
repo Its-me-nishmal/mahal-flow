@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_tokens.dart';
+import '../../../core/widgets/app_buttons.dart';
+import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_page_scaffold.dart';
 
 enum AlertType { payment, overdue, success, system, default_ }
 
@@ -18,188 +22,119 @@ class AlertDetailsScreen extends StatelessWidget {
     this.type = AlertType.system,
   });
 
+  bool get _needsPayment =>
+      type == AlertType.payment || type == AlertType.overdue;
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () {
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            } else {
-              Navigator.of(context).pushReplacementNamed('/member/alerts');
-            }
-          },
-        ),
-        title: Text(
-          'Alert Details',
-          style: GoogleFonts.inter(
-            fontSize: 24,
-            fontWeight: FontWeight.w700,
-            color: AppColors.primary,
-          ),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+    final visual = _visual;
+
+    return AppPageScaffold(
+      title: 'Notice',
+      eyebrow: visual.label,
+      onBack: () {
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        } else {
+          Navigator.of(context).pushReplacementNamed('/member/alerts');
+        }
+      },
+      floatingChild: AppCard.floating(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildTypeBadge(),
-                  const SizedBox(height: 16),
-                  Text(
-                    title,
-                    style: GoogleFonts.inter(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    time,
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    body,
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: AppColors.textSecondary,
-                      height: 1.5,
-                    ),
-                  ),
-                ],
+            Row(
+              children: [
+                AppIconChip(
+                  icon: visual.icon,
+                  color: visual.color,
+                  background: visual.background,
+                ),
+                const SizedBox(width: AppSpacing.ms),
+                StatusPill(
+                  label: visual.label,
+                  foreground: visual.color,
+                  background: visual.background,
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(title, style: AppTextStyles.sectionTitle),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              time,
+              style: AppTextStyles.small.copyWith(color: AppColors.textMuted),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            const Divider(height: 1, color: AppColors.border),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              body.isEmpty ? 'No further details were provided.' : body,
+              style: AppTextStyles.body.copyWith(
+                color: AppColors.textSecondary,
+                height: 22 / 14,
               ),
             ),
-            const SizedBox(height: 24),
-            _buildActionButton(context),
           ],
         ),
       ),
+      content: [
+        const SizedBox(height: AppSpacing.md),
+        if (_needsPayment)
+          const AppNoticeCard(
+            icon: Icons.info_outline_rounded,
+            title: 'Why you got this',
+            message: 'Your account shows dues that are not yet cleared.',
+            color: AppColors.info,
+            background: AppColors.infoBg,
+          ),
+      ],
+      bottomBar: AppBottomActionBar(
+        children: [
+          if (_needsPayment)
+            AppPrimaryButton(
+              label: 'Pay Dues Now',
+              icon: Icons.arrow_forward_rounded,
+              onPressed: () =>
+                  Navigator.of(context).pushNamed('/member/pay'),
+            )
+          else
+            AppSecondaryButton(
+              label: 'Close',
+              onPressed: () => Navigator.of(context).maybePop(),
+            ),
+        ],
+      ),
     );
   }
 
-  Widget _buildTypeBadge() {
-    String label;
-    Color color;
-    Color bg;
-
+  _AlertVisual get _visual {
     switch (type) {
       case AlertType.payment:
-        label = 'Payment';
-        color = AppColors.info;
-        bg = AppColors.infoBg;
+        return const _AlertVisual('Payment', Icons.payments_outlined,
+            AppColors.info, AppColors.infoBg);
       case AlertType.overdue:
-        label = 'Overdue';
-        color = AppColors.error;
-        bg = AppColors.errorBg;
+        return const _AlertVisual('Overdue', Icons.error_outline_rounded,
+            AppColors.error, AppColors.errorBg);
       case AlertType.success:
-        label = 'Success';
-        color = AppColors.success;
-        bg = AppColors.successBg;
+        return const _AlertVisual('Confirmed',
+            Icons.check_circle_outline_rounded, AppColors.success,
+            AppColors.successBg);
       case AlertType.system:
-        label = 'System';
-        color = AppColors.warning;
-        bg = AppColors.warningBg;
+        return const _AlertVisual('Announcement', Icons.campaign_outlined,
+            AppColors.warning, AppColors.warningBg);
       case AlertType.default_:
-        label = 'Info';
-        color = AppColors.textMuted;
-        bg = AppColors.background;
+        return const _AlertVisual('Notice', Icons.info_outline_rounded,
+            AppColors.textSecondary, AppColors.neutralBg);
     }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: GoogleFonts.inter(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: color,
-        ),
-      ),
-    );
   }
+}
 
-  Widget _buildActionButton(BuildContext context) {
-    String text;
-    Color bg;
+class _AlertVisual {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final Color background;
 
-    switch (type) {
-      case AlertType.payment:
-      case AlertType.overdue:
-        text = 'Pay Now';
-        bg = AppColors.primary;
-      default:
-        text = 'Dismiss';
-        bg = AppColors.surface;
-    }
-
-    if (type == AlertType.payment || type == AlertType.overdue) {
-      return SizedBox(
-        width: double.infinity,
-        height: 48,
-        child: ElevatedButton(
-          onPressed: () {},
-          style: ElevatedButton.styleFrom(
-            backgroundColor: bg,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-          child: Text(
-            text,
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      );
-    }
-
-    return SizedBox(
-      width: double.infinity,
-      height: 48,
-      child: OutlinedButton(
-        onPressed: () => Navigator.pop(context),
-        style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: AppColors.border),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-        child: Text(
-          text,
-          style: GoogleFonts.inter(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textSecondary,
-          ),
-        ),
-      ),
-    );
-  }
+  const _AlertVisual(this.label, this.icon, this.color, this.background);
 }

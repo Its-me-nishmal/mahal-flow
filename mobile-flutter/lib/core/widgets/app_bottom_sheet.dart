@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import '../theme/app_theme.dart';
+import '../theme/app_tokens.dart';
 
 class AppBottomSheet {
   static Future<T?> show<T>({
@@ -69,7 +70,7 @@ class AppBottomSheet {
                         margin: const EdgeInsets.only(right: 12),
                         decoration: BoxDecoration(
                           color: AppColors.primaryLight,
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(AppRadius.button),
                         ),
                         child: Icon(icon, color: AppColors.primary, size: 20),
                       ),
@@ -80,20 +81,13 @@ class AppBottomSheet {
                         children: [
                           Text(
                             title,
-                            style: GoogleFonts.inter(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textPrimary,
-                            ),
+                            style: AppTextStyles.sectionTitle,
                           ),
                           if (subtitle != null) ...[
                             const SizedBox(height: 2),
                             Text(
                               subtitle,
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                color: AppColors.textSecondary,
-                              ),
+                              style: AppTextStyles.small,
                             ),
                           ],
                         ],
@@ -145,7 +139,10 @@ class AppBottomSheet {
       icon: icon,
       builder: (ctx, _) => Text(
         message,
-        style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary, height: 1.4),
+        style: AppTextStyles.body.copyWith(
+          color: AppColors.textSecondary,
+          height: 20 / 14,
+        ),
       ),
       actions: [
         OutlinedButton(
@@ -153,9 +150,15 @@ class AppBottomSheet {
           style: OutlinedButton.styleFrom(
             minimumSize: const Size.fromHeight(44),
             side: const BorderSide(color: AppColors.border),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.button)),
           ),
-          child: Text(cancelLabel, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+          child: Text(
+            cancelLabel,
+            style: AppTextStyles.button.copyWith(
+              fontSize: 14,
+              color: AppColors.textSecondary,
+            ),
+          ),
         ),
         const SizedBox(width: 10),
         ElevatedButton(
@@ -164,10 +167,16 @@ class AppBottomSheet {
             backgroundColor: confirmColor,
             foregroundColor: Colors.white,
             minimumSize: const Size.fromHeight(44),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.button)),
             elevation: 0,
           ),
-          child: Text(confirmLabel, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
+          child: Text(
+            confirmLabel,
+            style: AppTextStyles.button.copyWith(
+              fontSize: 14,
+              color: Colors.white,
+            ),
+          ),
         ),
       ],
     );

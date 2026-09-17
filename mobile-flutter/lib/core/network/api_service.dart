@@ -21,7 +21,7 @@ class ApiService {
   static String cachedAddress = "Darul Aman";
 
   Dio _getDio(String baseUrl) {
-    return Dio(
+    final dio = Dio(
       BaseOptions(
         baseUrl: baseUrl,
         connectTimeout: const Duration(seconds: 4),
@@ -32,6 +32,16 @@ class ApiService {
         },
       ),
     );
+    dio.interceptors.add(LogInterceptor(
+      request: true,
+      requestHeader: true,
+      requestBody: true,
+      responseHeader: true,
+      responseBody: true,
+      error: true,
+      logPrint: (obj) => debugPrint("[DIO_API] $obj"),
+    ));
+    return dio;
   }
 
   Future<Response<T>?> _requestWithFallback<T>(
@@ -39,24 +49,32 @@ class ApiService {
   ) async {
     // 1. Try active Base URL first
     try {
+      debugPrint("[API_SERVICE] Requesting via: $activeBaseUrl");
       final dio = _getDio(activeBaseUrl);
       final res = await requestFn(dio);
       if (res.statusCode == 200 || res.statusCode == 201) {
+        debugPrint("[API_SERVICE] Success via: $activeBaseUrl (${res.statusCode})");
         return res;
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint("[API_SERVICE] Failed via $activeBaseUrl: $e");
+    }
 
     // 2. Try candidate fallback URLs if connection failed
     for (final url in candidateBaseUrls) {
       if (url == activeBaseUrl) continue;
       try {
+        debugPrint("[API_SERVICE] Fallback trying: $url");
         final dio = _getDio(url);
         final res = await requestFn(dio);
         if (res.statusCode == 200 || res.statusCode == 201) {
           activeBaseUrl = url; // remember working URL
+          debugPrint("[API_SERVICE] Fallback success: $url");
           return res;
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint("[API_SERVICE] Fallback failed $url: $e");
+      }
     }
     return null;
   }
@@ -81,7 +99,7 @@ class ApiService {
     required String memberId,
     required List<String> selectedMonths,
     required String idempotencyKey,
-    String gateway = "RAZORPAY",
+    String gateway = "PAYU",
   }) async {
     final response = await _requestWithFallback(
       (dio) => dio.post(
@@ -114,6 +132,52 @@ class ApiService {
     return null;
   }
 
+  // 3.01 Reconcile / Check Payment Gateway Status
+  Future<Map<String, dynamic>?> checkPaymentStatus(String transactionId) async {
+    final response = await _requestWithFallback(
+      (dio) => dio.get("/payments/$transactionId/status"),
+    );
+    if (response != null && response.data != null) {
+      return response.data as Map<String, dynamic>;
+    }
+    return null;
+  }
+
+  // 3.02 Fetch PayU Parameters and SHA-512 Hash for Native SDK
+  Future<Map<String, dynamic>?> getPayUCheckoutData(String orderId) async {
+    final response = await _requestWithFallback(
+      (dio) => dio.get("/payments/payu-checkout-data/$orderId"),
+    );
+    if (response != null && response.data != null) {
+      return response.data as Map<String, dynamic>;
+    }
+    return null;
+  }
+
+  // 3.03 Dynamically generate PayU hash from backend
+  Future<String?> generatePayUHash({
+    required String hashName,
+    required String hashString,
+    String? hashType,
+    String? postSalt,
+  }) async {
+    final response = await _requestWithFallback(
+      (dio) => dio.post(
+        "/payments/payu-generate-hash",
+        data: {
+          "hash_name": hashName,
+          "hash_string": hashString,
+          "hash_type": hashType ?? "",
+          "post_salt": postSalt ?? "",
+        },
+      ),
+    );
+    if (response != null && response.data != null) {
+      return response.data["hash"]?.toString();
+    }
+    return null;
+  }
+
   // 3.1 Initialize Contribution / Donation Payment
   Future<Map<String, dynamic>?> initializeContribution({
     required String memberId,
@@ -128,7 +192,7 @@ class ApiService {
           "member_id": memberId,
           "amount": amount,
           "purpose": fund,
-          "gateway": "RAZORPAY",
+          "gateway": "PAYU",
           "idempotency_key": idempotencyKey,
         },
       ),
@@ -215,7 +279,7 @@ class ApiService {
   // 8. Alerts Live APIs
   Future<List<dynamic>> getAlerts({String memberId = "MEM_001_9910"}) async {
     final response = await _requestWithFallback(
-      (dio) => dio.get("/admin/alerts?member_id=$memberId"),
+      (dio) => dio.get("/member/alerts?member_id=$memberId"),
     );
     if (response != null && response.data != null) {
       final map = response.data as Map<String, dynamic>;
@@ -264,26 +328,6 @@ class ApiService {
       (dio) => dio.post("/admin/alerts/mark-all-read"),
     );
     return response != null && response.statusCode == 200;
-  }
-
-  // 9. AutoPay Mandates
-  Future<Map<String, dynamic>?> createAutoPayMandate({
-    String memberId = "MEM_001_9910",
-    double maxAmount = 1000.0,
-  }) async {
-    final response = await _requestWithFallback(
-      (dio) => dio.post(
-        "/autopay/mandate/create",
-        data: {
-          "member_id": memberId,
-          "max_amount": maxAmount,
-        },
-      ),
-    );
-    if (response != null && response.data != null) {
-      return response.data as Map<String, dynamic>;
-    }
-    return null;
   }
 
   // 10. Admin Dashboard Live API
@@ -438,6 +482,38 @@ class ApiService {
   Future<Map<String, dynamic>?> verifyReceiptCryptographic(String receiptNumber) async {
     final response = await _requestWithFallback(
       (dio) => dio.get("/receipts/$receiptNumber/verify"),
+    );
+    if (response != null && response.data != null) {
+      return response.data as Map<String, dynamic>;
+    }
+    return null;
+  }
+
+  // 20. AutoPay Mandate APIs (PayU Recurring / e-Mandate)
+  Future<Map<String, dynamic>?> createAutoPayMandate({
+    String memberId = "MEM_001_9910",
+    double maxAmount = 1000.0,
+    String mode = "UPI",
+  }) async {
+    final response = await _requestWithFallback(
+      (dio) => dio.post(
+        "/autopay/mandate/create",
+        data: {
+          "member_id": memberId,
+          "max_amount": maxAmount,
+          "mode": mode,
+        },
+      ),
+    );
+    if (response != null && response.data != null) {
+      return response.data as Map<String, dynamic>;
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> getAutoPayStatus() async {
+    final response = await _requestWithFallback(
+      (dio) => dio.get("/autopay/mandate/status"),
     );
     if (response != null && response.data != null) {
       return response.data as Map<String, dynamic>;

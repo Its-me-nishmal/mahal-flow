@@ -1,23 +1,30 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import '../../../core/network/api_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/app_bottom_sheet.dart';
+import '../../../core/widgets/app_buttons.dart';
+import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_page_scaffold.dart';
+import '../../../core/widgets/app_text_field.dart';
+import '../../../core/widgets/shimmer_loading.dart';
 import '../widgets/admin_bottom_nav_bar.dart';
 
 class GatewayConfigurationScreen extends StatefulWidget {
   const GatewayConfigurationScreen({super.key});
 
   @override
-  State<GatewayConfigurationScreen> createState() => _GatewayConfigurationScreenState();
+  State<GatewayConfigurationScreen> createState() =>
+      _GatewayConfigurationScreenState();
 }
 
-class _GatewayConfigurationScreenState extends State<GatewayConfigurationScreen> {
+class _GatewayConfigurationScreenState
+    extends State<GatewayConfigurationScreen> {
   final ApiService _apiService = ApiService();
   bool _isLoading = true;
   List<Map<String, dynamic>> _gateways = [];
   String _primaryGateway = "";
-  String _secondaryGateway = "";
   String? _testedGatewayId;
 
   @override
@@ -27,350 +34,256 @@ class _GatewayConfigurationScreenState extends State<GatewayConfigurationScreen>
   }
 
   Future<void> _loadGateways() async {
-    setState(() => _isLoading = true);
+    if (mounted) setState(() => _isLoading = true);
     final data = await _apiService.getGateways();
-    if (mounted) {
-      setState(() {
-        _gateways = data.whereType<Map<String, dynamic>>().toList();
+    if (!mounted) return;
 
-        for (final gw in _gateways) {
-          if (gw["is_primary"] == true) {
-            _primaryGateway = gw["provider"]?.toString() ?? "";
-          } else if (_secondaryGateway.isEmpty) {
-            _secondaryGateway = gw["provider"]?.toString() ?? "";
-          }
-        }
-        if (_primaryGateway.isEmpty && _gateways.isNotEmpty) {
-          _primaryGateway = _gateways.first["provider"]?.toString() ?? "";
-        }
+    setState(() {
+      _gateways = data.whereType<Map<String, dynamic>>().toList();
 
-        _isLoading = false;
-      });
-    }
+      for (final gw in _gateways) {
+        if (gw["is_primary"] == true) {
+          _primaryGateway = gw["provider"]?.toString() ?? "";
+        }
+      }
+      if (_primaryGateway.isEmpty && _gateways.isNotEmpty) {
+        _primaryGateway = _gateways.first["provider"]?.toString() ?? "";
+      }
+
+      _isLoading = false;
+    });
   }
 
+  int get _connectedCount => _gateways
+      .where((gw) => (gw["status"]?.toString() ?? 'ACTIVE') == 'ACTIVE')
+      .length;
+
   void _openConfigureModal(Map<String, dynamic> gw) {
-    final name = gw["provider"]?.toString() ?? "Payment Gateway";
-    final keyCtrl = TextEditingController(text: "••••••••••••••••");
-    final secretCtrl = TextEditingController(text: "••••••••••••••••");
+    final name = gw["provider"]?.toString() ?? 'Payment gateway';
+    final keyCtrl = TextEditingController(text: '••••••••••••••••');
+    final secretCtrl = TextEditingController(text: '••••••••••••••••');
 
     AppBottomSheet.show(
       context: context,
-      title: "Configure $name",
-      subtitle: "Production secrets are encrypted with AES-256",
+      title: 'Configure $name',
+      subtitle: 'Secrets are stored encrypted, never in plain text',
       icon: Icons.vpn_key_rounded,
-      builder: (ctx, _) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("API Key / Merchant ID", style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
-            const SizedBox(height: 6),
-            TextField(
-              controller: keyCtrl,
-              decoration: InputDecoration(
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              ),
-            ),
-            const SizedBox(height: 14),
-            Text("Webhook Secret Key", style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
-            const SizedBox(height: 6),
-            TextField(
-              controller: secretCtrl,
-              obscureText: true,
-              decoration: InputDecoration(
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              ),
-            ),
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.of(ctx).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text("✅ $name configuration updated & saved securely!"),
-                      backgroundColor: AppColors.primary,
-                    ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
+      builder: (ctx, _) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppTextField(
+            controller: keyCtrl,
+            label: 'API key / merchant ID',
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppTextField(
+            controller: secretCtrl,
+            label: 'Webhook secret',
+            helper: 'Used to verify that callbacks really came from $name.',
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          AppPrimaryButton(
+            label: 'Save Configuration',
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('$name configuration saved.'),
                   backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  elevation: 0,
                 ),
-                child: Text("Save Configuration", style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700)),
-              ),
-            ),
-          ],
-        );
-      },
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 
   void _testConnection(String id) {
     setState(() => _testedGatewayId = id);
     Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        setState(() => _testedGatewayId = null);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("✅ Gateway connection verified & live (Ping: 42ms)"),
-            backgroundColor: AppColors.success,
-          ),
-        );
-      }
+      if (!mounted) return;
+      setState(() => _testedGatewayId = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Connection verified — the gateway responded.'),
+          backgroundColor: AppColors.success,
+        ),
+      );
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.primary),
-          onPressed: () {
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            } else {
-              Navigator.of(context).pushReplacementNamed('/admin/dashboard');
-            }
-          },
+    return AppPageScaffold(
+      title: 'Gateways',
+      eyebrow: 'Payments',
+      subtitle: 'Where member payments are processed.',
+      onBack: () {
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        } else {
+          Navigator.of(context).pushReplacementNamed('/admin/dashboard');
+        }
+      },
+      actions: [
+        AppHeaderIconButton(
+          icon: Icons.refresh_rounded,
+          tooltip: 'Refresh',
+          onTap: _loadGateways,
         ),
-        title: Text(
-          "Payment Gateways",
-          style: GoogleFonts.inter(
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
-            color: AppColors.primary,
-          ),
-        ),
-        shape: const Border(
-          bottom: BorderSide(color: AppColors.border, width: 1),
-        ),
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-          : RefreshIndicator(
-              onRefresh: _loadGateways,
-              color: AppColors.primary,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.warningBg,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.security, color: AppColors.warning, size: 20),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              "Strict Credential Vault: Production secrets are encrypted with AES-256.",
-                              style: GoogleFonts.inter(fontSize: 12, color: AppColors.textPrimary),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    ..._gateways.map((gw) {
-                      final name = gw["provider"]?.toString() ?? "Unknown Gateway";
-                      final rawStatus = gw["status"]?.toString() ?? "ACTIVE";
-                      final isPrimary = gw["is_primary"] == true;
-                      final id = gw["id"]?.toString() ?? "";
-
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _buildGatewayCard(
-                          gw: gw,
-                          id: id,
-                          name: name,
-                          status: rawStatus == "ACTIVE" ? "Connected" : "Inactive",
-                          statusColor: rawStatus == "ACTIVE" ? AppColors.success : AppColors.warning,
-                          statusBg: rawStatus == "ACTIVE" ? AppColors.successBg : AppColors.warningBg,
-                          isPrimary: isPrimary,
-                        ),
-                      );
-                    }),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("Routing rules verified & active across all payment channels"),
-                              backgroundColor: AppColors.primary,
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.sync_alt, size: 18, color: AppColors.primary),
-                        label: Text(
-                          "Verify Gateway Routing Rules",
-                          style: GoogleFonts.inter(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(48),
-                          side: const BorderSide(color: AppColors.primary),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+      ],
+      onRefresh: _loadGateways,
+      floatingChild: AppCard.floating(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text('PRIMARY GATEWAY', style: AppTextStyles.label),
                 ),
+                StatusPill(
+                  label: '$_connectedCount connected',
+                  foreground: AppColors.success,
+                  background: AppColors.successBg,
+                  icon: Icons.check_circle_rounded,
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.ms),
+            Text(
+              _isLoading
+                  ? 'Loading…'
+                  : _primaryGateway.isEmpty
+                      ? 'None set'
+                      : _primaryGateway,
+              style: AppTextStyles.sectionTitle.copyWith(fontSize: 22),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Every member payment is routed here first. If it fails, the '
+              'next configured gateway takes over.',
+              style: AppTextStyles.body.copyWith(
+                color: AppColors.textSecondary,
               ),
             ),
+          ],
+        ),
+      ),
+      content: [
+        const SizedBox(height: AppSpacing.md),
+        const AppNoticeCard(
+          icon: Icons.shield_outlined,
+          title: 'Credentials are encrypted',
+          message: 'Production secrets are stored with AES-256 encryption.',
+          color: AppColors.warning,
+          background: AppColors.warningBg,
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        const AppSectionHeader(title: 'Configured gateways'),
+        if (_isLoading)
+          const ShimmerLoading(
+            child: Column(
+              children: [
+                ShimmerCardSkeleton(height: 150),
+                ShimmerCardSkeleton(height: 150),
+              ],
+            ),
+          )
+        else
+          for (final gw in _gateways) ...[
+            _gatewayCard(gw),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+        const SizedBox(height: AppSpacing.sm),
+        AppSecondaryButton(
+          label: 'Verify routing rules',
+          icon: Icons.sync_alt_rounded,
+          onPressed: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Routing rules are active across all channels.'),
+                backgroundColor: AppColors.primary,
+              ),
+            );
+          },
+        ),
+      ],
       bottomNavigationBar: const AdminBottomNavBar(currentIndex: 0),
     );
   }
 
-  Widget _buildGatewayCard({
-    required Map<String, dynamic> gw,
-    required String id,
-    required String name,
-    required String status,
-    required Color statusColor,
-    required Color statusBg,
-    bool isPrimary = false,
-  }) {
+  Widget _gatewayCard(Map<String, dynamic> gw) {
+    final name = gw["provider"]?.toString() ?? 'Unknown gateway';
+    final rawStatus = gw["status"]?.toString() ?? 'ACTIVE';
+    final isPrimary = gw["is_primary"] == true;
+    final id = gw["id"]?.toString() ?? '';
+    final isConnected = rawStatus == 'ACTIVE';
     final isTesting = _testedGatewayId == id;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-        boxShadow: const [
-          BoxShadow(
-            color: Color.fromRGBO(23, 32, 29, 0.03),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
+    return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              AppIconChip(
+                icon: Icons.account_balance_outlined,
+                color: isConnected ? AppColors.primary : AppColors.textMuted,
+                background:
+                    isConnected ? AppColors.primaryLight : AppColors.neutralBg,
+              ),
+              const SizedBox(width: AppSpacing.ms),
               Expanded(
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Flexible(
-                      child: Text(
-                        name,
-                        style: GoogleFonts.inter(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.cardTitle.copyWith(fontSize: 15),
                     ),
-                    if (isPrimary) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryLight,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          "Primary",
-                          style: GoogleFonts.inter(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                      ),
-                    ],
+                    const SizedBox(height: 2),
+                    Text(
+                      isPrimary ? 'Primary route' : 'Fallback route',
+                      style: AppTextStyles.small,
+                    ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: statusBg,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  status,
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: statusColor,
-                  ),
-                ),
+              StatusPill(
+                label: isConnected ? 'Connected' : 'Inactive',
+                foreground:
+                    isConnected ? AppColors.success : AppColors.warning,
+                background:
+                    isConnected ? AppColors.successBg : AppColors.warningBg,
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            "Encrypted Merchant Key",
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              color: AppColors.textSecondary,
-            ),
+          const AppCardDivider(),
+          const AppDetailRow(
+            label: 'Merchant key',
+            value: '••••••••••••••••',
           ),
-          const SizedBox(height: 4),
-          Text(
-            "••••••••••••••••",
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              color: AppColors.textMuted,
-            ),
-          ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sm),
           Row(
             children: [
               Expanded(
-                child: OutlinedButton(
-                  onPressed: () => _testConnection(id),
-                  style: OutlinedButton.styleFrom(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    side: const BorderSide(color: AppColors.border),
-                  ),
-                  child: isTesting
-                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                      : Text("Test Connection", style: GoogleFonts.inter(fontSize: 13, color: AppColors.textPrimary)),
+                child: AppSecondaryButton(
+                  label: isTesting ? 'Testing…' : 'Test connection',
+                  height: 44,
+                  color: AppColors.textSecondary,
+                  onPressed: isTesting ? null : () => _testConnection(id),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpacing.sm),
               Expanded(
-                child: ElevatedButton(
+                child: AppPrimaryButton(
+                  label: 'Configure',
+                  height: 44,
                   onPressed: () => _openConfigureModal(gw),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  child: Text("Configure", style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
                 ),
               ),
             ],

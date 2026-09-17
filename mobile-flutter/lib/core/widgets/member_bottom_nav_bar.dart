@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import '../network/api_service.dart';
-import '../theme/app_theme.dart';
+import 'app_bottom_nav_bar.dart';
 
 class MemberBottomNavBar extends StatelessWidget {
   final int currentIndex;
 
-  const MemberBottomNavBar({
-    super.key,
-    required this.currentIndex,
-  });
+  const MemberBottomNavBar({super.key, required this.currentIndex});
 
   void _onItemTapped(BuildContext context, int index) {
     if (index == currentIndex) return;
@@ -38,124 +35,42 @@ class MemberBottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(
-          top: BorderSide(color: AppColors.border, width: 1),
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 64,
-          child: Row(
-            children: [
-              Expanded(
-                child: _buildNavItem(
-                  context,
-                  index: 0,
-                  icon: currentIndex == 0 ? Icons.home : Icons.home_outlined,
-                  label: "Home",
-                ),
-              ),
-              Expanded(
-                child: _buildNavItem(
-                  context,
-                  index: 1,
-                  icon: currentIndex == 1 ? Icons.payments : Icons.payments_outlined,
-                  label: "Payments",
-                ),
-              ),
-              Expanded(
-                child: _buildNavItem(
-                  context,
-                  index: 2,
-                  icon: currentIndex == 2 ? Icons.receipt_long : Icons.receipt_long_outlined,
-                  label: "Receipts",
-                ),
-              ),
-              Expanded(
-                child: ValueListenableBuilder<int>(
-                  valueListenable: ApiService.unreadAlertsCount,
-                  builder: (context, unreadCount, _) {
-                    return _buildNavItem(
-                      context,
-                      index: 3,
-                      icon: currentIndex == 3 ? Icons.notifications : Icons.notifications_none_outlined,
-                      label: "Alerts",
-                      showBadge: unreadCount > 0,
-                    );
-                  },
-                ),
-              ),
-              Expanded(
-                child: _buildNavItem(
-                  context,
-                  index: 4,
-                  icon: currentIndex == 4 ? Icons.person : Icons.person_outline,
-                  label: "Profile",
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(
-    BuildContext context, {
-    required int index,
-    required IconData icon,
-    required String label,
-    bool showBadge = false,
-  }) {
-    final isSelected = index == currentIndex;
-    final color = isSelected ? AppColors.primary : AppColors.textSecondary;
-
-    return InkWell(
-      onTap: () => _onItemTapped(context, index),
-      splashColor: Colors.transparent,
-      highlightColor: Colors.transparent,
-      child: Column(
-        mainAxisSize: MainAxisSize.max,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Icon(
-                icon,
-                size: 24,
-                color: color,
-              ),
-              if (showBadge)
-                Positioned(
-                  top: -1,
-                  right: -2,
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
-                      color: AppColors.error,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 3),
-          Text(
-            label,
-            style: GoogleFonts.inter(
-              fontSize: 11,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-              color: color,
+    return ValueListenableBuilder<int>(
+      valueListenable: ApiService.unreadAlertsCount,
+      builder: (context, unreadCount, _) {
+        return AppBottomNavBar(
+          currentIndex: currentIndex,
+          onTap: (index) => _onItemTapped(context, index),
+          items: [
+            const AppNavItem(
+              icon: Icons.home_outlined,
+              activeIcon: Icons.home_rounded,
+              label: 'Home',
             ),
-          ),
-        ],
-      ),
+            const AppNavItem(
+              icon: Icons.payments_outlined,
+              activeIcon: Icons.payments_rounded,
+              label: 'Pay',
+            ),
+            const AppNavItem(
+              icon: Icons.receipt_long_outlined,
+              activeIcon: Icons.receipt_long_rounded,
+              label: 'Receipts',
+            ),
+            AppNavItem(
+              icon: Icons.campaign_outlined,
+              activeIcon: Icons.campaign_rounded,
+              label: 'Notices',
+              showBadge: unreadCount > 0,
+            ),
+            const AppNavItem(
+              icon: Icons.person_outline_rounded,
+              activeIcon: Icons.person_rounded,
+              label: 'Profile',
+            ),
+          ],
+        );
+      },
     );
   }
 }

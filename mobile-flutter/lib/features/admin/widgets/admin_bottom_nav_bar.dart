@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../../../core/theme/app_theme.dart';
+
+import '../../../core/widgets/app_bottom_nav_bar.dart';
 
 class AdminBottomNavBar extends StatelessWidget {
   final int currentIndex;
 
-  const AdminBottomNavBar({
-    super.key,
-    required this.currentIndex,
-  });
+  const AdminBottomNavBar({super.key, required this.currentIndex});
 
   void _onTap(BuildContext context, int index) {
     if (index == currentIndex) return;
@@ -30,45 +27,31 @@ class AdminBottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        border: Border(
-          top: BorderSide(color: AppColors.border, width: 1),
+    return AppBottomNavBar(
+      currentIndex: currentIndex.clamp(0, 3),
+      onTap: (index) => _onTap(context, index),
+      items: const [
+        AppNavItem(
+          icon: Icons.dashboard_outlined,
+          activeIcon: Icons.dashboard_rounded,
+          label: 'Dashboard',
         ),
-      ),
-      child: BottomNavigationBar(
-        currentIndex: currentIndex.clamp(0, 3),
-        onTap: (idx) => _onTap(context, idx),
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: AppColors.surface,
-        selectedItemColor: AppColors.primary,
-        unselectedItemColor: AppColors.textSecondary,
-        selectedLabelStyle: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
-        unselectedLabelStyle: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500),
-        elevation: 0,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard_outlined),
-            activeIcon: Icon(Icons.dashboard),
-            label: "Dashboard",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.people_outline),
-            activeIcon: Icon(Icons.people),
-            label: "Members",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.assessment_outlined),
-            activeIcon: Icon(Icons.assessment),
-            label: "Reports",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.history_outlined),
-            activeIcon: Icon(Icons.history),
-            label: "Logs",
-          ),
-        ],
-      ),
+        AppNavItem(
+          icon: Icons.people_outline_rounded,
+          activeIcon: Icons.people_rounded,
+          label: 'Members',
+        ),
+        AppNavItem(
+          icon: Icons.assessment_outlined,
+          activeIcon: Icons.assessment_rounded,
+          label: 'Reports',
+        ),
+        AppNavItem(
+          icon: Icons.history_rounded,
+          activeIcon: Icons.history_rounded,
+          label: 'Logs',
+        ),
+      ],
     );
   }
 }

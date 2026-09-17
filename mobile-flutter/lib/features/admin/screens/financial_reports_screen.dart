@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import '../../../core/network/api_service.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/app_filter_chip_bar.dart';
+import '../../../core/theme/app_tokens.dart';
+import '../../../core/utils/currency_format.dart';
+import '../../../core/widgets/app_buttons.dart';
+import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_page_scaffold.dart';
 import '../../../core/widgets/shimmer_loading.dart';
 import '../widgets/admin_bottom_nav_bar.dart';
 
@@ -15,14 +19,14 @@ class FinancialReportsScreen extends StatefulWidget {
 
 class _FinancialReportsScreenState extends State<FinancialReportsScreen> {
   final ApiService _apiService = ApiService();
-  String _paymentStatusFilter = "All";
-  String _paymentTypeFilter = "All";
+  static const List<String> _typeFilters = ['All', 'Dues', 'Contribution'];
 
+  String _paymentTypeFilter = 'All';
   bool _isLoading = true;
   double _totalCollected = 0;
   double _totalPending = 0;
   double _totalDonations = 0;
-  String _period = "";
+  String _period = '';
   List<Map<String, dynamic>> _monthlyBreakdown = [];
 
   @override
@@ -32,61 +36,73 @@ class _FinancialReportsScreenState extends State<FinancialReportsScreen> {
   }
 
   Future<void> _loadData() async {
-    setState(() => _isLoading = true);
+    if (mounted) setState(() => _isLoading = true);
 
     final report = await _apiService.getFinancialReport();
     final receipts = await _apiService.getRecentReceipts();
+    if (!mounted) return;
 
-    if (mounted) {
-      setState(() {
-        if (report != null) {
-          final summary = report["summary"] as Map<String, dynamic>? ?? {};
-          _totalCollected = (summary["total_collected"] as num?)?.toDouble() ?? 0;
-          _totalPending = (summary["pending_dues"] as num?)?.toDouble() ?? 0;
-          _totalDonations = (summary["donations"] as num?)?.toDouble() ?? 0;
-          _period = report["period"]?.toString() ?? "2026-08";
-        }
+    setState(() {
+      if (report != null) {
+        final summary = report["summary"] as Map<String, dynamic>? ?? {};
+        _totalCollected =
+            (summary["total_collected"] as num?)?.toDouble() ?? 0;
+        _totalPending = (summary["pending_dues"] as num?)?.toDouble() ?? 0;
+        _totalDonations = (summary["donations"] as num?)?.toDouble() ?? 0;
+        _period = report["period"]?.toString() ?? "2026-08";
+      }
 
-        // Group receipts by month
-        final Map<String, Map<String, dynamic>> grouped = {};
-        for (final r in receipts) {
-          if (r is Map<String, dynamic>) {
-            final pType = r["payment_type"]?.toString() ?? "MONTHLY_DUES";
-            if (_paymentTypeFilter == "Dues" && !pType.contains("DUES")) continue;
-            if (_paymentTypeFilter == "Contribution" && !pType.contains("CONTRIBUTION") && !pType.contains("DONATION")) continue;
-
-            final createdAt = r["created_at"]?.toString() ?? r["paid_at"]?.toString() ?? "";
-            String monthKey = "2026-08";
-            if (createdAt.length >= 7) {
-              monthKey = createdAt.substring(0, 7);
-            }
-            if (!grouped.containsKey(monthKey)) {
-              grouped[monthKey] = {
-                "month": monthKey,
-                "collected": 0.0,
-                "members": 0,
-                "receipts": <dynamic>[],
-              };
-            }
-            grouped[monthKey]!["collected"] =
-                (grouped[monthKey]!["collected"] as double) +
-                    ((r["amount"] as num?)?.toDouble() ?? 0);
-            grouped[monthKey]!["members"] =
-                (grouped[monthKey]!["members"] as int) + 1;
-            (grouped[monthKey]!["receipts"] as List<dynamic>).add(r);
+      // Group receipts by month, honouring the category filter.
+      final Map<String, Map<String, dynamic>> grouped = {};
+      for (final r in receipts) {
+        if (r is Map<String, dynamic>) {
+          final pType = r["payment_type"]?.toString() ?? "MONTHLY_DUES";
+          if (_paymentTypeFilter == "Dues" && !pType.contains("DUES")) {
+            continue;
           }
+          if (_paymentTypeFilter == "Contribution" &&
+              !pType.contains("CONTRIBUTION") &&
+              !pType.contains("DONATION")) {
+            continue;
+          }
+
+          final createdAt = r["created_at"]?.toString() ??
+              r["paid_at"]?.toString() ??
+              "";
+          String monthKey = "2026-08";
+          if (createdAt.length >= 7) {
+            monthKey = createdAt.substring(0, 7);
+          }
+          grouped.putIfAbsent(
+            monthKey,
+            () => {
+              "month": monthKey,
+              "collected": 0.0,
+              "members": 0,
+              "receipts": <dynamic>[],
+            },
+          );
+          grouped[monthKey]!["collected"] =
+              (grouped[monthKey]!["collected"] as double) +
+                  ((r["amount"] as num?)?.toDouble() ?? 0);
+          grouped[monthKey]!["members"] =
+              (grouped[monthKey]!["members"] as int) + 1;
+          (grouped[monthKey]!["receipts"] as List<dynamic>).add(r);
         }
+      }
 
-        final sortedKeys = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
-        _monthlyBreakdown = sortedKeys.map((k) => grouped[k]!).toList();
+      final sortedKeys = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
+      _monthlyBreakdown = sortedKeys.map((k) => grouped[k]!).toList();
 
-        _isLoading = false;
-      });
-    }
+      _isLoading = false;
+    });
   }
 
   String _formatMonth(String ym) {
-    final months = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const months = [
+      "", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+    ];
     final parts = ym.split("-");
     if (parts.length == 2) {
       final year = parts[0];
@@ -96,322 +112,225 @@ class _FinancialReportsScreenState extends State<FinancialReportsScreen> {
     return ym;
   }
 
-  String _formatAmount(double amount) {
-    if (amount >= 100000) {
-      return "₹${(amount / 1000).toStringAsFixed(1)}K";
-    }
-    return "₹${amount.toInt().toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}";
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.primary),
+    return AppPageScaffold(
+      title: 'Reports',
+      eyebrow: 'Finance',
+      subtitle: _period.isEmpty
+          ? 'Collection across the Mahal'
+          : 'Period ${_formatMonth(_period)}',
+      onBack: () {
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        } else {
+          Navigator.of(context).pushReplacementNamed('/admin/dashboard');
+        }
+      },
+      actions: [
+        AppHeaderIconButton(
+          icon: Icons.refresh_rounded,
+          tooltip: 'Refresh',
+          onTap: _loadData,
+        ),
+      ],
+      headerChild: AppHeroFilterChips(
+        options: _typeFilters,
+        selected: _paymentTypeFilter,
+        onSelected: (val) {
+          setState(() => _paymentTypeFilter = val);
+          _loadData();
+        },
+      ),
+      onRefresh: _loadData,
+      floatingChild: _summaryCard(),
+      content: [
+        const SizedBox(height: AppSpacing.md),
+        AppSecondaryButton(
+          label: 'Export statement (PDF)',
+          icon: Icons.picture_as_pdf_outlined,
           onPressed: () {
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            } else {
-              Navigator.of(context).pushReplacementNamed('/admin/dashboard');
-            }
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Statement for ${_formatMonth(_period)} generated.',
+                ),
+                backgroundColor: AppColors.primary,
+              ),
+            );
           },
         ),
-        title: Text(
-          "Financial Reports",
-          style: GoogleFonts.inter(
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: AppColors.primary,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: AppColors.primary),
-            tooltip: "Refresh Data",
-            onPressed: _loadData,
-          ),
-        ],
-        shape: const Border(
-          bottom: BorderSide(color: AppColors.border, width: 1),
-        ),
-      ),
-      body: _isLoading
-          ? ShimmerLoading(
-              isLoading: true,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: const [
-                  ShimmerCardSkeleton(height: 140),
-                  SizedBox(height: 12),
-                  ShimmerCardSkeleton(height: 100),
-                  SizedBox(height: 12),
-                  ShimmerCardSkeleton(height: 80),
-                ],
-              ),
-            )
-          : RefreshIndicator(
-              onRefresh: _loadData,
-              color: AppColors.primary,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildFilterSection(),
-                    const SizedBox(height: 14),
-                    _buildSummaryGrid(),
-                    const SizedBox(height: 14),
-                    _buildMonthlyBreakdownCard(),
-                  ],
-                ),
-              ),
-            ),
+        const SizedBox(height: AppSpacing.lg),
+        const AppSectionHeader(title: 'Month by month'),
+        if (_isLoading) _skeleton() else _breakdownCard(),
+      ],
       bottomNavigationBar: const AdminBottomNavBar(currentIndex: 2),
     );
   }
 
-  Widget _buildFilterSection() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-      ),
+  Widget _summaryCard() {
+    return AppCard.floating(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                "Accounting Filters",
-                style: GoogleFonts.inter(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                ),
+              Expanded(
+                child: Text('TOTAL COLLECTED', style: AppTextStyles.label),
               ),
               if (_period.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryLight,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    _formatMonth(_period),
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.primary,
-                    ),
-                  ),
+                StatusPill(
+                  label: _formatMonth(_period),
+                  foreground: AppColors.primary,
+                  background: AppColors.primaryLight,
                 ),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            "Payment Status",
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
+          const SizedBox(height: AppSpacing.ms),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              Inr.format(_totalCollected),
+              semanticsLabel: 'Collected ${Inr.spoken(_totalCollected)}',
+              style: AppTextStyles.amount.copyWith(color: AppColors.success),
             ),
           ),
-          const SizedBox(height: 6),
-          AppFilterChipBar(
-            options: const ["All", "Paid", "Pending"],
-            selectedOption: _paymentStatusFilter,
-            onSelected: (val) {
-              setState(() => _paymentStatusFilter = val);
-              _loadData();
-            },
-          ),
-          const SizedBox(height: 12),
-          Text(
-            "Category",
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 6),
-          AppFilterChipBar(
-            options: const ["All", "Dues", "Contribution"],
-            selectedOption: _paymentTypeFilter,
-            onSelected: (val) {
-              setState(() => _paymentTypeFilter = val);
-              _loadData();
-            },
+          const SizedBox(height: AppSpacing.md),
+          const Divider(height: 1, color: AppColors.border),
+          const SizedBox(height: AppSpacing.ms),
+          Row(
+            children: [
+              Expanded(
+                child: _miniStat(
+                  'Pending dues',
+                  Inr.format(_totalPending),
+                  AppColors.warning,
+                ),
+              ),
+              Container(width: 1, height: 34, color: AppColors.border),
+              Expanded(
+                child: _miniStat(
+                  'Contributions',
+                  Inr.format(_totalDonations),
+                  AppColors.info,
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSummaryGrid() {
-    return Column(
-      children: [
-        GridView.count(
-          crossAxisCount: 3,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 8,
-          crossAxisSpacing: 8,
-          childAspectRatio: 1.1,
+  Widget _miniStat(String label, String value, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: AppTextStyles.small),
+          const SizedBox(height: 2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: AppTextStyles.sectionTitle.copyWith(
+                fontSize: 18,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _breakdownCard() {
+    if (_monthlyBreakdown.isEmpty) {
+      return AppCard(
+        child: Row(
           children: [
-            _buildMiniMetric("Collected", _formatAmount(_totalCollected), AppColors.success, AppColors.successBg),
-            _buildMiniMetric("Pending", _formatAmount(_totalPending), AppColors.warning, AppColors.warningBg),
-            _buildMiniMetric("Donations", _formatAmount(_totalDonations), AppColors.info, AppColors.infoBg),
+            const AppIconChip(
+              icon: Icons.bar_chart_rounded,
+              color: AppColors.textMuted,
+              background: AppColors.neutralBg,
+            ),
+            const SizedBox(width: AppSpacing.ms),
+            Expanded(
+              child: Text(
+                'No transactions match this filter.',
+                style: AppTextStyles.body.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
           ],
         ),
-        const SizedBox(height: 10),
-        SizedBox(
-          width: double.infinity,
-          height: 44,
-          child: OutlinedButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text("📄 Financial Statement for $_period generated!"),
-                  backgroundColor: AppColors.primary,
-                ),
-              );
-            },
-            icon: const Icon(Icons.picture_as_pdf_outlined, size: 16, color: AppColors.primary),
-            label: Text(
-              "Export Statement PDF",
-              style: GoogleFonts.inter(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppColors.primary,
-              ),
-            ),
-            style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: AppColors.primary),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          ),
-        ),
-      ],
+      );
+    }
+
+    return AppCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          for (var i = 0; i < _monthlyBreakdown.length; i++) ...[
+            if (i > 0) const Divider(height: 1, color: AppColors.border),
+            _breakdownRow(_monthlyBreakdown[i]),
+          ],
+        ],
+      ),
     );
   }
 
-  Widget _buildMiniMetric(String label, String value, Color color, Color bg) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+  Widget _breakdownRow(Map<String, dynamic> t) {
+    final monthKey = t["month"]?.toString() ?? '';
+    final collected = (t["collected"] as num?)?.toDouble() ?? 0;
+    final count = (t["members"] as num?)?.toInt() ?? 0;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md - 2,
+        vertical: AppSpacing.ms + 2,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
+      child: Row(
         children: [
-          Text(label, style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary)),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: GoogleFonts.inter(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: color,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _formatMonth(monthKey),
+                  style: AppTextStyles.cardTitle.copyWith(fontSize: 15),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  count == 1 ? '1 payment recorded' : '$count payments recorded',
+                  style: AppTextStyles.small,
+                ),
+              ],
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          ),
+          Text(
+            Inr.format(collected),
+            style: AppTextStyles.cardTitle.copyWith(
+              fontSize: 15,
+              color: AppColors.success,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildMonthlyBreakdownCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-      ),
+  Widget _skeleton() {
+    return const ShimmerLoading(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            "Monthly Breakdown",
-            style: GoogleFonts.inter(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 10),
-          if (_monthlyBreakdown.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 20),
-              child: Center(
-                child: Text(
-                  "No transactions matching selected filters",
-                  style: GoogleFonts.inter(fontSize: 13, color: AppColors.textMuted),
-                ),
-              ),
-            )
-          else
-            ..._monthlyBreakdown.map((t) {
-              final monthKey = t["month"]?.toString() ?? "";
-              final collected = (t["collected"] as num?)?.toDouble() ?? 0;
-              final members = (t["members"] as num?)?.toInt() ?? 0;
-
-              return Container(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: const BoxDecoration(
-                  border: Border(bottom: BorderSide(color: AppColors.border, width: 0.8)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _formatMonth(monthKey),
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          "$members payments recorded",
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            color: AppColors.textMuted,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Text(
-                      _formatAmount(collected),
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.success,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
+          ShimmerCardSkeleton(height: 72),
+          ShimmerCardSkeleton(height: 72),
+          ShimmerCardSkeleton(height: 72),
         ],
       ),
     );

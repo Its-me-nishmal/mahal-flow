@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import '../theme/app_theme.dart';
+import '../theme/app_tokens.dart';
 
 class AppSearchBar extends StatelessWidget {
   final TextEditingController controller;
@@ -26,7 +27,7 @@ class AppSearchBar extends StatelessWidget {
       height: 46,
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.button),
         border: Border.all(color: AppColors.border),
         boxShadow: const [
           BoxShadow(
@@ -45,16 +46,12 @@ class AppSearchBar extends StatelessWidget {
             child: TextField(
               controller: controller,
               onChanged: onChanged,
-              style: GoogleFonts.inter(
-                fontSize: 14,
+              style: AppTextStyles.body.copyWith(
                 fontWeight: FontWeight.w500,
-                color: AppColors.textPrimary,
               ),
               decoration: InputDecoration(
                 hintText: hintText,
-                hintStyle: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w400,
+                hintStyle: AppTextStyles.body.copyWith(
                   color: AppColors.textMuted,
                 ),
                 border: InputBorder.none,
