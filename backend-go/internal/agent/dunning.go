@@ -110,6 +110,8 @@ func (a *DunningAgent) processMember(ctx context.Context, mahalID string, member
 			"mahal_id":         mahalID,
 			"member_id":        member.ID,
 			"member_name":      member.Name,
+			"member_phone":     member.Phone,
+			"outstanding":      member.OutstandingBalance,
 			"language":         string(lang),
 			"template_subject": template.Subject,
 			"template_body":    template.Body,
@@ -164,9 +166,9 @@ func (a *DunningAgent) calculateOptimalDeliveryTime(ctx context.Context, mahalID
 	}
 
 	type timeSlot struct {
-		hour   int
-		score  float64
-		count  int
+		hour  int
+		score float64
+		count int
 	}
 	slots := make(map[int]*timeSlot)
 

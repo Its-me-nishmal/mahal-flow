@@ -125,3 +125,31 @@
 ---
 
 ## 4. Git & Monorepo Workflow
+
+### Entry 023: Member Home redesigned to a custom premium visual language (deviates from Stitch)
+- **Context**: The member dashboard was restyled away from `stitch_mahal_financial_integrity_system/member_dashboard/` at the product owner's explicit direction, in favour of a gradient hero header, a floating balance card and a 2x2 quick-action grid.
+- **Rule**: AGENTS.md §3.1 / `.cursorrules` still require Stitch fidelity for every *other* screen. The member home (`lib/features/dashboard/screens/member_dashboard_screen.dart`) is a sanctioned exception, not a precedent. Do not "fix" it back toward `screen.png`. If the rest of the member flow is later migrated to this language, update AGENTS.md §3.1 rather than leaving the two in conflict.
+- **Design tokens introduced**: `lib/core/theme/app_tokens.dart` (`AppSpacing`, `AppRadius`, `AppShadows`, `AppGradients`, `AppTextStyles`). These are opt-in — `AppTheme.lightTheme.textTheme` was deliberately left untouched so the other ~20 screens keep rendering identically. New screens should consume `AppTextStyles` instead of hand-rolling `GoogleFonts.inter(...)`.
+
+### Entry 024: `GetLatestReceipt` is Mahal-scoped, not member-scoped (data leak)
+- **Context**: `GET /member/dashboard` builds `latest_payment` from `receiptRepo.GetLatestReceipt(ctx, tenantID)`, and the repository query filters on `mahal_id` only, sorted by `sequence_number` descending. The most recent receipt in the whole Mahal is returned regardless of who owns it, so a member could see another member's amount and receipt number on their home screen.
+- **Rule**: The Flutter dashboard now discards `latest_payment` when its `member_id` does not match the dashboard's `member_id` (`MemberDashboardData.fromJson`). That is a client-side mitigation only. **The backend still needs fixing**: add a `member_id` filter to `GetLatestReceipt` and pass the member id from the handler. Multi-tenant isolation (invariant 5) means `mahal_id` scoping alone is not sufficient for per-member data.
+
+### Entry 025: `GET /autopay/mandate/status` is a non-persistent stub — do not consume it
+- **Context**: The handler returns a hardcoded `{"mandate_id": "MND_849201", "status": "ACTIVE"}` with no member scoping and no persistence. Wiring the UI to it would tell every member AutoPay is active even if they never set it up, which breaks the trust principle in the design system.
+- **Rule**: Until mandates are persisted and scoped server-side, AutoPay state on the member home is gated on a local per-member flag (`lib/core/storage/autopay_local_store.dart`, backed by `flutter_secure_storage`). `SetupAutoPayScreen` now pops `true` on success so the dashboard can persist it. Once the backend is real, replace the local read and delete the store.
+
+### Entry 026: Never label a dues receipt a "Contribution"
+- **Context**: The Stitch mockup shows "August 2026 Contribution" in the Latest Payment card, but the receipt may carry `payment_type: MONTHLY_DUES`.
+- **Rule**: Derive the noun from `payment_type` — `MONTHLY_DUES` renders "<months> Dues", `CONTRIBUTION` renders "Mahal Contribution". Financial invariant 3 (strict separation of dues and voluntary contributions) outranks visual fidelity to a mockup's placeholder copy.
+
+### Entry 027: Currency and month labels must not be hand-rolled
+- **Context**: The dashboard printed `₹1500` (no grouping) and screens hand-rolled `const monthNames = [...]` arrays plus fabricated fallbacks like `lastPaid = "2026-07"`.
+- **Rule**: Use `Inr.format()` / `Inr.spoken()` (`lib/core/utils/currency_format.dart`, `intl` with locale `en_IN` for lakh grouping) for all amounts, and `DuesPeriod` (`lib/core/utils/dues_period.dart`) to derive unpaid months from `last_paid_month`. `DuesPeriod.parseMonthKey` returns `null` on bad input — callers must render a neutral label rather than invent a period. The amount itself always comes from `outstanding_balance`, never from a month count.
+
+### Entry 028: Amount labels must scale down, never ellipsize; verify layout at 360dp
+- **Context**: On the redesigned member home, the primary CTA "Pay ₹12,50,000" overflowed its button by 4.4px at 360dp, and the quick-action tiles overflowed by 19px once a caption wrapped to two lines. `flutter analyze` reported nothing for either — overflow only appears at layout time.
+- **Rule**:
+  - Wrap any widget that renders a rupee amount in `FittedBox(fit: BoxFit.scaleDown)`. Never use `TextOverflow.ellipsis` on money: a truncated amount misinforms, a smaller one does not. Test with a lakh-scale value (₹12,50,000), not just ₹500.
+  - Never give a card row a fixed `SizedBox(height:)` when its text can wrap. Use `IntrinsicHeight` + `CrossAxisAlignment.stretch` so a row self-sizes to its tallest child and siblings stay equal height.
+  - 360dp is the narrowest supported width (docs/design.md section 36) and is the width of the SM M107F test device. Widget tests that pump at `Size(360, 800)` fail on `RenderFlex` overflow, so they catch this without a device — see `mobile-flutter/test/member_dashboard_layout_test.dart`. Add a case at `textScale: 1.3` as well.

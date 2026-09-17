@@ -136,5 +136,24 @@ func (m *MongoDB) ensureIndexes(ctx context.Context) error {
 	}
 	_, _ = m.DB.Collection("counters").Indexes().CreateMany(ctx, counterIndexes)
 
+	// 7. Notification Log Collection (Outbound Message Idempotency)
+	// The unique (mahal_id, dedupe_key) index is load-bearing: the dunning
+	// agent re-scans hourly, and this is what stops a member being messaged
+	// repeatedly for the same overdue month.
+	notificationIndexes := []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "mahal_id", Value: 1}, {Key: "dedupe_key", Value: 1}},
+			Options: options.Index().SetUnique(true),
+		},
+		{
+			Keys:    bson.D{{Key: "message_id", Value: 1}},
+			Options: options.Index().SetSparse(true),
+		},
+		{
+			Keys: bson.D{{Key: "mahal_id", Value: 1}, {Key: "member_id", Value: 1}, {Key: "created_at", Value: -1}},
+		},
+	}
+	_, _ = m.DB.Collection("notification_log").Indexes().CreateMany(ctx, notificationIndexes)
+
 	return nil
 }

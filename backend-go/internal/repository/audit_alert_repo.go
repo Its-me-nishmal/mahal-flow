@@ -216,6 +216,7 @@ func (r *mongoAlertRepo) MarkAllRead(ctx context.Context, mahalID string) error 
 type RefundRepository interface {
 	Create(ctx context.Context, refund *domain.RefundRequest) error
 	List(ctx context.Context, mahalID string) ([]domain.RefundRequest, error)
+	GetByID(ctx context.Context, refundID string) (*domain.RefundRequest, error)
 	UpdateStatus(ctx context.Context, refundID, status string) error
 }
 
@@ -261,6 +262,15 @@ func (r *mongoRefundRepo) List(ctx context.Context, mahalID string) ([]domain.Re
 		refunds = []domain.RefundRequest{}
 	}
 	return refunds, nil
+}
+
+func (r *mongoRefundRepo) GetByID(ctx context.Context, refundID string) (*domain.RefundRequest, error) {
+	var refund domain.RefundRequest
+	err := r.coll.FindOne(ctx, bson.M{"_id": refundID}).Decode(&refund)
+	if err != nil {
+		return nil, err
+	}
+	return &refund, nil
 }
 
 func (r *mongoRefundRepo) UpdateStatus(ctx context.Context, refundID, status string) error {

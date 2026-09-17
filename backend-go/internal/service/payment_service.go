@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/mahalflow/backend-go/internal/domain"
+	"github.com/mahalflow/backend-go/internal/logger"
 	"github.com/mahalflow/backend-go/internal/repository"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -38,6 +39,9 @@ type PaymentService interface {
 	InitializeDuesPayment(ctx context.Context, mahalID, memberID string, months []string, gateway, idempotencyKey string) (*domain.Transaction, error)
 	InitializeContribution(ctx context.Context, mahalID, memberID string, amount float64, gateway, idempotencyKey string) (*domain.Transaction, error)
 	CommitSuccessfulPayment(ctx context.Context, txnID string) (*domain.Receipt, error)
+	// SetReceiptIssuedHook registers an optional post-commit side effect
+	// (e.g. sending the member their receipt). Safe to leave unset.
+	SetReceiptIssuedHook(hook func(receipt *domain.Receipt))
 }
 
 type paymentService struct {
@@ -46,6 +50,11 @@ type paymentService struct {
 	memberRepo  repository.MemberRepository
 	txnRepo     repository.TransactionRepository
 	receiptRepo repository.ReceiptRepository
+
+	// onReceiptIssued is an optional side-effect hook fired after a payment is
+	// durably committed. It runs in its own goroutine and its outcome is
+	// ignored, so notification delivery can never influence the ledger.
+	onReceiptIssued func(receipt *domain.Receipt)
 }
 
 func NewPaymentService(
@@ -154,8 +163,10 @@ func (s *paymentService) InitializeDuesPayment(
 	totalPaise := domain.MoneyPaise(int64(len(months))) * ratePaise
 	totalAmount := totalPaise.ToRupees()
 
+	// PayU transactionId strict constraint: alphanumeric only, <= 25 characters, unique
+	rawUUID := strings.ReplaceAll(uuid.New().String(), "-", "")
 	txn := &domain.Transaction{
-		ID:             "TXN_" + uuid.New().String(),
+		ID:             "TXN" + rawUUID[:16],
 		MahalID:        mahalID,
 		MemberID:       memberID,
 		IdempotencyKey: idempotencyKey,
@@ -201,8 +212,9 @@ func (s *paymentService) InitializeContribution(
 	exactPaise := domain.ToPaise(amount)
 	exactAmount := exactPaise.ToRupees()
 
+	rawUUID := strings.ReplaceAll(uuid.New().String(), "-", "")
 	txn := &domain.Transaction{
-		ID:             "TXN_" + uuid.New().String(),
+		ID:             "TXN" + rawUUID[:16],
 		MahalID:        mahalID,
 		MemberID:       memberID,
 		IdempotencyKey: idempotencyKey,
@@ -242,9 +254,37 @@ func (s *paymentService) CommitSuccessfulPayment(ctx context.Context, txnID stri
 	receipt, err := s.commitWithTransaction(ctx, txnID)
 	if err != nil && (strings.Contains(err.Error(), "Transaction numbers are only allowed") || strings.Contains(err.Error(), "replica set")) {
 		// Single-node local MongoDB development fallback with locked serialization
-		return s.commitStandalone(ctx, txnID)
+		receipt, err = s.commitStandalone(ctx, txnID)
+	}
+
+	if err == nil {
+		s.fireReceiptIssued(receipt)
 	}
 	return receipt, err
+}
+
+// SetReceiptIssuedHook registers the post-commit side effect.
+func (s *paymentService) SetReceiptIssuedHook(hook func(receipt *domain.Receipt)) {
+	s.onReceiptIssued = hook
+}
+
+// fireReceiptIssued runs the hook detached from the request. It recovers from
+// any panic so a bug in a notification path can never take down a payment.
+func (s *paymentService) fireReceiptIssued(receipt *domain.Receipt) {
+	if s.onReceiptIssued == nil || receipt == nil {
+		return
+	}
+	hook := s.onReceiptIssued
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Log.Error().Interface("panic", r).
+					Str("receipt_number", receipt.ReceiptNumber).
+					Msg("Recovered from panic in receipt-issued hook")
+			}
+		}()
+		hook(receipt)
+	}()
 }
 
 func (s *paymentService) commitWithTransaction(ctx context.Context, txnID string) (*domain.Receipt, error) {

@@ -13,6 +13,9 @@ import (
 	"github.com/mahalflow/backend-go/internal/api"
 	"github.com/mahalflow/backend-go/internal/config"
 	"github.com/mahalflow/backend-go/internal/database"
+	"github.com/mahalflow/backend-go/internal/domain"
+	"github.com/mahalflow/backend-go/internal/gateway/pg"
+	"github.com/mahalflow/backend-go/internal/gateway/whatsapp"
 	"github.com/mahalflow/backend-go/internal/logger"
 	"github.com/mahalflow/backend-go/internal/repository"
 	"github.com/mahalflow/backend-go/internal/service"
@@ -41,6 +44,7 @@ func main() {
 	var auditRepo repository.AuditLogRepository
 	var alertRepo repository.AlertRepository
 	var refundRepo repository.RefundRepository
+	var notifRepo repository.NotificationRepository
 	var paymentService service.PaymentService
 
 	if dbClient != nil {
@@ -51,10 +55,68 @@ func main() {
 		auditRepo = repository.NewAuditLogRepository(dbClient.DB)
 		alertRepo = repository.NewAlertRepository(dbClient.DB)
 		refundRepo = repository.NewRefundRepository(dbClient.DB)
+		notifRepo = repository.NewNotificationRepository(dbClient.DB)
 		paymentService = service.NewPaymentService(dbClient.Client, mahalRepo, memberRepo, txnRepo, receiptRepo)
 	}
 
-	handler := api.NewHandler(paymentService, mahalRepo, memberRepo, receiptRepo, txnRepo, auditRepo, alertRepo, refundRepo)
+	// WhatsApp is optional: an unconfigured client reports disabled and every
+	// send becomes a no-op, so the API behaves exactly as before until
+	// credentials are present in the environment.
+	waClient := whatsapp.NewClient(whatsapp.Config{
+		BaseURL:       cfg.WhatsAppAPIURL,
+		APIVersion:    cfg.WhatsAppAPIVersion,
+		PhoneNumberID: cfg.WhatsAppPhoneNumberID,
+		WABAID:        cfg.WhatsAppBusinessAccountID,
+		AccessToken:   cfg.WhatsAppAccessToken,
+		AppSecret:     cfg.WhatsAppAppSecret,
+		DryRun:        cfg.WhatsAppDryRun,
+	})
+	log.Info().Str("whatsapp", waClient.Status()).Msg("WhatsApp gateway initialized")
+
+	// Deliver a receipt over WhatsApp once a payment is durably committed.
+	// The hook runs detached from the request and its failure cannot affect
+	// the ledger or the caller's response.
+	if paymentService != nil && notifRepo != nil {
+		notifier := service.NewNotificationService(waClient, notifRepo, service.NotificationTemplates{
+			DuesReminder: cfg.WhatsAppTemplateDues,
+			Receipt:      cfg.WhatsAppTemplateReceipt,
+		})
+		if notifier.Enabled() {
+			paymentService.SetReceiptIssuedHook(func(receipt *domain.Receipt) {
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+
+				member, err := memberRepo.GetByID(ctx, receipt.MahalID, receipt.MemberID)
+				if err != nil || member == nil {
+					log.Warn().Err(err).Str("member_id", receipt.MemberID).
+						Msg("Could not load member for receipt notification")
+					return
+				}
+
+				language := ""
+				if mahal, mErr := mahalRepo.GetByID(ctx, receipt.MahalID); mErr == nil && mahal != nil {
+					if len(mahal.Settings.PreferredLanguages) > 0 {
+						language = mahal.Settings.PreferredLanguages[0]
+					}
+				}
+
+				notifier.SendReceipt(ctx, receipt, member.Phone, language)
+			})
+			log.Info().Msg("Payment receipts will be delivered over WhatsApp")
+		}
+	}
+
+	pgClient := pg.NewClient(pg.Config{
+		BaseURL:      cfg.PGAPIURL,
+		APIKey:       cfg.PGAPIKey,
+		Salt:         cfg.PGSalt,
+		ClientID:     cfg.PGClientID,
+		ClientSecret: cfg.PGClientSecret,
+		ReturnURL:    cfg.PGReturnURL,
+		TestMode:     cfg.PaymentTestMode,
+	})
+
+	handler := api.NewHandler(paymentService, mahalRepo, memberRepo, receiptRepo, txnRepo, auditRepo, alertRepo, refundRepo, pgClient)
 
 	// 3. Initialize Fiber App
 	app := fiber.New(fiber.Config{
@@ -85,6 +147,19 @@ func main() {
 	// Public Auth & Webhooks
 	app.Post("/api/v1/auth/login", api.StrictAuthRateLimiterMiddleware(), handler.Login)
 	app.Post("/api/v1/webhooks/razorpay", handler.HandleRazorpayWebhook)
+	app.Post("/api/v1/webhooks/pg", handler.HandlePGWebhook)
+	app.Get("/api/v1/webhooks/pg", handler.HandlePGWebhook)
+
+	// Public PayU Checkout Redirect & JSON Data
+	app.Get("/api/v1/payments/payu-checkout/:orderId", handler.RenderPayUCheckoutPage)
+	app.Get("/api/v1/payments/payu-checkout-data/:orderId", handler.GetPayUCheckoutData)
+	app.Post("/api/v1/payments/payu-generate-hash", handler.GeneratePayUDynamicHash)
+
+	// WhatsApp Cloud API callbacks: GET is Meta's subscription handshake,
+	// POST carries delivery receipts and inbound member replies.
+	whatsappHandler := api.NewWhatsAppHandler(waClient, notifRepo, cfg.WhatsAppWebhookVerifyToken)
+	app.Get("/api/v1/webhooks/whatsapp", whatsappHandler.VerifyWebhook)
+	app.Post("/api/v1/webhooks/whatsapp", whatsappHandler.HandleWebhook)
 
 	// Tenant-Scoped API Routes (v1) - Requires valid X-Tenant-ID
 	v1 := app.Group("/api/v1", api.TenantExtractionMiddleware())
@@ -99,6 +174,7 @@ func main() {
 	v1.Get("/member/receipts", handler.GetMemberReceipts)
 	v1.Post("/payments/dues/initialize", handler.InitializeDuesPayment)
 	v1.Post("/payments/dues/confirm", handler.ConfirmPayment)
+	v1.Get("/payments/:id/status", handler.VerifyPGPaymentStatus)
 	v1.Post("/payments/contribution/initialize", handler.InitializeContribution)
 	v1.Get("/receipts/:number", handler.GetReceipt)
 	v1.Get("/receipts/:number/verify", handler.VerifyReceiptIntegrity)
@@ -106,6 +182,14 @@ func main() {
 	// AutoPay Mandates
 	v1.Post("/autopay/mandate/create", handler.CreateAutoPayMandate)
 	v1.Get("/autopay/mandate/status", handler.GetAutoPayStatus)
+
+	// Alerts for Members & Announcements
+	v1.Get("/member/alerts", handler.GetAlerts)
+	v1.Get("/alerts", handler.GetAlerts)
+
+	// QR Standee (BharatQR & UPI)
+	v1.Get("/mahal/qr-standee", handler.GetMahalQRStandee)
+	v1.Post("/mahal/qr-standee/dynamic", handler.GenerateDynamicQR)
 
 	// Protected Admin Routes (Requires valid JWT Token + MAHAL_ADMIN / SUPER_ADMIN Role)
 	admin := v1.Group("/admin", api.JWTAuthMiddleware(), api.RequireRole("MAHAL_ADMIN", "SUPER_ADMIN"))
@@ -121,6 +205,8 @@ func main() {
 	admin.Get("/subscriptions", handler.GetSubscriptions)
 	admin.Get("/refunds", handler.GetRefunds)
 	admin.Post("/refunds/:id/action", handler.ProcessRefund)
+	admin.Get("/qr-standee", handler.GetMahalQRStandee)
+	admin.Post("/qr-standee/dynamic", handler.GenerateDynamicQR)
 	admin.Get("/reports/financial", handler.GetFinancialReports)
 	admin.Post("/reports/financial/query", handler.QueryFinancialReports)
 	admin.Get("/gateways", handler.GetGateways)

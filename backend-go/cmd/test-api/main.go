@@ -39,6 +39,23 @@ func main() {
 
 	client := &http.Client{Timeout: 5 * time.Second}
 
+	// Login as admin to get Bearer token for protected routes
+	var adminToken string
+	loginPayload, _ := json.Marshal(map[string]string{
+		"phone":    "9847111222",
+		"mahal_id": tenant1,
+	})
+	loginResp, err := client.Post(baseURL+"/api/v1/auth/login", "application/json", bytes.NewBuffer(loginPayload))
+	if err == nil && loginResp.StatusCode == 200 {
+		var loginData map[string]interface{}
+		if json.NewDecoder(loginResp.Body).Decode(&loginData) == nil {
+			if t, ok := loginData["token"].(string); ok {
+				adminToken = "Bearer " + t
+			}
+		}
+		loginResp.Body.Close()
+	}
+
 	tests := []EndpointTest{
 		// -------------------------------------------------------------
 		// 1. CORE & HEALTH APIS
@@ -83,6 +100,7 @@ func main() {
 				"X-Tenant-ID":            tenant1,
 				"Content-Type":           "application/json",
 				"X-HTTP-Method-Override": "QUERY",
+				"Authorization":          adminToken,
 			},
 			Body: map[string]interface{}{
 				"status":           "ACTIVE",
@@ -111,6 +129,7 @@ func main() {
 				"X-Tenant-ID":            tenant1,
 				"Content-Type":           "application/json",
 				"X-HTTP-Method-Override": "QUERY",
+				"Authorization":          adminToken,
 			},
 			Body: map[string]interface{}{
 				"from_date": "2026-01-01",
@@ -234,6 +253,62 @@ func main() {
 			Path:     "/api/v1/autopay/mandate/status",
 			Headers:  map[string]string{"X-Tenant-ID": tenant1},
 			ExpectedStatus: 200,
+		},
+		{
+			Name:     "12. PayU: Initialize Dues Payment",
+			Category: "PAYU",
+			Method:   "POST",
+			Path:     "/api/v1/payments/dues/initialize",
+			Headers: map[string]string{
+				"X-Tenant-ID":  tenant1,
+				"Content-Type": "application/json",
+			},
+			Body: map[string]interface{}{
+				"member_id":       "MEM_001_9910",
+				"selected_months": []string{"2026-09"},
+				"gateway":         "PAYU",
+				"idempotency_key": "IDEMP_PAYU_" + uuid.New().String()[:8],
+			},
+			ExpectedStatus: 201,
+			ValidateModel: func(b map[string]interface{}) error {
+				if b["payment_url"] == nil || b["gateway_order_id"] == nil {
+					return fmt.Errorf("expected payment_url and gateway_order_id in PayU response")
+				}
+				return nil
+			},
+		},
+		{
+			Name:     "13. PayU: Public Checkout Data & Hash Endpoint",
+			Category: "PAYU",
+			Method:   "GET",
+			Path:     "/api/v1/payments/payu-checkout-data/ORD_TXN_d1e923ce-774b-4200-a7b7-44fbbe184a93",
+			ExpectedStatus: 200,
+			ValidateModel: func(b map[string]interface{}) error {
+				if b["hash"] == nil || b["action"] == nil || b["key"] != "XiiFzG" {
+					return fmt.Errorf("invalid PayU checkout payload or key")
+				}
+				return nil
+			},
+		},
+		{
+			Name:     "14. Public Auth: Login Endpoint",
+			Category: "AUTH",
+			Method:   "POST",
+			Path:     "/api/v1/auth/login",
+			Headers: map[string]string{
+				"Content-Type": "application/json",
+			},
+			Body: map[string]interface{}{
+				"phone":    "9847111222",
+				"mahal_id": tenant1,
+			},
+			ExpectedStatus: 200,
+			ValidateModel: func(b map[string]interface{}) error {
+				if b["token"] == nil || b["role"] == nil {
+					return fmt.Errorf("missing token or role in login response")
+				}
+				return nil
+			},
 		},
 	}
 

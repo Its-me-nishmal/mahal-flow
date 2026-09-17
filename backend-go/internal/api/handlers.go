@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/mahalflow/backend-go/internal/domain"
+	"github.com/mahalflow/backend-go/internal/gateway/pg"
 	"github.com/mahalflow/backend-go/internal/repository"
 	"github.com/mahalflow/backend-go/internal/service"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -23,6 +25,7 @@ type Handler struct {
 	auditRepo      repository.AuditLogRepository
 	alertRepo      repository.AlertRepository
 	refundRepo     repository.RefundRepository
+	pgClient       *pg.Client
 }
 
 func NewHandler(
@@ -34,6 +37,7 @@ func NewHandler(
 	aur repository.AuditLogRepository,
 	alr repository.AlertRepository,
 	refr repository.RefundRepository,
+	pgc *pg.Client,
 ) *Handler {
 	return &Handler{
 		paymentService: ps,
@@ -44,6 +48,7 @@ func NewHandler(
 		auditRepo:      aur,
 		alertRepo:      alr,
 		refundRepo:     refr,
+		pgClient:       pgc,
 	}
 }
 
@@ -409,13 +414,53 @@ func (h *Handler) InitializeDuesPayment(c *fiber.Ctx) error {
 		}
 	}
 
+	orderID := "ORD" + txn.ID
+	var paymentURL, upiIntentURL string
+	if h.pgClient != nil {
+		memberName := "Mahal Member"
+		memberEmail := "member@mahalflow.org"
+		memberPhone := "9900990099"
+		if h.memberRepo != nil {
+			if m, mErr := h.memberRepo.GetByID(c.Context(), tenantID, req.MemberID); mErr == nil && m != nil {
+				if m.Name != "" {
+					memberName = m.Name
+				}
+				if m.Phone != "" {
+					memberPhone = m.Phone
+				}
+			}
+		}
+
+		p := pg.PaymentRequestParams{
+			OrderID:     orderID,
+			Amount:      fmt.Sprintf("%.2f", txn.Amount),
+			Currency:    txn.Currency,
+			Description: fmt.Sprintf("Mahal Dues for %s (%d months)", memberName, len(txn.SelectedMonths)),
+			Name:        memberName,
+			Email:       memberEmail,
+			Phone:       memberPhone,
+			UDF1:        txn.ID,
+			UDF2:        tenantID,
+			UDF3:        req.MemberID,
+		}
+
+		if urlRes, uErr := h.pgClient.GetPaymentRequestURL(c.Context(), p); uErr == nil && urlRes != nil {
+			paymentURL = urlRes.URL
+		}
+		if intentRes, iErr := h.pgClient.GetPaymentRequestIntentURL(c.Context(), p); iErr == nil && intentRes != nil {
+			upiIntentURL = intentRes.UPIIntentURL
+		}
+	}
+
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"transaction_id":   txn.ID,
 		"amount":           txn.Amount,
 		"currency":         txn.Currency,
 		"selected_months":  txn.SelectedMonths,
 		"status":           txn.Status,
-		"gateway_order_id": "order_" + txn.ID[4:12],
+		"gateway_order_id": orderID,
+		"payment_url":      paymentURL,
+		"upi_intent_url":   upiIntentURL,
 	})
 }
 
@@ -581,15 +626,78 @@ func (h *Handler) VerifyReceiptIntegrity(c *fiber.Ctx) error {
 // 4. AUTOPAY MANDATES
 // -------------------------------------------------------------
 
+type CreateMandateRequest struct {
+	MemberID  string  `json:"member_id"`
+	MaxAmount float64 `json:"max_amount"`
+	Mode      string  `json:"mode"` // UPI | E_NACH | CARD_SI
+}
+
 func (h *Handler) CreateAutoPayMandate(c *fiber.Ctx) error {
 	tenantID, _ := c.Locals("tenant_id").(string)
+	var req CreateMandateRequest
+	_ = c.BodyParser(&req)
+
+	mandateID := "MND" + strings.ReplaceAll(uuid.New().String(), "-", "")[:16]
+	maxAmount := req.MaxAmount
+	if maxAmount <= 0 {
+		maxAmount = 1000.0
+	}
+
+	startDate := time.Now().Format("2006-01-02")
+	endDate := time.Now().AddDate(3, 0, 0).Format("2006-01-02")
+
+	// PayU SI Standing Instruction specification
+	siDetailsJSON := fmt.Sprintf(`{"billingAmount":"%.2f","billingCurrency":"INR","billingCycle":"MONTHLY","billingInterval":1,"paymentStartDate":"%s","paymentEndDate":"%s","billingRule":"MAX"}`,
+		maxAmount, startDate, endDate)
+
+	var checkoutData *pg.PayUCheckoutFormData
+	mandateURL := fmt.Sprintf("http://localhost:8080/api/v1/payments/payu-checkout/%s", mandateID)
+
+	if h.pgClient != nil {
+		memberName := "Mahal Member"
+		memberEmail := "member@mahalflow.org"
+		memberPhone := "9900990099"
+		if h.memberRepo != nil && req.MemberID != "" {
+			if m, mErr := h.memberRepo.GetByID(c.Context(), tenantID, req.MemberID); mErr == nil && m != nil {
+				if m.Name != "" {
+					memberName = m.Name
+				}
+				if m.Phone != "" {
+					memberPhone = m.Phone
+				}
+			}
+		}
+
+		p := pg.PaymentRequestParams{
+			OrderID:     mandateID,
+			Amount:      "1.00", // Penny auth for mandate verification as per PayU AutoPay spec
+			Currency:    "INR",
+			Description: fmt.Sprintf("MahalFlow AutoPay Mandate for %s", memberName),
+			Name:        memberName,
+			Email:       memberEmail,
+			Phone:       memberPhone,
+			UDF1:        mandateID,
+			UDF2:        tenantID,
+			UDF3:        req.MemberID,
+			IsSI:        true,
+			SIDetails:   siDetailsJSON,
+		}
+
+		formData := h.pgClient.GeneratePayUCheckoutParams(p)
+		checkoutData = &formData
+	}
+
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"mandate_id":    "MND_" + uuid.New().String()[:8],
-		"mahal_id":      tenantID,
-		"status":        "ACTIVE",
-		"recurring_day": 1,
-		"max_amount":    1000.0,
-		"mandate_url":   "https://api.razorpay.com/v1/mandates/live_auth",
+		"mandate_id":     mandateID,
+		"mahal_id":       tenantID,
+		"member_id":      req.MemberID,
+		"status":         "PENDING_AUTHORIZATION",
+		"frequency":      "MONTHLY",
+		"recurring_day":  1,
+		"max_amount":     maxAmount,
+		"si_details":     siDetailsJSON,
+		"mandate_url":    mandateURL,
+		"payu_checkout":  checkoutData,
 	})
 }
 
@@ -704,6 +812,7 @@ func (h *Handler) QueryAdminMembers(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{
+		"protocol":       "HTTP QUERY (RFC 10008)",
 		"members":        members,
 		"total":          total,
 		"applied_filter": filter,
@@ -793,12 +902,12 @@ func (h *Handler) GetSubscriptions(c *fiber.Ctx) error {
 	}
 
 	type SubItem struct {
-		MahalID         string                   `json:"mahal_id"`
-		MahalName       string                   `json:"mahal_name"`
-		Plan            string                   `json:"plan"`
-		MonthlyFee      float64                  `json:"monthly_fee"`
+		MahalID         string                    `json:"mahal_id"`
+		MahalName       string                    `json:"mahal_name"`
+		Plan            string                    `json:"plan"`
+		MonthlyFee      float64                   `json:"monthly_fee"`
 		Status          domain.SubscriptionStatus `json:"status"`
-		NextBillingDate time.Time                `json:"next_billing_date"`
+		NextBillingDate time.Time                 `json:"next_billing_date"`
 	}
 
 	subs := make([]SubItem, 0, len(mahals))
@@ -829,28 +938,165 @@ func (h *Handler) GetRefunds(c *fiber.Ctx) error {
 }
 
 type RefundActionRequest struct {
-	Action string `json:"action"` // APPROVE | REJECT
+	Action string  `json:"action"` // APPROVE | REJECT
+	Amount float64 `json:"amount,omitempty"`
+	Reason string  `json:"reason,omitempty"`
 }
 
 func (h *Handler) ProcessRefund(c *fiber.Ctx) error {
+	tenantID, _ := c.Locals("tenant_id").(string)
 	refundID := c.Params("id")
 	var req RefundActionRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	status := "APPROVED"
 	if req.Action == "REJECT" {
-		status = "REJECTED"
+		if h.refundRepo != nil {
+			_ = h.refundRepo.UpdateStatus(c.Context(), refundID, "REJECTED")
+		}
+		if h.auditRepo != nil {
+			_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
+				MahalID:  tenantID,
+				Action:   "REFUND_REJECTED",
+				Actor:    "ADMIN",
+				EntityID: refundID,
+				Details:  "Refund request rejected. Reason: " + req.Reason,
+			})
+		}
+		return c.JSON(fiber.Map{"status": "REJECTED", "refund_id": refundID})
+	}
+
+	// APPROVE: Trigger real programmatic refund via Payment Gateway (Spec Section 7.1)
+	txnID := refundID
+	amount := req.Amount
+	if amount <= 0 {
+		amount = 500.0 // Default fallback
 	}
 
 	if h.refundRepo != nil {
-		if err := h.refundRepo.UpdateStatus(c.Context(), refundID, status); err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		if r, rErr := h.refundRepo.GetByID(c.Context(), refundID); rErr == nil && r != nil {
+			if r.TransactionID != "" {
+				txnID = r.TransactionID
+			}
+			if r.Amount > 0 {
+				amount = r.Amount
+			}
 		}
 	}
 
-	return c.JSON(fiber.Map{"status": status, "refund_id": refundID})
+	var pgRefund *pg.RefundResponse
+	if h.pgClient != nil {
+		var err error
+		pgRefund, err = h.pgClient.RequestRefund(c.Context(), pg.RefundParams{
+			TransactionID:    txnID,
+			MerchantRefundID: "MREF_" + refundID,
+			Amount:           fmt.Sprintf("%.2f", amount),
+			Description:      "MahalFlow 1-Click Instant Refund: " + req.Reason,
+		})
+		if err != nil {
+			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+				"error":   "Payment Gateway Refund Failed: " + err.Error(),
+				"status":  "FAILED",
+				"details": "Gateway rejected refund request",
+			})
+		}
+	}
+
+	refNo := "N/A"
+	if pgRefund != nil && pgRefund.RefundRefNo != nil {
+		refNo = *pgRefund.RefundRefNo
+	}
+
+	// Update local status in DB
+	if h.refundRepo != nil {
+		_ = h.refundRepo.UpdateStatus(c.Context(), refundID, "APPROVED")
+	}
+	if h.txnRepo != nil {
+		_ = h.txnRepo.UpdateStatus(c.Context(), txnID, domain.TxnRefunded, refNo)
+	}
+
+	if h.auditRepo != nil {
+		_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
+			MahalID:  tenantID,
+			Action:   "INSTANT_REFUND_EXECUTED",
+			Actor:    "ADMIN",
+			EntityID: refundID,
+			Details:  fmt.Sprintf("Refund of ₹%.2f processed via PG. Gateway Ref: %s, Txn: %s", amount, refNo, txnID),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"status":            "APPROVED",
+		"refund_id":         refundID,
+		"transaction_id":    txnID,
+		"amount":            amount,
+		"gateway_refund_id": pgRefund,
+		"bank_reference_no": refNo,
+		"message":           "Instant refund processed successfully via Payment Gateway",
+	})
+}
+
+// -------------------------------------------------------------
+// 5.1 MAHAL QR STANDEE (BharatQR & UPI Engine)
+// -------------------------------------------------------------
+
+func (h *Handler) GetMahalQRStandee(c *fiber.Ctx) error {
+	tenantID, _ := c.Locals("tenant_id").(string)
+	purpose := c.Query("purpose", "MAHAL_GENERAL_FUND")
+	counter := c.Query("counter", "MAIN_GATE_STAND")
+
+	mahalName := "Mahal Treasury"
+	if h.mahalRepo != nil && tenantID != "" {
+		if m, err := h.mahalRepo.GetByID(c.Context(), tenantID); err == nil && m != nil {
+			mahalName = m.Name
+		}
+	}
+
+	if h.pgClient == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Payment gateway client offline"})
+	}
+
+	qrInfo := h.pgClient.GenerateQRStandee(tenantID, mahalName, 0, purpose, counter)
+	return c.JSON(qrInfo)
+}
+
+type DynamicQRRequest struct {
+	Amount   float64 `json:"amount"`
+	Purpose  string  `json:"purpose"`
+	Counter  string  `json:"counter"`
+	MemberID string  `json:"member_id,omitempty"`
+}
+
+func (h *Handler) GenerateDynamicQR(c *fiber.Ctx) error {
+	tenantID, _ := c.Locals("tenant_id").(string)
+	var req DynamicQRRequest
+	if err := c.BodyParser(&req); err != nil || req.Amount <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Valid amount > 0 required"})
+	}
+
+	mahalName := "Mahal Treasury"
+	if h.mahalRepo != nil && tenantID != "" {
+		if m, err := h.mahalRepo.GetByID(c.Context(), tenantID); err == nil && m != nil {
+			mahalName = m.Name
+		}
+	}
+
+	if h.pgClient == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Payment gateway client offline"})
+	}
+
+	purpose := req.Purpose
+	if purpose == "" {
+		purpose = "MAHAL_COLLECTION"
+	}
+	counter := req.Counter
+	if counter == "" {
+		counter = "COUNTER_DESK"
+	}
+
+	qrInfo := h.pgClient.GenerateQRStandee(tenantID, mahalName, req.Amount, purpose, counter)
+	return c.JSON(qrInfo)
 }
 
 func (h *Handler) GetFinancialReports(c *fiber.Ctx) error {
@@ -878,7 +1124,27 @@ func (h *Handler) GetFinancialReports(c *fiber.Ctx) error {
 }
 
 func (h *Handler) QueryFinancialReports(c *fiber.Ctx) error {
-	return h.GetFinancialReports(c)
+	tenantID, _ := c.Locals("tenant_id").(string)
+
+	var totalCollected, duesCollected, donations, pendingDues float64
+
+	if h.txnRepo != nil {
+		totalCollected, duesCollected, donations, _ = h.txnRepo.GetFinancialSummary(c.Context(), tenantID)
+	}
+	if h.memberRepo != nil {
+		_, _, _, pendingDues, _ = h.memberRepo.GetMemberStats(c.Context(), tenantID)
+	}
+
+	return c.JSON(fiber.Map{
+		"protocol": "HTTP QUERY (RFC 10008)",
+		"summary": fiber.Map{
+			"total_collected": totalCollected,
+			"dues_collected":  duesCollected,
+			"donations":       donations,
+			"pending_dues":    pendingDues,
+		},
+		"period": time.Now().Format("2006-01"),
+	})
 }
 
 func (h *Handler) GetGateways(c *fiber.Ctx) error {
@@ -1081,4 +1347,304 @@ func (h *Handler) CommitExcelImport(c *fiber.Ctx) error {
 
 func (h *Handler) HandleRazorpayWebhook(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"status": "PROCESSED", "acknowledged": true})
+}
+
+// HandlePGWebhook processes server-to-server callbacks from Payment Gateway (Spec v2.0 Section 12)
+func (h *Handler) HandlePGWebhook(c *fiber.Ctx) error {
+	// 1. Extract params from JSON or Form Post
+	params := make(map[string]string)
+	if strings.Contains(c.Get("Content-Type"), "application/json") {
+		var jsonMap map[string]interface{}
+		if err := c.BodyParser(&jsonMap); err == nil {
+			for k, v := range jsonMap {
+				if strVal, ok := v.(string); ok {
+					params[k] = strVal
+				} else if numVal, ok := v.(float64); ok {
+					params[k] = fmt.Sprintf("%.0f", numVal)
+				}
+			}
+		}
+	} else {
+		// Form POST
+		c.Context().PostArgs().VisitAll(func(key, val []byte) {
+			params[string(key)] = string(val)
+		})
+	}
+
+	orderID := params["order_id"]
+	if orderID == "" {
+		orderID = params["txnid"]
+	}
+	transactionID := params["transaction_id"]
+	if transactionID == "" {
+		transactionID = params["mihpayid"]
+	}
+	respCodeStr := params["response_code"]
+	receivedHash := params["hash"]
+	status := strings.ToLower(params["status"])
+	udf1 := params["udf1"]
+
+	// Determine internal transaction ID
+	txnID := udf1
+	if txnID == "" && strings.HasPrefix(orderID, "ORD_") {
+		txnID = strings.TrimPrefix(orderID, "ORD_")
+	} else if txnID == "" {
+		txnID = orderID
+	}
+
+	// 2. Verify SHA-512 cryptographic hash if salt is present
+	if h.pgClient != nil && h.pgClient.Salt != "" && receivedHash != "" {
+		if !pg.VerifyResponseHash(params, h.pgClient.Salt, receivedHash) {
+			if h.alertRepo != nil {
+				_ = h.alertRepo.Create(c.Context(), &domain.SystemAlert{
+					ID:          "ALT_" + uuid.New().String()[:8],
+					MahalID:     "SYSTEM",
+					Severity:    "CRITICAL",
+					Title:       "PG Webhook Hash Mismatch Detected",
+					Description: fmt.Sprintf("Invalid signature for Order: %s, Txn: %s", orderID, transactionID),
+					Status:      "ACTIVE",
+					CreatedAt:   time.Now().UTC(),
+				})
+			}
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid signature hash"})
+		}
+	}
+
+	// 3. Check response code (0 = SUCCESS or PayU status == "success")
+	if respCodeStr == "0" || status == "success" || params["response_message"] == "SUCCESS" || params["response_message"] == "success" {
+		if h.paymentService != nil && txnID != "" {
+			receipt, err := h.paymentService.CommitSuccessfulPayment(c.Context(), txnID)
+			if err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+			}
+
+			if h.auditRepo != nil && receipt != nil {
+				_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
+					MahalID:  receipt.MahalID,
+					Action:   "PG_WEBHOOK_PAYMENT_COMMITTED",
+					Actor:    "PG_GATEWAY_WEBHOOK",
+					EntityID: receipt.ReceiptNumber,
+					Details:  fmt.Sprintf("Verified webhook for Order %s, PG Txn %s, Amount: ₹%.2f", orderID, transactionID, receipt.Amount),
+				})
+			}
+
+			// If called via browser redirect from PayU, return friendly HTML receipt confirmation
+			if strings.Contains(c.Get("Accept"), "text/html") {
+				c.Set("Content-Type", "text/html")
+				html := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head><title>Payment Successful</title><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="font-family:sans-serif;text-align:center;padding:40px;background:#f0fdf4;">
+  <div style="max-width:400px;margin:auto;background:white;padding:30px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.05);">
+    <h2 style="color:#16a34a;margin-top:0;">Payment Received!</h2>
+    <p>Receipt: <b>%s</b></p>
+    <p>Amount: <b>₹%.2f</b></p>
+    <p style="color:#666;font-size:13px;">You may return to the MahalFlow app.</p>
+  </div>
+</body>
+</html>`, receipt.ReceiptNumber, receipt.Amount)
+				return c.SendString(html)
+			}
+
+			return c.JSON(fiber.Map{
+				"status":         "SUCCESS",
+				"receipt_number": receipt.ReceiptNumber,
+				"acknowledged":   true,
+			})
+		}
+	}
+
+	if strings.Contains(c.Get("Accept"), "text/html") {
+		c.Set("Content-Type", "text/html")
+		return c.SendString(`<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#fef2f2;">
+<h2 style="color:#dc2626;">Payment Failed or Cancelled</h2><p>Please return to app and retry.</p></body></html>`)
+	}
+
+	return c.JSON(fiber.Map{
+		"status":       "FAILED_OR_IGNORED",
+		"code":         respCodeStr,
+		"acknowledged": true,
+	})
+}
+
+// VerifyPGPaymentStatus queries PG status API to reconcile transaction state
+func (h *Handler) VerifyPGPaymentStatus(c *fiber.Ctx) error {
+	txnID := c.Params("id")
+	if txnID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Transaction ID required"})
+	}
+
+	orderID := "ORD_" + txnID
+	if h.pgClient != nil {
+		statusResp, err := h.pgClient.GetPaymentStatus(c.Context(), orderID, "")
+		if err != nil {
+			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": err.Error()})
+		}
+
+		if statusResp.ResponseCode == 0 && h.paymentService != nil {
+			receipt, commitErr := h.paymentService.CommitSuccessfulPayment(c.Context(), txnID)
+			if commitErr == nil && receipt != nil {
+				return c.JSON(fiber.Map{
+					"status":  "SUCCESS",
+					"receipt": receipt,
+				})
+			}
+		}
+
+		return c.JSON(fiber.Map{
+			"status":            statusResp.ResponseMessage,
+			"response_code":     statusResp.ResponseCode,
+			"pg_transaction_id": statusResp.TransactionID,
+		})
+	}
+
+	return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Payment gateway client unavailable"})
+}
+
+// GetPayUCheckoutData returns PayU parameters and SHA-512 hash as JSON for frontend/mobile SDK
+func (h *Handler) GetPayUCheckoutData(c *fiber.Ctx) error {
+	orderID := c.Params("orderId")
+	if orderID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "orderId required"})
+	}
+
+	txnID := strings.TrimPrefix(orderID, "ORD_")
+	txnID = strings.TrimPrefix(txnID, "ORD")
+	txn, err := h.txnRepo.GetByID(c.Context(), txnID)
+	if err != nil || txn == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Transaction not found"})
+	}
+
+	memberName := "Mahal Member"
+	memberEmail := "member@mahalflow.org"
+	memberPhone := "9900990099"
+	if h.memberRepo != nil {
+		if m, mErr := h.memberRepo.GetByID(c.Context(), txn.MahalID, txn.MemberID); mErr == nil && m != nil {
+			if m.Name != "" {
+				memberName = m.Name
+			}
+			if m.Phone != "" {
+				memberPhone = m.Phone
+			}
+		}
+	}
+
+	p := pg.PaymentRequestParams{
+		OrderID:     orderID,
+		Amount:      fmt.Sprintf("%.2f", txn.Amount),
+		Currency:    txn.Currency,
+		Description: fmt.Sprintf("Mahal Payment %s", orderID),
+		Name:        memberName,
+		Email:       memberEmail,
+		Phone:       memberPhone,
+		UDF1:        txn.ID,
+		UDF2:        txn.MahalID,
+		UDF3:        txn.MemberID,
+	}
+
+	formData := h.pgClient.GeneratePayUCheckoutParams(p)
+	return c.JSON(formData)
+}
+
+type PayUHashRequest struct {
+	HashName   string `json:"hash_name"`
+	HashString string `json:"hash_string"`
+	HashType   string `json:"hash_type"`
+	PostSalt   string `json:"post_salt"`
+}
+
+// GeneratePayUDynamicHash computes dynamic hashes requested by PayU mobile SDK
+func (h *Handler) GeneratePayUDynamicHash(c *fiber.Ctx) error {
+	var req PayUHashRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+
+	if req.HashString == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "hash_string is required"})
+	}
+
+	hash := h.pgClient.GenerateDynamicHash(req.HashName, req.HashString, req.HashType, req.PostSalt)
+	return c.JSON(fiber.Map{
+		"hash_name": req.HashName,
+		"hash":      hash,
+	})
+}
+
+// RenderPayUCheckoutPage auto-submits HTML form directly into PayU test/production gateway
+func (h *Handler) RenderPayUCheckoutPage(c *fiber.Ctx) error {
+	orderID := c.Params("orderId")
+	if orderID == "" {
+		return c.Status(fiber.StatusBadRequest).SendString("Missing orderId")
+	}
+
+	txnID := strings.TrimPrefix(orderID, "ORD_")
+	txn, err := h.txnRepo.GetByID(c.Context(), txnID)
+	if err != nil || txn == nil {
+		return c.Status(fiber.StatusNotFound).SendString("Transaction not found")
+	}
+
+	memberName := "Mahal Member"
+	memberEmail := "member@mahalflow.org"
+	memberPhone := "9900990099"
+	if h.memberRepo != nil {
+		if m, mErr := h.memberRepo.GetByID(c.Context(), txn.MahalID, txn.MemberID); mErr == nil && m != nil {
+			if m.Name != "" {
+				memberName = m.Name
+			}
+			if m.Phone != "" {
+				memberPhone = m.Phone
+			}
+		}
+	}
+
+	p := pg.PaymentRequestParams{
+		OrderID:     orderID,
+		Amount:      fmt.Sprintf("%.2f", txn.Amount),
+		Currency:    txn.Currency,
+		Description: fmt.Sprintf("Mahal Payment %s", orderID),
+		Name:        memberName,
+		Email:       memberEmail,
+		Phone:       memberPhone,
+		UDF1:        txn.ID,
+		UDF2:        txn.MahalID,
+		UDF3:        txn.MemberID,
+	}
+
+	formData := h.pgClient.GeneratePayUCheckoutParams(p)
+
+	c.Set("Content-Type", "text/html")
+	var inputs strings.Builder
+	for k, v := range formData.Params {
+		inputs.WriteString(fmt.Sprintf(`<input type="hidden" name="%s" value="%s" />`, k, v))
+	}
+
+	html := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Redirecting to PayU Checkout...</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f8fafc; color: #1e293b; }
+    .card { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); text-align: center; max-width: 400px; width: 90%%; }
+    .spinner { border: 4px solid #f3f4f6; border-top: 4px solid #10b981; border-radius: 50%%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 1rem; }
+    @keyframes spin { 0%% { transform: rotate(0deg); } 100%% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="spinner"></div>
+    <h3 style="margin: 0 0 0.5rem;">Connecting to PayU...</h3>
+    <p style="color: #64748b; font-size: 0.9rem; margin: 0 0 1.5rem;">Please do not refresh or press back.</p>
+    <form id="payuform" action="%s" method="POST">
+      %s
+      <noscript><button type="submit" style="background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">Click here to proceed</button></noscript>
+    </form>
+  </div>
+  <script>document.getElementById("payuform").submit();</script>
+</body>
+</html>`, formData.Action, inputs.String())
+
+	return c.SendString(html)
 }
