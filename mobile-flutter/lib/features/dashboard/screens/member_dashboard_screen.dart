@@ -195,7 +195,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
     final gradientHeight = topPad + 212 * textScale;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
+      value: AppOverlayStyles.gradientHeader,
       child: Scaffold(
         backgroundColor: AppColors.background,
         body: Stack(

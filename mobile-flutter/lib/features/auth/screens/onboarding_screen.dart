@@ -83,7 +83,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final isLast = _currentPage == _slides.length - 1;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
+      value: AppOverlayStyles.gradientHeader,
       child: Scaffold(
         backgroundColor: AppColors.background,
         body: Column(

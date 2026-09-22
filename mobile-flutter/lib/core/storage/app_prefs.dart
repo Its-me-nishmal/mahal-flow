@@ -12,6 +12,7 @@ class AppPrefs {
 
   static const String _kOnboardingSeen = 'onboarding_completed_v1';
   static const String _kLastRole = 'last_signed_in_role';
+  static const String _kAuthToken = 'auth_jwt_token';
 
   /// True once the member has finished (or skipped) the welcome carousel.
   /// The carousel is a first-run introduction; showing it again on every
@@ -54,6 +55,33 @@ class AppPrefs {
   static Future<void> setLastRole(String role) async {
     try {
       await _storage.write(key: _kLastRole, value: role);
+    } catch (_) {
+      // Non-fatal.
+    }
+  }
+
+  /// The signed-in admin's JWT. Every /admin/* call needs it in an
+  /// Authorization header; without it the API returns 401 and the dashboard
+  /// renders empty. Persisted so a returning admin keeps their session.
+  static Future<String?> authToken() async {
+    try {
+      return await _storage.read(key: _kAuthToken);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> setAuthToken(String token) async {
+    try {
+      await _storage.write(key: _kAuthToken, value: token);
+    } catch (_) {
+      // Non-fatal: the in-memory token still serves this session.
+    }
+  }
+
+  static Future<void> clearAuthToken() async {
+    try {
+      await _storage.delete(key: _kAuthToken);
     } catch (_) {
       // Non-fatal.
     }

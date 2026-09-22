@@ -321,7 +321,7 @@ class AppPageScaffold extends StatelessWidget {
     }
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
+      value: AppOverlayStyles.gradientHeader,
       child: Scaffold(
         key: scaffoldKey,
         drawer: drawer,

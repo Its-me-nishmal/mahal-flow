@@ -251,7 +251,8 @@ type PaymentStatusResponse struct {
 }
 
 type RefundParams struct {
-	TransactionID    string
+	TransactionID    string // merchant txnid (the ORD... order id sent to PayU)
+	MihPayID         string // PayU payment id (var1 for cancel_refund_transaction)
 	MerchantRefundID string
 	Amount           string
 	Description      string
@@ -492,8 +493,148 @@ func (c *Client) GetPaymentStatus(ctx context.Context, orderID, transactionID st
 }
 
 // RequestRefund (Section 7.1): Issues programmatic refund for a successful transaction
+// postServiceBaseURL returns the PayU Merchant Web Service host that hosts
+// verify_payment / cancel_refund_transaction. This is a DIFFERENT host from the
+// checkout _payment URL: prod = https://info.payu.in, test = https://test.payu.in.
+func (c *Client) postServiceBaseURL() string {
+	if strings.Contains(c.BaseURL, "test.payu.in") {
+		return "https://test.payu.in"
+	}
+	return "https://info.payu.in"
+}
+
+// commandHash computes the SHA-512 hash PayU's postservice commands expect:
+// sha512(key|command|var1|salt).
+func (c *Client) commandHash(command, var1 string) string {
+	raw := fmt.Sprintf("%s|%s|%s|%s", c.APIKey, command, var1, c.Salt)
+	sum := sha512.Sum512([]byte(raw))
+	return hex.EncodeToString(sum[:])
+}
+
+// VerifyPayment resolves a merchant txnid to PayU's mihpayid (and confirms the
+// gateway-side status) via the verify_payment command. txnid is the ORD... order
+// id that was sent to PayU as the transaction id.
+func (c *Client) VerifyPayment(ctx context.Context, txnid string) (mihpayid string, status string, err error) {
+	if c.APIKey == "" || c.TestMode {
+		return "", "", errors.New("verify_payment unavailable: PG not configured or in test mode")
+	}
+
+	params := map[string]string{
+		"key":     c.APIKey,
+		"command": "verify_payment",
+		"var1":    txnid,
+		"hash":    c.commandHash("verify_payment", txnid),
+	}
+
+	respBody, err := c.postForm(ctx, c.postServiceBaseURL()+"/merchant/postservice?form=2", params)
+	if err != nil {
+		return "", "", err
+	}
+
+	var res struct {
+		Status             interface{}                       `json:"status"`
+		Msg                string                            `json:"msg"`
+		TransactionDetails map[string]map[string]interface{} `json:"transaction_details"`
+	}
+	if err := json.Unmarshal(respBody, &res); err != nil {
+		return "", "", fmt.Errorf("failed to parse verify_payment response: %w", err)
+	}
+
+	detail, ok := res.TransactionDetails[txnid]
+	if !ok {
+		return "", "", fmt.Errorf("verify_payment: transaction %s not found at gateway", txnid)
+	}
+	mihpayid = fmt.Sprintf("%v", detail["mihpayid"])
+	status = fmt.Sprintf("%v", detail["status"])
+	if mihpayid == "" || mihpayid == "Not Found" {
+		return "", status, fmt.Errorf("verify_payment: no mihpayid for %s (status %s)", txnid, status)
+	}
+	return mihpayid, status, nil
+}
+
+// SIResult is the outcome of a recurring standing-instruction debit.
+type SIResult struct {
+	Success  bool
+	MihPayID string
+	Status   string
+	Message  string
+}
+
+// RecurringDebit charges a subsequent installment against an existing SI mandate
+// via the si_transaction command. authPayUID is the mihpayid of the original
+// consent transaction (stored on the mandate as AuthPayUID). txnid is a fresh,
+// unique merchant transaction id for this installment.
+func (c *Client) RecurringDebit(ctx context.Context, authPayUID, txnid, amount, productinfo, firstname, email string) (*SIResult, error) {
+	if c.APIKey == "" || c.TestMode {
+		return &SIResult{Success: true, MihPayID: "SIM_" + txnid, Status: "success", Message: "simulated"}, nil
+	}
+	if authPayUID == "" {
+		return nil, errors.New("recurring debit requires authpayuid")
+	}
+
+	// var1 is a JSON payload describing the installment for si_transaction.
+	var1 := fmt.Sprintf(
+		`{"txnid":"%s","amount":"%s","productinfo":"%s","firstname":"%s","email":"%s","authpayuid":"%s"}`,
+		txnid, amount, productinfo, firstname, email, authPayUID)
+
+	params := map[string]string{
+		"key":     c.APIKey,
+		"command": "si_transaction",
+		"var1":    var1,
+		"hash":    c.commandHash("si_transaction", var1),
+	}
+
+	respBody, err := c.postForm(ctx, c.postServiceBaseURL()+"/merchant/postservice?form=2", params)
+	if err != nil {
+		return nil, err
+	}
+
+	var res struct {
+		Status   interface{} `json:"status"`
+		Msg      string      `json:"msg"`
+		MihPayID interface{} `json:"mihpayid"`
+		Result   interface{} `json:"result"`
+	}
+	if err := json.Unmarshal(respBody, &res); err != nil {
+		return nil, fmt.Errorf("failed to parse si_transaction response: %w", err)
+	}
+
+	statusStr := fmt.Sprintf("%v", res.Status)
+	return &SIResult{
+		Success:  statusStr == "1" || strings.EqualFold(statusStr, "success"),
+		MihPayID: fmt.Sprintf("%v", res.MihPayID),
+		Status:   statusStr,
+		Message:  res.Msg,
+	}, nil
+}
+
+// PreDebitNotify sends the mandatory pre-debit notification (>=48h before a
+// recurring charge) via the pre_debit_notification command. Best-effort:
+// callers log failures but should not abort the debit cycle for a notify error
+// where the gateway does not strictly require it.
+func (c *Client) PreDebitNotify(ctx context.Context, authPayUID, txnid, amount string) error {
+	if c.APIKey == "" || c.TestMode {
+		return nil
+	}
+	if authPayUID == "" {
+		return errors.New("pre-debit notification requires authpayuid")
+	}
+	var1 := fmt.Sprintf(`{"txnid":"%s","amount":"%s","authpayuid":"%s"}`, txnid, amount, authPayUID)
+	params := map[string]string{
+		"key":     c.APIKey,
+		"command": "pre_debit_notification",
+		"var1":    var1,
+		"hash":    c.commandHash("pre_debit_notification", var1),
+	}
+	_, err := c.postForm(ctx, c.postServiceBaseURL()+"/merchant/postservice?form=2", params)
+	return err
+}
+
+// RequestRefund issues a real PayU refund via the cancel_refund_transaction
+// command. It requires the mihpayid (PayU payment id); callers resolve it with
+// VerifyPayment when it was not persisted at capture time.
 func (c *Client) RequestRefund(ctx context.Context, p RefundParams) (*RefundResponse, error) {
-	if c.BaseURL == "" || c.APIKey == "" || c.TestMode {
+	if c.APIKey == "" || c.TestMode {
 		refNo := fmt.Sprintf("REF_%d", time.Now().Unix())
 		return &RefundResponse{
 			TransactionID:    p.TransactionID,
@@ -504,42 +645,48 @@ func (c *Client) RequestRefund(ctx context.Context, p RefundParams) (*RefundResp
 		}, nil
 	}
 
-	params := map[string]string{
-		"api_key":            c.APIKey,
-		"transaction_id":     p.TransactionID,
-		"merchant_refund_id": p.MerchantRefundID,
-		"amount":             p.Amount,
-		"description":        p.Description,
+	if p.MihPayID == "" {
+		return nil, errors.New("refund requires mihpayid (gateway payment id)")
 	}
-	params["hash"] = GenerateHash(params, c.Salt)
 
-	apiURL := c.BaseURL + "/v2/refundrequest"
-	respBody, err := c.postForm(ctx, apiURL, params)
+	params := map[string]string{
+		"key":     c.APIKey,
+		"command": "cancel_refund_transaction",
+		"var1":    p.MihPayID,          // PayU payment id
+		"var2":    p.MerchantRefundID,  // unique merchant refund token
+		"var3":    p.Amount,            // refund amount
+		"hash":    c.commandHash("cancel_refund_transaction", p.MihPayID),
+	}
+
+	respBody, err := c.postForm(ctx, c.postServiceBaseURL()+"/merchant/postservice?form=2", params)
 	if err != nil {
 		return nil, err
 	}
 
 	var res struct {
-		Data  *RefundResponse `json:"data"`
-		Error *struct {
-			Code    interface{} `json:"code"`
-			Message string      `json:"message"`
-		} `json:"error"`
+		Status    interface{} `json:"status"`
+		Msg       string      `json:"msg"`
+		ErrorCode interface{} `json:"error_code"`
+		RequestID interface{} `json:"request_id"`
+		MihPayID  interface{} `json:"mihpayid"`
 	}
-
 	if err := json.Unmarshal(respBody, &res); err != nil {
 		return nil, fmt.Errorf("failed to parse PG refund response: %w", err)
 	}
 
-	if res.Error != nil {
-		return nil, fmt.Errorf("PG refund error [%v]: %s", res.Error.Code, res.Error.Message)
+	// PayU signals success with status == 1 and a queued request_id.
+	if fmt.Sprintf("%v", res.Status) != "1" {
+		return nil, fmt.Errorf("PG refund rejected [%v]: %s", res.ErrorCode, res.Msg)
 	}
 
-	if res.Data == nil {
-		return nil, errors.New("empty refund data received from PG")
-	}
-
-	return res.Data, nil
+	requestID := fmt.Sprintf("%v", res.RequestID)
+	return &RefundResponse{
+		TransactionID:    p.TransactionID,
+		RefundID:         res.RequestID,
+		RefundRefNo:      &requestID,
+		MerchantRefundID: p.MerchantRefundID,
+		MerchantOrderID:  "ORD_" + p.TransactionID,
+	}, nil
 }
 
 // GenerateQRStandee (Section 9 & BharatQR Appendix): Generates static or dynamic QR payload for physical standee

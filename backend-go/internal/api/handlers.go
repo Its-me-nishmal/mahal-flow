@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strconv"
@@ -25,7 +26,9 @@ type Handler struct {
 	auditRepo      repository.AuditLogRepository
 	alertRepo      repository.AlertRepository
 	refundRepo     repository.RefundRepository
+	mandateRepo    repository.MandateRepository
 	pgClient       *pg.Client
+	autoPayEvery   time.Duration // recurring-debit cadence for test mandates
 }
 
 func NewHandler(
@@ -37,6 +40,7 @@ func NewHandler(
 	aur repository.AuditLogRepository,
 	alr repository.AlertRepository,
 	refr repository.RefundRepository,
+	mndr repository.MandateRepository,
 	pgc *pg.Client,
 ) *Handler {
 	return &Handler{
@@ -48,6 +52,7 @@ func NewHandler(
 		auditRepo:      aur,
 		alertRepo:      alr,
 		refundRepo:     refr,
+		mandateRepo:    mndr,
 		pgClient:       pgc,
 	}
 }
@@ -466,6 +471,9 @@ func (h *Handler) InitializeDuesPayment(c *fiber.Ctx) error {
 
 type ConfirmPaymentRequest struct {
 	TransactionID string `json:"transaction_id"`
+	// GatewayPaymentID is PayU's mihpayid, returned by the mobile SDK on success.
+	// Persisted so refunds work later; if empty the server resolves it from PayU.
+	GatewayPaymentID string `json:"gateway_payment_id,omitempty"`
 }
 
 func (h *Handler) ConfirmPayment(c *fiber.Ctx) error {
@@ -481,6 +489,27 @@ func (h *Handler) ConfirmPayment(c *fiber.Ctx) error {
 	receipt, err := h.paymentService.CommitSuccessfulPayment(c.Context(), req.TransactionID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	// Persist PayU's mihpayid so a refund can be issued later. Prefer the value
+	// the mobile SDK reported; otherwise resolve it from the gateway. Best-effort
+	// — a lookup failure must not fail an already-committed payment.
+	if h.txnRepo != nil {
+		mihpayid := req.GatewayPaymentID
+		if mihpayid == "" && h.pgClient != nil {
+			if txn, tErr := h.txnRepo.GetByID(c.Context(), req.TransactionID); tErr == nil && txn != nil {
+				orderID := txn.GatewayOrderID
+				if orderID == "" {
+					orderID = "ORD" + txn.ID
+				}
+				if mp, _, vErr := h.pgClient.VerifyPayment(c.Context(), orderID); vErr == nil {
+					mihpayid = mp
+				}
+			}
+		}
+		if mihpayid != "" {
+			_ = h.txnRepo.SetGatewayPaymentID(c.Context(), req.TransactionID, mihpayid)
+		}
 	}
 
 	if h.auditRepo != nil {
@@ -627,9 +656,52 @@ func (h *Handler) VerifyReceiptIntegrity(c *fiber.Ctx) error {
 // -------------------------------------------------------------
 
 type CreateMandateRequest struct {
-	MemberID  string  `json:"member_id"`
-	MaxAmount float64 `json:"max_amount"`
-	Mode      string  `json:"mode"` // UPI | E_NACH | CARD_SI
+	MemberID    string  `json:"member_id"`
+	MaxAmount   float64 `json:"max_amount"`
+	DebitAmount float64 `json:"debit_amount"` // amount charged each cycle (defaults to MaxAmount)
+	Frequency   string  `json:"frequency"`    // HOURLY | DAILY | WEEKLY | MONTHLY (default MONTHLY)
+	Mode        string  `json:"mode"`         // UPI | E_NACH | CARD_SI
+}
+
+// payUBillingCycle maps our frequency to a PayU SI billingCycle. HOURLY/DAILY
+// use ADHOC (merchant-initiated, on-demand up to the max) because UPI AutoPay
+// has no sub-daily bank cycle — our own scheduler drives the actual timing.
+func payUBillingCycle(freq string) string {
+	switch strings.ToUpper(freq) {
+	case "MINUTELY", "HOURLY", "DAILY", "ADHOC":
+		return "ADHOC"
+	case "WEEKLY":
+		return "WEEKLY"
+	default:
+		return "MONTHLY"
+	}
+}
+
+// advanceDebit returns the next debit time for a frequency, from a base time.
+func advanceDebit(freq string, from time.Time) time.Time {
+	switch strings.ToUpper(freq) {
+	case "MINUTELY":
+		return from.Add(time.Minute)
+	case "HOURLY":
+		return from.Add(time.Hour)
+	case "DAILY":
+		return from.AddDate(0, 0, 1)
+	case "WEEKLY":
+		return from.AddDate(0, 0, 7)
+	default:
+		return from.AddDate(0, 1, 0)
+	}
+}
+
+// isTestFrequency reports sub-monthly cadences used only for testing, where the
+// 48h pre-debit gate is skipped so debits can be exercised immediately.
+func isTestFrequency(freq string) bool {
+	switch strings.ToUpper(freq) {
+	case "MINUTELY", "HOURLY", "DAILY":
+		return true
+	default:
+		return false
+	}
 }
 
 func (h *Handler) CreateAutoPayMandate(c *fiber.Ctx) error {
@@ -642,13 +714,23 @@ func (h *Handler) CreateAutoPayMandate(c *fiber.Ctx) error {
 	if maxAmount <= 0 {
 		maxAmount = 1000.0
 	}
+	debitAmount := req.DebitAmount
+	if debitAmount <= 0 {
+		debitAmount = maxAmount
+	}
+	frequency := strings.ToUpper(req.Frequency)
+	if frequency == "" {
+		frequency = "MONTHLY"
+	}
+	billingCycle := payUBillingCycle(frequency)
 
 	startDate := time.Now().Format("2006-01-02")
 	endDate := time.Now().AddDate(3, 0, 0).Format("2006-01-02")
 
-	// PayU SI Standing Instruction specification
-	siDetailsJSON := fmt.Sprintf(`{"billingAmount":"%.2f","billingCurrency":"INR","billingCycle":"MONTHLY","billingInterval":1,"paymentStartDate":"%s","paymentEndDate":"%s","billingRule":"MAX"}`,
-		maxAmount, startDate, endDate)
+	// PayU SI Standing Instruction specification. billingAmount is the max per
+	// debit; billingRule MAX authorizes any amount up to it each cycle.
+	siDetailsJSON := fmt.Sprintf(`{"billingAmount":"%.2f","billingCurrency":"INR","billingCycle":"%s","billingInterval":1,"paymentStartDate":"%s","paymentEndDate":"%s","billingRule":"MAX"}`,
+		maxAmount, billingCycle, startDate, endDate)
 
 	var checkoutData *pg.PayUCheckoutFormData
 	mandateURL := fmt.Sprintf("http://localhost:8080/api/v1/payments/payu-checkout/%s", mandateID)
@@ -687,28 +769,373 @@ func (h *Handler) CreateAutoPayMandate(c *fiber.Ctx) error {
 		checkoutData = &formData
 	}
 
+	// Persist the mandate as PENDING_AUTHORIZATION. It becomes ACTIVE once the
+	// member approves the SI at the gateway (see ConfirmAutoPayMandate).
+	if h.mandateRepo != nil {
+		now := time.Now().UTC()
+		mode := req.Mode
+		if mode == "" {
+			mode = "UPI"
+		}
+		_ = h.mandateRepo.Create(c.Context(), &domain.Mandate{
+			ID:           mandateID,
+			MahalID:      tenantID,
+			MemberID:     req.MemberID,
+			Status:       "PENDING_AUTHORIZATION",
+			MaxAmount:    maxAmount,
+			DebitAmount:  debitAmount,
+			Frequency:    frequency,
+			RecurringDay: 1,
+			Mode:         mode,
+			SIDetails:    siDetailsJSON,
+			CreatedAt:    now,
+			UpdatedAt:    now,
+		})
+	}
+
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"mandate_id":     mandateID,
-		"mahal_id":       tenantID,
-		"member_id":      req.MemberID,
-		"status":         "PENDING_AUTHORIZATION",
-		"frequency":      "MONTHLY",
-		"recurring_day":  1,
-		"max_amount":     maxAmount,
-		"si_details":     siDetailsJSON,
-		"mandate_url":    mandateURL,
-		"payu_checkout":  checkoutData,
+		"mandate_id":    mandateID,
+		"mahal_id":      tenantID,
+		"member_id":     req.MemberID,
+		"status":        "PENDING_AUTHORIZATION",
+		"frequency":     frequency,
+		"billing_cycle": billingCycle,
+		"recurring_day": 1,
+		"max_amount":    maxAmount,
+		"debit_amount":  debitAmount,
+		"si_details":    siDetailsJSON,
+		"mandate_url":   mandateURL,
+		"payu_checkout": checkoutData,
+	})
+}
+
+type ConfirmMandateRequest struct {
+	MandateID        string `json:"mandate_id"`
+	GatewayPaymentID string `json:"gateway_payment_id,omitempty"` // PayU mihpayid from SI consent
+}
+
+// ConfirmAutoPayMandate activates a mandate after the member has approved the SI
+// at the gateway. It captures AuthPayUID (mihpayid of the consent transaction),
+// which every subsequent recurring debit is charged against.
+func (h *Handler) ConfirmAutoPayMandate(c *fiber.Ctx) error {
+	if h.mandateRepo == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "AutoPay service offline"})
+	}
+	var req ConfirmMandateRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	mandate, err := h.mandateRepo.GetByID(c.Context(), req.MandateID)
+	if err != nil || mandate == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Mandate not found"})
+	}
+
+	// Resolve the consent transaction's mihpayid (authpayuid): prefer the value
+	// the app reported, else ask the gateway using the mandate id as the txnid.
+	authPayUID := req.GatewayPaymentID
+	if authPayUID == "" && h.pgClient != nil {
+		if mp, _, vErr := h.pgClient.VerifyPayment(c.Context(), mandate.ID); vErr == nil {
+			authPayUID = mp
+		}
+	}
+	if authPayUID == "" {
+		return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+			"error":  "Could not confirm mandate: gateway authorization id unavailable",
+			"status": "PENDING_AUTHORIZATION",
+		})
+	}
+
+	// First debit: for real (monthly/weekly) mandates, align to the recurring
+	// day; for test cadences, the next interval from now.
+	var next time.Time
+	if isTestFrequency(mandate.Frequency) {
+		next = time.Now().UTC() // due immediately so the first run-due charges
+	} else {
+		next = nextMonthlyDebit(mandate.RecurringDay)
+	}
+	_ = h.mandateRepo.Update(c.Context(), mandate.ID, bson.M{
+		"status":       "ACTIVE",
+		"auth_payu_id": authPayUID,
+		"next_debit":   next,
+	})
+
+	if h.auditRepo != nil {
+		_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
+			MahalID:  mandate.MahalID,
+			Action:   "AUTOPAY_MANDATE_ACTIVATED",
+			Actor:    "MEMBER",
+			EntityID: mandate.ID,
+			Details:  fmt.Sprintf("SI mandate active. authpayuid %s, max ₹%.2f, next %s", authPayUID, mandate.MaxAmount, next.Format("2006-01-02")),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"mandate_id": mandate.ID,
+		"status":     "ACTIVE",
+		"next_debit": next.Format("2006-01-02"),
 	})
 }
 
 func (h *Handler) GetAutoPayStatus(c *fiber.Ctx) error {
-	return c.JSON(fiber.Map{
-		"mandate_id": "MND_849201",
-		"status":     "ACTIVE",
-		"frequency":  "MONTHLY",
-		"amount":     500.0,
-		"next_debit": "2026-09-01",
+	if h.mandateRepo == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "AutoPay service offline"})
+	}
+	tenantID, _ := c.Locals("tenant_id").(string)
+	memberID := c.Query("member_id")
+	if memberID == "" {
+		memberID = "MEM_001_9910"
+	}
+
+	mandate, err := h.mandateRepo.GetActiveByMember(c.Context(), tenantID, memberID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	if mandate == nil {
+		return c.JSON(fiber.Map{"status": "NONE", "active": false})
+	}
+
+	resp := fiber.Map{
+		"mandate_id": mandate.ID,
+		"status":     mandate.Status,
+		"active":     mandate.Status == "ACTIVE",
+		"frequency":  mandate.Frequency,
+		"amount":     mandate.DebitAmount,
+		"max_amount": mandate.MaxAmount,
+		"mode":       mandate.Mode,
+	}
+	if mandate.NextDebit != nil {
+		resp["next_debit"] = mandate.NextDebit.Format("2006-01-02")
+	}
+	if mandate.LastDebitAt != nil {
+		resp["last_debit_at"] = mandate.LastDebitAt.Format("2006-01-02")
+	}
+	return c.JSON(resp)
+}
+
+type CancelMandateRequest struct {
+	MandateID string `json:"mandate_id"`
+	MemberID  string `json:"member_id"`
+	Reason    string `json:"reason"`
+}
+
+// CancelAutoPayMandate stops a mandate so the scheduler no longer debits it.
+// Sets status CANCELLED (scheduler only charges ACTIVE). Accepts a mandate_id,
+// or falls back to the member's active mandate. This is the safety switch for a
+// runaway test cadence.
+func (h *Handler) CancelAutoPayMandate(c *fiber.Ctx) error {
+	if h.mandateRepo == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "AutoPay service offline"})
+	}
+	tenantID, _ := c.Locals("tenant_id").(string)
+	var req CancelMandateRequest
+	_ = c.BodyParser(&req)
+
+	var mandate *domain.Mandate
+	var err error
+	if req.MandateID != "" {
+		mandate, err = h.mandateRepo.GetByID(c.Context(), req.MandateID)
+	} else {
+		memberID := req.MemberID
+		if memberID == "" {
+			memberID = "MEM_001_9910"
+		}
+		mandate, err = h.mandateRepo.GetActiveByMember(c.Context(), tenantID, memberID)
+	}
+	if err != nil || mandate == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Mandate not found"})
+	}
+
+	_ = h.mandateRepo.Update(c.Context(), mandate.ID, bson.M{
+		"status":     "CANCELLED",
+		"next_debit": nil,
 	})
+	if h.auditRepo != nil {
+		_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
+			MahalID:  mandate.MahalID,
+			Action:   "AUTOPAY_MANDATE_CANCELLED",
+			Actor:    "MEMBER",
+			EntityID: mandate.ID,
+			Details:  "AutoPay mandate cancelled. Reason: " + req.Reason,
+		})
+	}
+	return c.JSON(fiber.Map{"mandate_id": mandate.ID, "status": "CANCELLED"})
+}
+
+// nextMonthlyDebit returns the next occurrence of the given day-of-month, at
+// least one day in the future, clamped to valid days in the target month.
+func nextMonthlyDebit(day int) time.Time {
+	if day < 1 || day > 28 {
+		day = 1
+	}
+	now := time.Now().UTC()
+	candidate := time.Date(now.Year(), now.Month(), day, 0, 0, 0, 0, time.UTC)
+	if !candidate.After(now) {
+		candidate = candidate.AddDate(0, 1, 0)
+	}
+	return candidate
+}
+
+// RunDueAutoPayDebits drives the recurring AutoPay cycle: for every ACTIVE
+// mandate due on or before today it sends the pre-debit notification (>=48h
+// ahead) and, once notified, charges the installment via PayU si_transaction,
+// then commits a receipt and rolls next_debit forward one month. It is
+// idempotent per cycle and safe to call repeatedly (from a scheduler or the
+// admin endpoint).
+func (h *Handler) RunDueAutoPayDebits(c *fiber.Ctx) error {
+	summary := h.runDueAutoPayDebits(c.Context())
+	return c.JSON(summary)
+}
+
+// StartAutoPayScheduler runs the recurring-debit cycle automatically on a fixed
+// interval, so AutoPay charges happen without any manual trigger. For test
+// mandates the debit cadence is set to this same interval. Runs until ctx is
+// cancelled; call once at startup in its own goroutine.
+func (h *Handler) StartAutoPayScheduler(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		return
+	}
+	h.autoPayEvery = interval
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	// Run once shortly after boot so a due mandate does not wait a full interval.
+	first := time.NewTimer(10 * time.Second)
+	defer first.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-first.C:
+			h.runDueAutoPayDebits(ctx)
+		case <-ticker.C:
+			h.runDueAutoPayDebits(ctx)
+		}
+	}
+}
+
+func (h *Handler) runDueAutoPayDebits(ctx context.Context) fiber.Map {
+	result := fiber.Map{"charged": 0, "notified": 0, "failed": 0, "skipped": 0}
+	if h.mandateRepo == nil || h.paymentService == nil || h.pgClient == nil {
+		result["error"] = "autopay dependencies unavailable"
+		return result
+	}
+
+	now := time.Now().UTC()
+	// Look one debit-window ahead so pre-debit notifications go out in time.
+	dueOrUpcoming, err := h.mandateRepo.FindDue(ctx, now.AddDate(0, 0, 2))
+	if err != nil {
+		result["error"] = err.Error()
+		return result
+	}
+
+	charged, notified, failed, skipped := 0, 0, 0, 0
+	for i := range dueOrUpcoming {
+		m := dueOrUpcoming[i]
+		if m.NextDebit == nil || m.AuthPayUID == "" {
+			skipped++
+			continue
+		}
+		amount := m.DebitAmount
+		if amount <= 0 {
+			amount = m.MaxAmount
+		}
+		amountStr := fmt.Sprintf("%.2f", amount)
+		testFreq := isTestFrequency(m.Frequency)
+
+		// Not yet due: for real cadences, pre-notify (>=48h ahead) and wait. For
+		// test cadences (minutely/hourly/daily) there is no notification gate — just
+		// wait until due.
+		if m.NextDebit.After(now) {
+			if !testFreq && m.PreDebitSentAt == nil {
+				txnid := "SIPD" + strings.ReplaceAll(uuid.New().String(), "-", "")[:12]
+				if err := h.pgClient.PreDebitNotify(ctx, m.AuthPayUID, txnid, amountStr); err == nil {
+					sent := now
+					_ = h.mandateRepo.Update(ctx, m.ID, bson.M{"pre_debit_sent_at": sent})
+					notified++
+				} else {
+					failed++
+				}
+			} else {
+				skipped++
+			}
+			continue
+		}
+
+		// Due now. Real cadences enforce the 48h gap between notification and
+		// debit; test cadences skip straight to the charge.
+		if !testFreq && (m.PreDebitSentAt == nil || now.Sub(*m.PreDebitSentAt) < 48*time.Hour) {
+			if m.PreDebitSentAt == nil {
+				txnid := "SIPD" + strings.ReplaceAll(uuid.New().String(), "-", "")[:12]
+				if err := h.pgClient.PreDebitNotify(ctx, m.AuthPayUID, txnid, amountStr); err == nil {
+					sent := now
+					_ = h.mandateRepo.Update(ctx, m.ID, bson.M{"pre_debit_sent_at": sent})
+					notified++
+				} else {
+					failed++
+				}
+			} else {
+				skipped++
+			}
+			continue
+		}
+
+		// Create the installment transaction, then charge it at the gateway.
+		txn, iErr := h.paymentService.InitializeContribution(ctx, m.MahalID, m.MemberID, amount, "PAYU", "SI_"+m.ID+"_"+m.NextDebit.Format("20060102150405"))
+		if iErr != nil || txn == nil {
+			failed++
+			continue
+		}
+
+		si, dErr := h.pgClient.RecurringDebit(ctx, m.AuthPayUID, "ORD"+txn.ID, amountStr, "Mahal AutoPay Dues", "Mahal Member", "member@mahalflow.org")
+		if dErr != nil || si == nil || !si.Success {
+			failed++
+			_ = h.txnRepo.UpdateStatus(ctx, txn.ID, domain.TxnFailed, "")
+			continue
+		}
+
+		if si.MihPayID != "" {
+			_ = h.txnRepo.SetGatewayPaymentID(ctx, txn.ID, si.MihPayID)
+		}
+		if _, cErr := h.paymentService.CommitSuccessfulPayment(ctx, txn.ID); cErr != nil {
+			failed++
+			continue
+		}
+
+		// Test mandates follow the scheduler cadence (e.g. every 3 min) when one
+		// is configured; real cadences advance by their frequency.
+		var next time.Time
+		if testFreq && h.autoPayEvery > 0 {
+			next = now.Add(h.autoPayEvery)
+		} else {
+			next = advanceDebit(m.Frequency, *m.NextDebit)
+			// Never schedule the next debit in the past — catch up to just ahead of now.
+			if next.Before(now) {
+				next = advanceDebit(m.Frequency, now)
+			}
+		}
+		last := now
+		_ = h.mandateRepo.Update(ctx, m.ID, bson.M{
+			"last_debit_at":     last,
+			"next_debit":        next,
+			"pre_debit_sent_at": nil,
+		})
+		if h.auditRepo != nil {
+			_ = h.auditRepo.Create(ctx, &domain.AuditLog{
+				MahalID:  m.MahalID,
+				Action:   "AUTOPAY_DEBIT_EXECUTED",
+				Actor:    "SCHEDULER",
+				EntityID: m.ID,
+				Details:  fmt.Sprintf("AutoPay debit ₹%.2f via SI. txn %s, next %s", amount, txn.ID, next.Format("2006-01-02")),
+			})
+		}
+		charged++
+	}
+
+	result["charged"] = charged
+	result["notified"] = notified
+	result["failed"] = failed
+	result["skipped"] = skipped
+	result["scanned"] = len(dueOrUpcoming)
+	return result
 }
 
 // -------------------------------------------------------------
@@ -968,6 +1395,8 @@ func (h *Handler) ProcessRefund(c *fiber.Ctx) error {
 	}
 
 	// APPROVE: Trigger real programmatic refund via Payment Gateway (Spec Section 7.1)
+	// refundID may be either a RefundRequest id or, for a 1-click refund, the
+	// transaction id itself.
 	txnID := refundID
 	amount := req.Amount
 	if amount <= 0 {
@@ -985,12 +1414,42 @@ func (h *Handler) ProcessRefund(c *fiber.Ctx) error {
 		}
 	}
 
+	// Load the transaction to resolve mihpayid, the order id and member details.
+	var txn *domain.Transaction
+	if h.txnRepo != nil {
+		txn, _ = h.txnRepo.GetByID(c.Context(), txnID)
+	}
+	if txn == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error":  "Transaction not found for refund",
+			"status": "FAILED",
+		})
+	}
+	if req.Amount <= 0 {
+		amount = txn.Amount
+	}
+
+	orderID := txn.GatewayOrderID
+	if orderID == "" {
+		orderID = "ORD" + txn.ID
+	}
+
+	// Resolve PayU's mihpayid: persisted at capture, else ask the gateway now.
+	mihpayid := txn.GatewayPaymentID
+	if mihpayid == "" && h.pgClient != nil {
+		if mp, _, vErr := h.pgClient.VerifyPayment(c.Context(), orderID); vErr == nil {
+			mihpayid = mp
+			_ = h.txnRepo.SetGatewayPaymentID(c.Context(), txn.ID, mihpayid)
+		}
+	}
+
 	var pgRefund *pg.RefundResponse
 	if h.pgClient != nil {
 		var err error
 		pgRefund, err = h.pgClient.RequestRefund(c.Context(), pg.RefundParams{
-			TransactionID:    txnID,
-			MerchantRefundID: "MREF_" + refundID,
+			TransactionID:    orderID,
+			MihPayID:         mihpayid,
+			MerchantRefundID: "MREF_" + txn.ID,
 			Amount:           fmt.Sprintf("%.2f", amount),
 			Description:      "MahalFlow 1-Click Instant Refund: " + req.Reason,
 		})
@@ -1008,12 +1467,28 @@ func (h *Handler) ProcessRefund(c *fiber.Ctx) error {
 		refNo = *pgRefund.RefundRefNo
 	}
 
-	// Update local status in DB
+	// Record the refund as an immutable ledger document (invariant #4: corrections
+	// are new REFUND records, not edits to the original transaction/receipt).
 	if h.refundRepo != nil {
-		_ = h.refundRepo.UpdateStatus(c.Context(), refundID, "APPROVED")
+		now := time.Now().UTC()
+		_ = h.refundRepo.Create(c.Context(), &domain.RefundRequest{
+			ID:            "RFD_" + refNo,
+			MahalID:       txn.MahalID,
+			TransactionID: txn.ID,
+			MemberID:      txn.MemberID,
+			Amount:        amount,
+			Reason:        req.Reason,
+			Status:        "PROCESSED",
+			RequestedAt:   now,
+			ProcessedAt:   &now,
+		})
+		// If refundID referenced an existing pending request, close it too.
+		if refundID != txn.ID {
+			_ = h.refundRepo.UpdateStatus(c.Context(), refundID, "APPROVED")
+		}
 	}
 	if h.txnRepo != nil {
-		_ = h.txnRepo.UpdateStatus(c.Context(), txnID, domain.TxnRefunded, refNo)
+		_ = h.txnRepo.UpdateStatus(c.Context(), txn.ID, domain.TxnRefunded, refNo)
 	}
 
 	if h.auditRepo != nil {
@@ -1416,6 +1891,11 @@ func (h *Handler) HandlePGWebhook(c *fiber.Ctx) error {
 			receipt, err := h.paymentService.CommitSuccessfulPayment(c.Context(), txnID)
 			if err != nil {
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+			}
+
+			// Persist PayU's mihpayid from the webhook so refunds work later.
+			if h.txnRepo != nil && params["mihpayid"] != "" {
+				_ = h.txnRepo.SetGatewayPaymentID(c.Context(), txnID, params["mihpayid"])
 			}
 
 			if h.auditRepo != nil && receipt != nil {

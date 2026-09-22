@@ -1,8 +1,15 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
+import '../storage/app_prefs.dart';
+
 class ApiService {
   static final ValueNotifier<int> unreadAlertsCount = ValueNotifier<int>(0);
+
+  /// Bearer token for /admin/* routes. Set by [login], restored on launch by
+  /// [restoreSession], and injected into every request in [_getDio]. Null =
+  /// unauthenticated (member-only routes still work; admin routes 401).
+  static String? authToken;
 
   // Support both Physical Device via ADB / localhost and Emulator (10.0.2.2)
   static const List<String> candidateBaseUrls = [
@@ -29,6 +36,8 @@ class ApiService {
         headers: {
           "Content-Type": "application/json",
           "X-Tenant-ID": defaultTenant,
+          if (authToken != null && authToken!.isNotEmpty)
+            "Authorization": "Bearer $authToken",
         },
       ),
     );
@@ -79,6 +88,40 @@ class ApiService {
     return null;
   }
 
+  /// Exchange a phone (and optional mahal) for a JWT and cache it in memory and
+  /// secure storage. Returns true on success. The backend issues a MAHAL_ADMIN
+  /// token; the password field is currently ignored server-side.
+  Future<bool> login({
+    required String phone,
+    String mahalId = defaultTenant,
+  }) async {
+    final response = await _requestWithFallback(
+      (dio) => dio.post("/auth/login", data: {
+        "phone": phone,
+        "mahal_id": mahalId,
+      }),
+    );
+    final data = response?.data;
+    if (data is Map<String, dynamic> && data["token"] is String) {
+      authToken = data["token"] as String;
+      await AppPrefs.setAuthToken(authToken!);
+      return true;
+    }
+    return false;
+  }
+
+  /// Restore a persisted token into memory on app launch, so a returning admin
+  /// keeps a working session without signing in again.
+  static Future<void> restoreSession() async {
+    authToken = await AppPrefs.authToken();
+  }
+
+  /// Drop the token from memory and storage on sign-out.
+  static Future<void> logout() async {
+    authToken = null;
+    await AppPrefs.clearAuthToken();
+  }
+
   // 1. Fetch Member Dashboard from Live MongoDB API
   Future<Map<String, dynamic>?> getMemberDashboard({String memberId = "MEM_001_9910"}) async {
     final response = await _requestWithFallback(
@@ -119,11 +162,18 @@ class ApiService {
   }
 
   // 3. Confirm Dues Payment
-  Future<Map<String, dynamic>?> confirmPayment(String transactionId) async {
+  Future<Map<String, dynamic>?> confirmPayment(
+    String transactionId, {
+    String? gatewayPaymentId,
+  }) async {
     final response = await _requestWithFallback(
       (dio) => dio.post(
         "/payments/dues/confirm",
-        data: {"transaction_id": transactionId},
+        data: {
+          "transaction_id": transactionId,
+          if (gatewayPaymentId != null && gatewayPaymentId.isNotEmpty)
+            "gateway_payment_id": gatewayPaymentId,
+        },
       ),
     );
     if (response != null && response.data != null) {
@@ -493,6 +543,8 @@ class ApiService {
   Future<Map<String, dynamic>?> createAutoPayMandate({
     String memberId = "MEM_001_9910",
     double maxAmount = 1000.0,
+    double? debitAmount,
+    String frequency = "MONTHLY",
     String mode = "UPI",
   }) async {
     final response = await _requestWithFallback(
@@ -501,6 +553,8 @@ class ApiService {
         data: {
           "member_id": memberId,
           "max_amount": maxAmount,
+          "debit_amount": debitAmount ?? maxAmount,
+          "frequency": frequency,
           "mode": mode,
         },
       ),
@@ -511,9 +565,54 @@ class ApiService {
     return null;
   }
 
-  Future<Map<String, dynamic>?> getAutoPayStatus() async {
+  // Activate a mandate after the member approves the SI at the gateway.
+  Future<Map<String, dynamic>?> confirmAutoPayMandate({
+    required String mandateId,
+    String? gatewayPaymentId,
+  }) async {
     final response = await _requestWithFallback(
-      (dio) => dio.get("/autopay/mandate/status"),
+      (dio) => dio.post(
+        "/autopay/mandate/confirm",
+        data: {
+          "mandate_id": mandateId,
+          if (gatewayPaymentId != null && gatewayPaymentId.isNotEmpty)
+            "gateway_payment_id": gatewayPaymentId,
+        },
+      ),
+    );
+    if (response != null && response.data != null) {
+      return response.data as Map<String, dynamic>;
+    }
+    return null;
+  }
+
+  // Stop a mandate so the backend scheduler no longer debits it.
+  Future<Map<String, dynamic>?> cancelAutoPayMandate({
+    String? mandateId,
+    String memberId = "MEM_001_9910",
+    String reason = "Cancelled by member",
+  }) async {
+    final response = await _requestWithFallback(
+      (dio) => dio.post(
+        "/autopay/mandate/cancel",
+        data: {
+          if (mandateId != null && mandateId.isNotEmpty) "mandate_id": mandateId,
+          "member_id": memberId,
+          "reason": reason,
+        },
+      ),
+    );
+    if (response != null && response.data != null) {
+      return response.data as Map<String, dynamic>;
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> getAutoPayStatus({
+    String memberId = "MEM_001_9910",
+  }) async {
+    final response = await _requestWithFallback(
+      (dio) => dio.get("/autopay/mandate/status?member_id=$memberId"),
     );
     if (response != null && response.data != null) {
       return response.data as Map<String, dynamic>;

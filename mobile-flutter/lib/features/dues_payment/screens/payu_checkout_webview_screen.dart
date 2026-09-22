@@ -97,7 +97,7 @@ class _PayUCheckoutWebViewScreenState extends State<PayUCheckoutWebViewScreen> {
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
+      value: AppOverlayStyles.gradientHeader,
       child: Scaffold(
         backgroundColor: AppColors.background,
         body: Column(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/network/api_service.dart';
 import '../../../core/storage/app_prefs.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_tokens.dart';
@@ -49,10 +50,27 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     final isAdmin = isDemoAdmin || digits == '9847123456';
-    await _enter(isAdmin ? 'admin' : 'member');
+    await _enter(isAdmin ? 'admin' : 'member',
+        phone: digits.isEmpty ? phone : digits);
   }
 
-  Future<void> _enter(String role) async {
+  Future<void> _enter(String role, {String phone = '9847123456'}) async {
+    // Admin routes require a JWT; fetch one before entering the dashboard, or
+    // every /admin/* call 401s and the screens render empty. Covers both the
+    // phone Continue path and the "Committee" demo button.
+    if (role == 'admin') {
+      setState(() => _isSubmitting = true);
+      final ok = await ApiService().login(phone: phone);
+      if (!ok) {
+        if (!mounted) return;
+        setState(() {
+          _error = 'Could not reach the server. Check the connection and retry.';
+          _isSubmitting = false;
+        });
+        return;
+      }
+    }
+
     await AppPrefs.setLastRole(role);
     if (!mounted) return;
     setState(() => _isSubmitting = false);

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_theme.dart';
 
@@ -62,6 +63,38 @@ class AppGradients {
     end: Alignment.bottomRight,
     colors: [Color(0xFF17806B), AppColors.primary, AppColors.primaryDark],
     stops: [0.0, 0.45, 1.0],
+  );
+}
+
+/// System bar styling. [SystemUiOverlayStyle.light] is deliberately not used
+/// anywhere: alongside the light status-bar icons it wants, it also forces an
+/// opaque black navigation bar, which paints a black strip across the bottom
+/// of every screen the app draws edge to edge.
+class AppOverlayStyles {
+  AppOverlayStyles._();
+
+  /// Screens whose gradient runs the full height (the splash). Both bars are
+  /// transparent so the gradient bleeds under them.
+  static const SystemUiOverlayStyle fullBleed = SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark,
+    systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarDividerColor: Colors.transparent,
+    systemNavigationBarIconBrightness: Brightness.light,
+    systemNavigationBarContrastEnforced: false,
+  );
+
+  /// Screens with a gradient header over a light body: light icons over the
+  /// header, dark icons on a background-coloured navigation bar so they stay
+  /// legible against the page underneath.
+  static const SystemUiOverlayStyle gradientHeader = SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark,
+    systemNavigationBarColor: AppColors.background,
+    systemNavigationBarDividerColor: Colors.transparent,
+    systemNavigationBarIconBrightness: Brightness.dark,
   );
 }
 

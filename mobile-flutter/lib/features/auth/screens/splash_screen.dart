@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/network/api_service.dart';
 import '../../../core/storage/app_prefs.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_tokens.dart';
@@ -45,6 +46,9 @@ class _SplashScreenState extends State<SplashScreen>
     final results = await Future.wait([
       AppPrefs.hasSeenOnboarding(),
       Future.delayed(_minimumHold).then((_) => false),
+      // Rehydrate a persisted admin JWT so a returning admin keeps a working
+      // session; result unused, the token lands in ApiService.authToken.
+      ApiService.restoreSession().then((_) => false),
     ]);
     if (!mounted) return;
 
@@ -63,60 +67,65 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
+      value: AppOverlayStyles.fullBleed,
       child: Scaffold(
         backgroundColor: AppColors.primaryDark,
-        body: DecoratedBox(
-          decoration: const BoxDecoration(gradient: AppGradients.hero),
-          child: SafeArea(
-            child: FadeTransition(
-              opacity: _fade,
-              child: AnimatedBuilder(
-                animation: _rise,
-                builder: (context, child) => Transform.translate(
-                  offset: Offset(0, _rise.value),
-                  child: child,
-                ),
-                child: Column(
-                  children: [
-                    const Spacer(flex: 4),
-                    _mark(),
-                    const SizedBox(height: AppSpacing.lg),
-                    Text(
-                      'MahalFlow',
-                      style: AppTextStyles.display.copyWith(
-                        color: Colors.white,
-                        fontSize: 34,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      'Dues, contributions and receipts\nfor your Mahal',
-                      textAlign: TextAlign.center,
-                      style: AppTextStyles.body.copyWith(
-                        color: Colors.white.withValues(alpha: 0.76),
-                      ),
-                    ),
-                    const Spacer(flex: 4),
-                    SizedBox(
-                      width: 26,
-                      height: 26,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.2,
-                        valueColor: AlwaysStoppedAnimation(
-                          Colors.white.withValues(alpha: 0.7),
+        // SizedBox.expand is load-bearing: Scaffold hands its body loose
+        // constraints, and a Column sizes its cross axis to the widest child,
+        // so without it the gradient would only be as wide as the tagline.
+        body: SizedBox.expand(
+          child: DecoratedBox(
+            decoration: const BoxDecoration(gradient: AppGradients.hero),
+            child: SafeArea(
+              child: FadeTransition(
+                opacity: _fade,
+                child: AnimatedBuilder(
+                  animation: _rise,
+                  builder: (context, child) => Transform.translate(
+                    offset: Offset(0, _rise.value),
+                    child: child,
+                  ),
+                  child: Column(
+                    children: [
+                      const Spacer(flex: 4),
+                      _mark(),
+                      const SizedBox(height: AppSpacing.lg),
+                      Text(
+                        'MahalFlow',
+                        style: AppTextStyles.display.copyWith(
+                          color: Colors.white,
+                          fontSize: 34,
                         ),
                       ),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    Text(
-                      'Secure payments · Verified receipts',
-                      style: AppTextStyles.small.copyWith(
-                        color: Colors.white.withValues(alpha: 0.6),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        'Dues, contributions and receipts\nfor your Mahal',
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.body.copyWith(
+                          color: Colors.white.withValues(alpha: 0.76),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-                  ],
+                      const Spacer(flex: 4),
+                      SizedBox(
+                        width: 26,
+                        height: 26,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.2,
+                          valueColor: AlwaysStoppedAnimation(
+                            Colors.white.withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      Text(
+                        'Secure payments · Verified receipts',
+                        style: AppTextStyles.small.copyWith(
+                          color: Colors.white.withValues(alpha: 0.6),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xl),
+                    ],
+                  ),
                 ),
               ),
             ),

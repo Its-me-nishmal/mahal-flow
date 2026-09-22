@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -44,6 +45,7 @@ func main() {
 	var auditRepo repository.AuditLogRepository
 	var alertRepo repository.AlertRepository
 	var refundRepo repository.RefundRepository
+	var mandateRepo repository.MandateRepository
 	var notifRepo repository.NotificationRepository
 	var paymentService service.PaymentService
 
@@ -55,6 +57,7 @@ func main() {
 		auditRepo = repository.NewAuditLogRepository(dbClient.DB)
 		alertRepo = repository.NewAlertRepository(dbClient.DB)
 		refundRepo = repository.NewRefundRepository(dbClient.DB)
+		mandateRepo = repository.NewMandateRepository(dbClient.DB)
 		notifRepo = repository.NewNotificationRepository(dbClient.DB)
 		paymentService = service.NewPaymentService(dbClient.Client, mahalRepo, memberRepo, txnRepo, receiptRepo)
 	}
@@ -116,7 +119,23 @@ func main() {
 		TestMode:     cfg.PaymentTestMode,
 	})
 
-	handler := api.NewHandler(paymentService, mahalRepo, memberRepo, receiptRepo, txnRepo, auditRepo, alertRepo, refundRepo, pgClient)
+	handler := api.NewHandler(paymentService, mahalRepo, memberRepo, receiptRepo, txnRepo, auditRepo, alertRepo, refundRepo, mandateRepo, pgClient)
+
+	// AutoPay scheduler: automatically charges due mandates on a fixed interval
+	// (no manual trigger). Defaults to every 3 minutes; set AUTOPAY_INTERVAL_SECONDS=0
+	// to disable. WARNING: this debits real money on ACTIVE mandates.
+	autoPayInterval := 180 * time.Second
+	if v := os.Getenv("AUTOPAY_INTERVAL_SECONDS"); v != "" {
+		if secs, err := strconv.Atoi(v); err == nil {
+			autoPayInterval = time.Duration(secs) * time.Second
+		}
+	}
+	if autoPayInterval > 0 {
+		schedulerCtx, cancelScheduler := context.WithCancel(context.Background())
+		defer cancelScheduler()
+		go handler.StartAutoPayScheduler(schedulerCtx, autoPayInterval)
+		log.Info().Dur("interval", autoPayInterval).Msg("AutoPay scheduler started")
+	}
 
 	// 3. Initialize Fiber App
 	app := fiber.New(fiber.Config{
@@ -182,6 +201,8 @@ func main() {
 	// AutoPay Mandates
 	v1.Post("/autopay/mandate/create", handler.CreateAutoPayMandate)
 	v1.Get("/autopay/mandate/status", handler.GetAutoPayStatus)
+	v1.Post("/autopay/mandate/confirm", handler.ConfirmAutoPayMandate)
+	v1.Post("/autopay/mandate/cancel", handler.CancelAutoPayMandate)
 
 	// Alerts for Members & Announcements
 	v1.Get("/member/alerts", handler.GetAlerts)
@@ -219,6 +240,7 @@ func main() {
 	admin.Post("/alerts/mark-all-read", handler.MarkAllAlertsRead)
 	admin.Post("/excel/upload-preview", handler.UploadExcelPreview)
 	admin.Post("/excel/commit-import", handler.CommitExcelImport)
+	admin.Post("/autopay/run-due", handler.RunDueAutoPayDebits)
 
 	// Graceful shutdown setup
 	sigChan := make(chan os.Signal, 1)

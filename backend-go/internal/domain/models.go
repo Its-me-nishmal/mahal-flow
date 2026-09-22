@@ -177,6 +177,29 @@ type RefundRequest struct {
 	ProcessedAt   *time.Time `bson:"processed_at,omitempty" json:"processed_at,omitempty"`
 }
 
+// Mandate is a PayU Standing Instruction (recurring AutoPay authorization).
+// It is created PENDING_AUTHORIZATION, becomes ACTIVE once the member approves
+// the SI at the gateway (capturing AuthPayUID, PayU's mihpayid for the consent
+// transaction), and is charged on each cycle via the si_transaction API.
+type Mandate struct {
+	ID             string     `bson:"_id" json:"mandate_id"`
+	MahalID        string     `bson:"mahal_id" json:"mahal_id"`
+	MemberID       string     `bson:"member_id" json:"member_id"`
+	Status         string     `bson:"status" json:"status"` // PENDING_AUTHORIZATION | ACTIVE | PAUSED | CANCELLED | FAILED
+	MaxAmount      float64    `bson:"max_amount" json:"max_amount"`
+	DebitAmount    float64    `bson:"debit_amount" json:"debit_amount"`
+	Frequency      string     `bson:"frequency" json:"frequency"` // MONTHLY
+	RecurringDay   int        `bson:"recurring_day" json:"recurring_day"`
+	Mode           string     `bson:"mode" json:"mode"` // UPI | E_NACH | CARD_SI
+	AuthPayUID     string     `bson:"auth_payu_id,omitempty" json:"auth_payu_id,omitempty"`
+	SIDetails      string     `bson:"si_details,omitempty" json:"si_details,omitempty"`
+	NextDebit      *time.Time `bson:"next_debit,omitempty" json:"next_debit,omitempty"`
+	LastDebitAt    *time.Time `bson:"last_debit_at,omitempty" json:"last_debit_at,omitempty"`
+	PreDebitSentAt *time.Time `bson:"pre_debit_sent_at,omitempty" json:"pre_debit_sent_at,omitempty"`
+	CreatedAt      time.Time  `bson:"created_at" json:"created_at"`
+	UpdatedAt      time.Time  `bson:"updated_at" json:"updated_at"`
+}
+
 // SubscriptionInvoice represents SaaS billing records for a Mahal
 type SubscriptionInvoice struct {
 	ID          string    `bson:"_id" json:"id"`

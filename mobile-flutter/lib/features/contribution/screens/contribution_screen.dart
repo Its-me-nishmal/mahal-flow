@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:payu_checkoutpro_flutter/payu_checkoutpro_flutter.dart';
+import 'package:payu_checkoutpro_flutter/PayUConstantKeys.dart';
 
 import '../../../core/network/api_service.dart';
+import '../../../core/network/payu_utils.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../core/utils/currency_format.dart';
@@ -31,10 +34,18 @@ class ContributionScreen extends StatefulWidget {
   State<ContributionScreen> createState() => _ContributionScreenState();
 }
 
-class _ContributionScreenState extends State<ContributionScreen> {
+class _ContributionScreenState extends State<ContributionScreen>
+    implements PayUCheckoutProProtocol {
   final ApiService _apiService = ApiService();
+  late final PayUCheckoutProFlutter _checkoutPro;
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _noteController = TextEditingController();
+
+  // Held across the PayU checkout lifecycle so the success callback can confirm
+  // the right transaction and show the correct receipt/amount.
+  String? _activeTxnId;
+  Map<String, dynamic>? _activePayUData;
+  double _activeAmount = 0;
 
   static const List<_Fund> _funds = [
     _Fund('Zakat Fund', 'Obligatory charity, distributed by the committee',
@@ -58,6 +69,7 @@ class _ContributionScreenState extends State<ContributionScreen> {
   @override
   void initState() {
     super.initState();
+    _checkoutPro = PayUCheckoutProFlutter(this);
     _amountController.addListener(() => setState(() {}));
   }
 
@@ -91,9 +103,9 @@ class _ContributionScreenState extends State<ContributionScreen> {
     );
 
     if (!mounted) return;
-    setState(() => _isProcessing = false);
 
     if (res == null) {
+      setState(() => _isProcessing = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Couldn't reach the server. Your card was not charged."),
@@ -102,12 +114,188 @@ class _ContributionScreenState extends State<ContributionScreen> {
       return;
     }
 
-    final receipt = res["receipt"] as Map<String, dynamic>?;
-    final receiptNum = receipt?["receipt_number"]?.toString() ??
-        res["transaction_id"]?.toString() ??
-        "Verified";
+    // Backend auto-commits in test mode (PAYMENT_TEST_MODE=ON) and returns a
+    // receipt directly — no gateway step. Show the receipt as before.
+    if (res["status"] == "SUCCESS") {
+      setState(() => _isProcessing = false);
+      final receipt = res["receipt"] as Map<String, dynamic>?;
+      final receiptNum = receipt?["receipt_number"]?.toString() ??
+          res["transaction_id"]?.toString() ??
+          "Verified";
+      _showSuccessSheet(amount, receiptNum);
+      return;
+    }
 
-    _showSuccessSheet(amount, receiptNum);
+    // Live path: a PENDING transaction was created. Take the member through the
+    // real PayU gateway, same as monthly dues.
+    final txnId = res["transaction_id"] as String?;
+    if (txnId == null) {
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Couldn't start the payment. Try again.")),
+      );
+      return;
+    }
+
+    _activeTxnId = txnId;
+    _activeAmount = amount;
+    final orderId = res["gateway_order_id"] as String? ?? "ORD$txnId";
+
+    final payUData = await _apiService.getPayUCheckoutData(orderId);
+    _activePayUData = payUData;
+    if (!mounted) return;
+
+    if (payUData == null) {
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Couldn't open the payment screen. Try again.")),
+      );
+      return;
+    }
+
+    final payUPaymentParams = {
+      PayUPaymentParamKey.key: payUData["key"],
+      PayUPaymentParamKey.amount:
+          payUData["amount"]?.toString() ?? amount.toStringAsFixed(2),
+      PayUPaymentParamKey.productInfo: payUData["productinfo"] ?? "Mahal Contribution",
+      PayUPaymentParamKey.firstName: payUData["firstname"] ?? "Member",
+      PayUPaymentParamKey.email: payUData["email"] ?? "member@mahalflow.org",
+      PayUPaymentParamKey.phone: payUData["phone"] ?? "9900990099",
+      PayUPaymentParamKey.ios_surl:
+          payUData["surl"] ?? "http://localhost:8080/api/v1/webhooks/pg",
+      PayUPaymentParamKey.ios_furl:
+          payUData["furl"] ?? "http://localhost:8080/api/v1/webhooks/pg",
+      PayUPaymentParamKey.android_surl:
+          payUData["surl"] ?? "http://localhost:8080/api/v1/webhooks/pg",
+      PayUPaymentParamKey.android_furl:
+          payUData["furl"] ?? "http://localhost:8080/api/v1/webhooks/pg",
+      PayUPaymentParamKey.environment: "0", // 0 = PRODUCTION, 1 = TEST
+      PayUPaymentParamKey.transactionId: orderId,
+      PayUPaymentParamKey.userCredential: "MEM_001_9910",
+      PayUPaymentParamKey.additionalParam: {
+        PayUAdditionalParamKeys.udf1: payUData["udf1"] ?? txnId,
+        PayUAdditionalParamKeys.udf2: payUData["udf2"] ?? "MH_001_CALICUT",
+        PayUAdditionalParamKeys.udf3: payUData["udf3"] ?? "MEM_001_9910",
+      },
+    };
+
+    final payUCheckoutProConfig = {
+      PayUCheckoutProConfigKeys.primaryColor: "#146C5B",
+      PayUCheckoutProConfigKeys.secondaryColor: "#ffffff",
+      PayUCheckoutProConfigKeys.merchantName: "MahalFlow Treasury",
+      PayUCheckoutProConfigKeys.showExitConfirmationOnCheckoutScreen: false,
+      PayUCheckoutProConfigKeys.showExitConfirmationOnPaymentScreen: false,
+      PayUCheckoutProConfigKeys.upiAppsOrder: "gpay|phonepe|paytm",
+    };
+
+    try {
+      _checkoutPro.openCheckoutScreen(
+        payUPaymentParams: payUPaymentParams,
+        payUCheckoutProConfig: payUCheckoutProConfig,
+      );
+    } catch (e) {
+      debugPrint("[PAYU_SDK_ERROR] contribution checkout: $e");
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't open the payment screen. Try again.")),
+        );
+      }
+    }
+  }
+
+  // --- PayUCheckoutProProtocol ---
+
+  @override
+  void generateHash(Map response) async {
+    final hashName = response[PayUHashConstantsKeys.hashName]?.toString() ?? "";
+    final hashString =
+        response[PayUHashConstantsKeys.hashString]?.toString() ?? "";
+    final hashType = response[PayUHashConstantsKeys.hashType]?.toString();
+    final postSalt = response[PayUHashConstantsKeys.postSalt]?.toString();
+
+    if (hashString.isNotEmpty) {
+      try {
+        final generated = await _apiService.generatePayUHash(
+          hashName: hashName,
+          hashString: hashString,
+          hashType: hashType,
+          postSalt: postSalt,
+        );
+        if (generated != null && generated.isNotEmpty) {
+          _checkoutPro.hashGenerated(hash: {hashName: generated});
+          return;
+        }
+      } catch (e) {
+        debugPrint("[PAYU_HASH_ERROR] $hashName: $e");
+      }
+    }
+
+    if (_activePayUData != null &&
+        _activePayUData!["hash"] != null &&
+        hashName == "payment_hash") {
+      _checkoutPro.hashGenerated(hash: {hashName: _activePayUData!["hash"].toString()});
+    } else {
+      _checkoutPro.hashGenerated(hash: {});
+    }
+  }
+
+  @override
+  void onPaymentSuccess(dynamic response) async {
+    debugPrint("[PAYU_NATIVE_SUCCESS] $response");
+    if (_activeTxnId != null) {
+      final confirmRes = await _apiService.confirmPayment(
+        _activeTxnId!,
+        gatewayPaymentId: extractMihpayid(response),
+      );
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        if (confirmRes != null && confirmRes["status"] == "SUCCESS") {
+          final receipt = confirmRes["receipt"] as Map<String, dynamic>?;
+          final receiptNum = receipt?["receipt_number"]?.toString() ?? "Verified";
+          _showSuccessSheet(_activeAmount, receiptNum);
+          return;
+        }
+      }
+    }
+    if (mounted) setState(() => _isProcessing = false);
+  }
+
+  @override
+  void onPaymentFailure(dynamic response) {
+    debugPrint("[PAYU_NATIVE_FAILURE] $response");
+    if (mounted) {
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Payment failed or was cancelled.")),
+      );
+    }
+  }
+
+  @override
+  void onPaymentCancel(Map? response) {
+    debugPrint("[PAYU_NATIVE_CANCEL] $response");
+    if (mounted) {
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Payment was cancelled.")),
+      );
+    }
+  }
+
+  @override
+  void onError(Map? response) {
+    debugPrint("[PAYU_NATIVE_ERROR] $response");
+    if (mounted) {
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Payment error: ${response?['errorMessage'] ?? 'Unknown error'}",
+          ),
+        ),
+      );
+    }
   }
 
   void _showSuccessSheet(double amount, String receiptNum) {

@@ -15,6 +15,7 @@ type TransactionRepository interface {
 	GetByID(ctx context.Context, id string) (*domain.Transaction, error)
 	ListAll(ctx context.Context, mahalID string, limit, skip int64) ([]domain.Transaction, int64, error)
 	UpdateStatus(ctx context.Context, id string, status domain.PaymentStatus, receiptID string) error
+	SetGatewayPaymentID(ctx context.Context, id, gatewayPaymentID string) error
 	FindPendingOlderThan(ctx context.Context, threshold time.Duration) ([]domain.Transaction, error)
 	FindByIDempotencyKey(ctx context.Context, key string) (*domain.Transaction, error)
 	CountFailedByIP(ctx context.Context, ip string, within time.Duration) (int64, error)
@@ -81,6 +82,14 @@ func (r *mongoTxnRepo) UpdateStatus(ctx context.Context, id string, status domai
 		},
 	}
 	_, err := r.coll.UpdateOne(ctx, bson.M{"_id": id}, update)
+	return err
+}
+
+// SetGatewayPaymentID persists PayU's mihpayid on a transaction so a later
+// refund can be issued without re-querying the gateway.
+func (r *mongoTxnRepo) SetGatewayPaymentID(ctx context.Context, id, gatewayPaymentID string) error {
+	_, err := r.coll.UpdateOne(ctx, bson.M{"_id": id},
+		bson.M{"$set": bson.M{"gateway_payment_id": gatewayPaymentID}})
 	return err
 }
 

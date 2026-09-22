@@ -3,6 +3,7 @@ import 'package:payu_checkoutpro_flutter/payu_checkoutpro_flutter.dart';
 import 'package:payu_checkoutpro_flutter/PayUConstantKeys.dart';
 
 import '../../../core/network/api_service.dart';
+import '../../../core/network/payu_utils.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../core/utils/currency_format.dart';
@@ -172,7 +173,7 @@ class _MonthlyPaymentScreenState extends State<MonthlyPaymentScreen>
               "http://localhost:8080/api/v1/webhooks/pg",
           PayUPaymentParamKey.android_furl: payUData["furl"] ??
               "http://localhost:8080/api/v1/webhooks/pg",
-          PayUPaymentParamKey.environment: "1", // 1 = TEST, 0 = PRODUCTION
+          PayUPaymentParamKey.environment: "0", // 0 = PRODUCTION, 1 = TEST
           PayUPaymentParamKey.transactionId: orderId,
           PayUPaymentParamKey.userCredential: "MEM_001_9910",
           PayUPaymentParamKey.additionalParam: {
@@ -260,7 +261,10 @@ class _MonthlyPaymentScreenState extends State<MonthlyPaymentScreen>
   void onPaymentSuccess(dynamic response) async {
     debugPrint("[PAYU_NATIVE_SUCCESS] $response");
     if (_activeTxnId != null) {
-      final confirmRes = await _apiService.confirmPayment(_activeTxnId!);
+      final confirmRes = await _apiService.confirmPayment(
+        _activeTxnId!,
+        gatewayPaymentId: extractMihpayid(response),
+      );
       if (mounted) {
         setState(() => _isProcessing = false);
         if (confirmRes != null && confirmRes["status"] == "SUCCESS") {

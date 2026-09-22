@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
@@ -30,7 +32,15 @@ class AppBottomSheet {
               left: 20,
               right: 20,
               top: 12,
-              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              // The sheet paints under the system navigation bar in edge to
+              // edge, so the actions need that inset too. max(), not a sum:
+              // when the keyboard is up it already covers the bar.
+              bottom:
+                  math.max(
+                    MediaQuery.viewInsetsOf(context).bottom,
+                    MediaQuery.viewPaddingOf(context).bottom,
+                  ) +
+                  20,
             ),
             decoration: const BoxDecoration(
               color: AppColors.surface,
@@ -113,7 +123,12 @@ class AppBottomSheet {
                 if (actions != null && actions.isNotEmpty) ...[
                   const SizedBox(height: 18),
                   Row(
-                    children: actions.map((act) => Expanded(child: act)).toList(),
+                    children: [
+                      for (var i = 0; i < actions.length; i++) ...[
+                        if (i > 0) const SizedBox(width: 10),
+                        Expanded(child: actions[i]),
+                      ],
+                    ],
                   ),
                 ],
               ],
@@ -160,7 +175,6 @@ class AppBottomSheet {
             ),
           ),
         ),
-        const SizedBox(width: 10),
         ElevatedButton(
           onPressed: () => Navigator.of(context).pop(true),
           style: ElevatedButton.styleFrom(
