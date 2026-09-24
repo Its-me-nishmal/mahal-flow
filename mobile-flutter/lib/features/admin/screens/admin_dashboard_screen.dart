@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/network/api_service.dart';
+import '../../../core/services/push_notification_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../core/utils/currency_format.dart';
@@ -35,6 +36,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   @override
   void initState() {
     super.initState();
+    PushNotificationService.instance.markSessionReady();
     _loadAdminData();
   }
 
@@ -110,6 +112,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
             ),
           ],
+        ),
+        const SizedBox(height: AppSpacing.ms),
+        AppSecondaryButton(
+          label: 'Pending approvals',
+          icon: Icons.how_to_reg_outlined,
+          height: 46,
+          onPressed: () => Navigator.of(context).pushNamed('/admin/pending-approvals'),
         ),
         const SizedBox(height: AppSpacing.lg),
         const AppSectionHeader(title: 'This month'),
@@ -1091,8 +1100,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   icon: Icons.logout_rounded,
                   title: 'Sign out',
                   color: AppColors.error,
-                  onTap: () {
+                  onTap: () async {
                     Navigator.pop(context);
+                    await PushNotificationService.instance.onSignOut();
+                    await ApiService.logout();
+                    if (!context.mounted) return;
                     Navigator.of(context).pushNamedAndRemoveUntil(
                       '/login',
                       (route) => false,

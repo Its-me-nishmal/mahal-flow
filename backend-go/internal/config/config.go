@@ -34,6 +34,12 @@ type Config struct {
 	WhatsAppDryRun             bool
 	WhatsAppTemplateDues       string
 	WhatsAppTemplateReceipt    string
+
+	// Firebase Cloud Messaging (push). Service account from the Firebase
+	// console → Project settings → Service accounts. Unset = push disabled.
+	FCMServiceAccountFile string
+	FCMServiceAccountJSON string
+	FCMDryRun             bool
 }
 
 func Load() *Config {
@@ -118,5 +124,9 @@ func Load() *Config {
 		WhatsAppDryRun:             waDryRun,
 		WhatsAppTemplateDues:       os.Getenv("WHATSAPP_TEMPLATE_DUES_REMINDER"),
 		WhatsAppTemplateReceipt:    os.Getenv("WHATSAPP_TEMPLATE_RECEIPT"),
+
+		FCMServiceAccountFile: os.Getenv("FCM_SERVICE_ACCOUNT_FILE"),
+		FCMServiceAccountJSON: os.Getenv("FCM_SERVICE_ACCOUNT_JSON"),
+		FCMDryRun:             os.Getenv("FCM_DRY_RUN") == "true",
 	}
 }

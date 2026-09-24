@@ -139,7 +139,7 @@ class _MonthlyPaymentScreenState extends State<MonthlyPaymentScreen>
 
     final idempKey = "IDEMP_${DateTime.now().millisecondsSinceEpoch}";
     final initRes = await _apiService.initializeDuesPayment(
-      memberId: "MEM_001_9910",
+      memberId: ApiService.currentMemberId,
       selectedMonths: selectedKeys,
       idempotencyKey: idempKey,
       gateway: "PAYU",

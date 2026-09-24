@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'package:firebase_auth/firebase_auth.dart';
+
 import '../../../core/network/api_service.dart';
+import '../../../core/services/phone_auth_service.dart';
 import '../../../core/storage/app_prefs.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_tokens.dart';
@@ -8,6 +11,7 @@ import '../../../core/widgets/app_buttons.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_page_scaffold.dart';
 import '../../../core/widgets/app_text_field.dart';
+import 'otp_verification_screen.dart';
 
 /// Sign in. Same gradient header and floating card as the member home, so the
 /// first screen after the welcome already looks like the app.
@@ -31,15 +35,24 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _continue() async {
     final phone = _phoneController.text.trim();
-    // The backend has no OTP endpoint yet; the field still has to reject
-    // obvious nonsense rather than hand a broken session to the dashboard.
     if (phone.isEmpty) {
       setState(() => _error = 'Enter your registered mobile number');
       return;
     }
     final digits = phone.replaceAll(RegExp(r'\D'), '');
     final isDemoAdmin = phone.toLowerCase().contains('admin');
-    if (!isDemoAdmin && digits.length < 10) {
+
+    // "admin" / the seeded demo number skip OTP for quick internal access.
+    if (isDemoAdmin) {
+      setState(() {
+        _error = null;
+        _isSubmitting = true;
+      });
+      await _enter('admin', phone: digits.isEmpty ? '9847123456' : digits);
+      return;
+    }
+
+    if (digits.length < 10) {
       setState(() => _error = 'That does not look like a 10-digit number');
       return;
     }
@@ -49,9 +62,38 @@ class _LoginScreenState extends State<LoginScreen> {
       _isSubmitting = true;
     });
 
-    final isAdmin = isDemoAdmin || digits == '9847123456';
-    await _enter(isAdmin ? 'admin' : 'member',
-        phone: digits.isEmpty ? phone : digits);
+    final isAdmin = digits == '9847123456';
+
+    // Real sign-in: send a Firebase OTP, then verify on the next screen.
+    await PhoneAuthService.instance.sendOtp(
+      phone: digits,
+      codeSent: (verificationId, resendToken) {
+        if (!mounted) return;
+        setState(() => _isSubmitting = false);
+        Navigator.of(context).pushNamed(
+          '/otp',
+          arguments: OtpArgs(
+            phone: PhoneAuthService.toE164(digits),
+            verificationId: verificationId,
+            resendToken: resendToken,
+            isAdmin: isAdmin,
+          ),
+        );
+      },
+      autoVerified: (_) async {
+        // Android instant verification: skip the OTP screen.
+        await _enter(isAdmin ? 'admin' : 'member', phone: digits);
+      },
+      failed: (FirebaseAuthException e) {
+        if (!mounted) return;
+        setState(() {
+          _isSubmitting = false;
+          _error = e.code == 'invalid-phone-number'
+              ? 'Enter a valid mobile number'
+              : (e.message ?? 'Could not send the code. Try again.');
+        });
+      },
+    );
   }
 
   Future<void> _enter(String role, {String phone = '9847123456'}) async {

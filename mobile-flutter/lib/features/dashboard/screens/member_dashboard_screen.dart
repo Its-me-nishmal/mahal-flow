@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/network/api_service.dart';
+import '../../../core/services/push_notification_service.dart';
 import '../../../core/storage/autopay_local_store.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_tokens.dart';
@@ -82,6 +83,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
   @override
   void initState() {
     super.initState();
+    PushNotificationService.instance.markSessionReady();
     _loadDashboardData();
   }
 

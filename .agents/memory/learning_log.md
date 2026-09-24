@@ -153,3 +153,13 @@
   - Wrap any widget that renders a rupee amount in `FittedBox(fit: BoxFit.scaleDown)`. Never use `TextOverflow.ellipsis` on money: a truncated amount misinforms, a smaller one does not. Test with a lakh-scale value (₹12,50,000), not just ₹500.
   - Never give a card row a fixed `SizedBox(height:)` when its text can wrap. Use `IntrinsicHeight` + `CrossAxisAlignment.stretch` so a row self-sizes to its tallest child and siblings stay equal height.
   - 360dp is the narrowest supported width (docs/design.md section 36) and is the width of the SM M107F test device. Widget tests that pump at `Size(360, 800)` fail on `RenderFlex` overflow, so they catch this without a device — see `mobile-flutter/test/member_dashboard_layout_test.dart`. Add a case at `textScale: 1.3` as well.
+
+### Entry 029: [Flutter][Backend-Go] Push notifications — payload contract and gotchas
+- **Context**: FCM was initialised but notifications were never visible in the foreground, taps went nowhere, and the backend only audit-logged tokens.
+- **Rule**:
+  - Android never draws an FCM push while the app is in the foreground. `PushNotificationService` redraws it with `flutter_local_notifications` on channel `mahalflow_default`. That channel id, the `ic_stat_notification` drawable and the `#146C5B` colour are also hard-coded in `internal/gateway/fcm/client.go` and `AndroidManifest.xml`. Change all three together.
+  - The small icon must be a white-on-transparent drawable (`res/drawable-*/ic_stat_notification.png`). A coloured launcher icon renders as a white square.
+  - `flutter_local_notifications` v10+ requires core library desugaring in `android/app/build.gradle.kts`.
+  - Tap routing reads FCM `data.type` (ALERT | DUES_REMINDER | RECEIPT | PAYMENT_FAILED | AUTOPAY). Kind constants live in `service/push_service.go`. The backend copies title/body into `data`, because a tray tap only delivers `data`.
+  - On a cold start the tap is held until a dashboard calls `markSessionReady()`. Splash → login would otherwise replace the routed screen.
+  - Push is optional, like WhatsApp: without `FCM_SERVICE_ACCOUNT_FILE`/`FCM_SERVICE_ACCOUNT_JSON` the client is disabled and every send is a no-op. `paymentService` accepts only one receipt hook, so `main.go` fans out to every channel (WhatsApp, push) from a single hook. Never call `SetReceiptIssuedHook` twice.

@@ -27,8 +27,34 @@ type Handler struct {
 	alertRepo      repository.AlertRepository
 	refundRepo     repository.RefundRepository
 	mandateRepo    repository.MandateRepository
+	adminRepo      repository.AdminRepository
 	pgClient       *pg.Client
 	autoPayEvery   time.Duration // recurring-debit cadence for test mandates
+
+	// Push notifications. Both optional: nil means tokens are accepted but
+	// not stored, and nothing is pushed.
+	deviceTokenRepo repository.DeviceTokenRepository
+	push            *service.PushService
+}
+
+// SetPush wires device-token storage and FCM delivery. Kept out of NewHandler
+// so push stays optional and the constructor signature stays stable.
+func (h *Handler) SetPush(tokens repository.DeviceTokenRepository, push *service.PushService) {
+	h.deviceTokenRepo = tokens
+	h.push = push
+}
+
+// pushAsync sends detached from the request, so a slow FCM round-trip never
+// delays the admin's response or fails it.
+func (h *Handler) pushAsync(send func(ctx context.Context, p *service.PushService)) {
+	if !h.push.Enabled() {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		send(ctx, h.push)
+	}()
 }
 
 func NewHandler(
@@ -41,6 +67,7 @@ func NewHandler(
 	alr repository.AlertRepository,
 	refr repository.RefundRepository,
 	mndr repository.MandateRepository,
+	adr repository.AdminRepository,
 	pgc *pg.Client,
 ) *Handler {
 	return &Handler{
@@ -53,6 +80,7 @@ func NewHandler(
 		alertRepo:      alr,
 		refundRepo:     refr,
 		mandateRepo:    mndr,
+		adminRepo:      adr,
 		pgClient:       pgc,
 	}
 }
@@ -100,6 +128,212 @@ func (h *Handler) Login(c *fiber.Ctx) error {
 		"mahal_id":   mahalID,
 		"expires_in": 86400,
 	})
+}
+
+// MemberStatusPending marks a self-registered member awaiting admin approval.
+const MemberStatusPending = "PENDING_APPROVAL"
+
+// normalizePhoneIN returns an Indian E.164 phone (+91XXXXXXXXXX) from loose input.
+func normalizePhoneIN(raw string) string {
+	var digits strings.Builder
+	for _, r := range raw {
+		if r >= '0' && r <= '9' {
+			digits.WriteRune(r)
+		}
+	}
+	d := digits.String()
+	switch {
+	case len(d) == 10:
+		return "+91" + d
+	case len(d) == 12 && strings.HasPrefix(d, "91"):
+		return "+" + d
+	case d == "":
+		return ""
+	default:
+		return "+" + d
+	}
+}
+
+type ResolveRequest struct {
+	Phone string `json:"phone"`
+}
+
+// ResolveLogin maps an OTP-verified phone to an identity within the tenant:
+// admin, active member, pending member, or unregistered. Only admins/active
+// members receive a session token; pending/unregistered are told what to do.
+func (h *Handler) ResolveLogin(c *fiber.Ctx) error {
+	tenantID, _ := c.Locals("tenant_id").(string)
+	var req ResolveRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+	phone := normalizePhoneIN(req.Phone)
+	if phone == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Phone number is required"})
+	}
+
+	// 1. Admin phone?
+	if h.adminRepo != nil {
+		if a, _ := h.adminRepo.GetByPhone(c.Context(), tenantID, phone); a != nil {
+			token, _ := GenerateJWT(a.ID, phone, "MAHAL_ADMIN", tenantID, 24*time.Hour)
+			return c.JSON(fiber.Map{
+				"status": "ALLOWED", "role": "MAHAL_ADMIN",
+				"admin_id": a.ID, "name": a.Name, "mahal_id": tenantID, "token": token,
+			})
+		}
+	}
+
+	// 2. Member phone?
+	if h.memberRepo != nil {
+		if m, _ := h.memberRepo.GetByPhone(c.Context(), tenantID, phone); m != nil {
+			if m.Status == MemberStatusPending {
+				return c.JSON(fiber.Map{
+					"status": "PENDING", "role": "MEMBER",
+					"member_id": m.ID, "name": m.Name, "mahal_id": tenantID,
+				})
+			}
+			token, _ := GenerateJWT(m.ID, phone, "MEMBER", tenantID, 24*time.Hour)
+			return c.JSON(fiber.Map{
+				"status": "ALLOWED", "role": "MEMBER",
+				"member_id": m.ID, "name": m.Name, "mahal_id": tenantID, "token": token,
+			})
+		}
+	}
+
+	// 3. Unknown — the app should collect identity and register.
+	return c.JSON(fiber.Map{"status": "UNREGISTERED", "phone": phone})
+}
+
+type RegisterMemberRequest struct {
+	Phone   string `json:"phone"`
+	MahalID string `json:"mahal_id"`
+	Name    string `json:"name"`
+}
+
+// RegisterSelf creates a PENDING_APPROVAL member for an unregistered phone. The
+// member cannot transact until an admin approves them.
+func (h *Handler) RegisterSelf(c *fiber.Ctx) error {
+	tenantID, _ := c.Locals("tenant_id").(string)
+	if h.memberRepo == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Member service offline"})
+	}
+	var req RegisterMemberRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+	mahalID := req.MahalID
+	if mahalID == "" {
+		mahalID = tenantID
+	}
+	phone := normalizePhoneIN(req.Phone)
+	if phone == "" || strings.TrimSpace(req.Name) == "" || mahalID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Name, phone and Mahal ID are required"})
+	}
+
+	// Confirm the Mahal exists (identity check the user does at registration).
+	if h.mahalRepo != nil {
+		if mh, mErr := h.mahalRepo.GetByID(c.Context(), mahalID); mErr != nil || mh == nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "No Mahal found for that ID"})
+		}
+	}
+
+	// Already known? Report current state rather than duplicating.
+	if existing, _ := h.memberRepo.GetByPhone(c.Context(), mahalID, phone); existing != nil {
+		status := "PENDING"
+		if existing.Status != MemberStatusPending {
+			status = "ALLOWED"
+		}
+		return c.JSON(fiber.Map{"status": status, "member_id": existing.ID, "name": existing.Name})
+	}
+
+	memberID := "MEM_" + uuid.New().String()[:8]
+	now := time.Now().UTC()
+	member := domain.Member{
+		ID:                      memberID,
+		MahalID:                 mahalID,
+		MemberCode:              "M-" + strconv.FormatInt(now.Unix()%100000, 10),
+		Name:                    req.Name,
+		Phone:                   phone,
+		MonthlyDuesCustomAmount: 500,
+		Status:                  MemberStatusPending,
+		LastPaidMonth:           now.AddDate(0, -1, 0).Format("2006-01"),
+		OutstandingBalance:      0,
+		Version:                 1,
+		CreatedAt:               now,
+		UpdatedAt:               now,
+	}
+	if err := h.memberRepo.Create(c.Context(), &member); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	if h.auditRepo != nil {
+		_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
+			MahalID:  mahalID,
+			Action:   "MEMBER_REGISTRATION_REQUESTED",
+			Actor:    req.Name,
+			EntityID: memberID,
+			Details:  "Self-registration pending approval (" + phone + ")",
+		})
+	}
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"status": "PENDING", "member_id": memberID, "name": req.Name,
+	})
+}
+
+// GetPendingMembers lists members awaiting approval for the admin's tenant.
+func (h *Handler) GetPendingMembers(c *fiber.Ctx) error {
+	tenantID, _ := c.Locals("tenant_id").(string)
+	if h.memberRepo == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Member service offline"})
+	}
+	all, _, err := h.memberRepo.ListByMahal(c.Context(), tenantID, 500, 0)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	pending := make([]domain.Member, 0)
+	for _, m := range all {
+		if m.Status == MemberStatusPending {
+			pending = append(pending, m)
+		}
+	}
+	return c.JSON(fiber.Map{"pending": pending, "total": len(pending)})
+}
+
+// ApproveMember activates a pending member so they can transact.
+func (h *Handler) ApproveMember(c *fiber.Ctx) error {
+	tenantID, _ := c.Locals("tenant_id").(string)
+	memberID := c.Params("id")
+	if h.memberRepo == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Member service offline"})
+	}
+	if err := h.memberRepo.UpdateStatus(c.Context(), tenantID, memberID, "ACTIVE"); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	if h.auditRepo != nil {
+		_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
+			MahalID: tenantID, Action: "MEMBER_APPROVED", Actor: "ADMIN",
+			EntityID: memberID, Details: "Member approved and activated",
+		})
+	}
+	return c.JSON(fiber.Map{"member_id": memberID, "status": "ACTIVE"})
+}
+
+// RejectMember removes a pending registration.
+func (h *Handler) RejectMember(c *fiber.Ctx) error {
+	tenantID, _ := c.Locals("tenant_id").(string)
+	memberID := c.Params("id")
+	if h.memberRepo == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Member service offline"})
+	}
+	if err := h.memberRepo.Delete(c.Context(), tenantID, memberID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	if h.auditRepo != nil {
+		_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
+			MahalID: tenantID, Action: "MEMBER_REJECTED", Actor: "ADMIN",
+			EntityID: memberID, Details: "Member registration rejected/removed",
+		})
+	}
+	return c.JSON(fiber.Map{"member_id": memberID, "status": "REJECTED"})
 }
 
 func (h *Handler) GetCurrentUser(c *fiber.Ctx) error {
@@ -912,6 +1146,59 @@ func (h *Handler) GetAutoPayStatus(c *fiber.Ctx) error {
 	return c.JSON(resp)
 }
 
+type RegisterTokenRequest struct {
+	Token    string `json:"token"`
+	MemberID string `json:"member_id"`
+	Platform string `json:"platform"`
+}
+
+// RegisterDeviceToken binds a device's FCM push token to the tenant/member so
+// pushes can target it. The app calls this on every launch and sign-in, so it
+// is an idempotent upsert (not audit-logged: that would log every launch).
+func (h *Handler) RegisterDeviceToken(c *fiber.Ctx) error {
+	tenantID, _ := c.Locals("tenant_id").(string)
+	var req RegisterTokenRequest
+	if err := c.BodyParser(&req); err != nil || strings.TrimSpace(req.Token) == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "token is required"})
+	}
+	if strings.TrimSpace(req.MemberID) == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "member_id is required"})
+	}
+	platform := strings.ToLower(strings.TrimSpace(req.Platform))
+	if platform == "" {
+		platform = "android"
+	}
+	if h.deviceTokenRepo != nil {
+		if err := h.deviceTokenRepo.Upsert(c.Context(), &repository.DeviceToken{
+			Token:    strings.TrimSpace(req.Token),
+			MahalID:  tenantID,
+			MemberID: strings.TrimSpace(req.MemberID),
+			Platform: platform,
+		}); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "could not store token"})
+		}
+	}
+	return c.JSON(fiber.Map{"status": "REGISTERED"})
+}
+
+type UnregisterTokenRequest struct {
+	Token string `json:"token"`
+}
+
+// UnregisterDeviceToken stops pushes to a device (called on sign-out).
+func (h *Handler) UnregisterDeviceToken(c *fiber.Ctx) error {
+	var req UnregisterTokenRequest
+	if err := c.BodyParser(&req); err != nil || strings.TrimSpace(req.Token) == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "token is required"})
+	}
+	if h.deviceTokenRepo != nil {
+		if err := h.deviceTokenRepo.Delete(c.Context(), strings.TrimSpace(req.Token)); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "could not remove token"})
+		}
+	}
+	return c.JSON(fiber.Map{"status": "UNREGISTERED"})
+}
+
 type CancelMandateRequest struct {
 	MandateID string `json:"mandate_id"`
 	MemberID  string `json:"member_id"`
@@ -1089,6 +1376,14 @@ func (h *Handler) runDueAutoPayDebits(ctx context.Context) fiber.Map {
 		if dErr != nil || si == nil || !si.Success {
 			failed++
 			_ = h.txnRepo.UpdateStatus(ctx, txn.ID, domain.TxnFailed, "")
+			mahalID, memberID := m.MahalID, m.MemberID
+			h.pushAsync(func(ctx context.Context, p *service.PushService) {
+				p.SendToMember(ctx, mahalID, memberID, service.PushNotification{
+					Kind:  service.PushKindPaymentFailed,
+					Title: "AutoPay debit failed",
+					Body:  "We could not collect ₹" + amountStr + " via AutoPay. Tap to pay your dues manually.",
+				})
+			})
 			continue
 		}
 
@@ -1782,6 +2077,48 @@ func (h *Handler) CreateAlert(c *fiber.Ctx) error {
 			Details:  "Broadcast notice sent to audience: " + req.Audience + " (Title: " + req.Title + ")",
 		})
 	}
+
+	h.pushAsync(func(ctx context.Context, p *service.PushService) {
+		n := service.PushNotification{
+			Kind:  service.PushKindAlert,
+			Title: alert.Title,
+			Body:  alert.Description,
+			Data:  map[string]string{"alert_id": alert.ID, "severity": alert.Severity},
+		}
+		switch req.Audience {
+		case "OVERDUE_ONLY":
+			if h.memberRepo == nil {
+				return
+			}
+			overdue, err := h.memberRepo.GetOverdueMembers(ctx, tenantID)
+			if err != nil {
+				return
+			}
+			ids := make([]string, 0, len(overdue))
+			for _, m := range overdue {
+				ids = append(ids, m.ID)
+			}
+			n.Kind = service.PushKindDuesReminder
+			p.SendToMembers(ctx, tenantID, ids, n)
+		case "FAMILY_HEADS":
+			if h.memberRepo == nil {
+				return
+			}
+			members, _, err := h.memberRepo.ListByMahal(ctx, tenantID, 0, 0)
+			if err != nil {
+				return
+			}
+			var ids []string
+			for _, m := range members {
+				if m.FamilyHead {
+					ids = append(ids, m.ID)
+				}
+			}
+			p.SendToMembers(ctx, tenantID, ids, n)
+		default:
+			p.SendToMahal(ctx, tenantID, n)
+		}
+	})
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"status":   "CREATED",

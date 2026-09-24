@@ -11,6 +11,13 @@ class ApiService {
   /// unauthenticated (member-only routes still work; admin routes 401).
   static String? authToken;
 
+  /// The signed-in member's id, set after phone resolve and restored on launch.
+  /// Member-scoped calls default to this so each user sees their own data.
+  static String? sessionMemberId;
+
+  /// Effective member id for member-scoped calls (session, else legacy seed).
+  static String get currentMemberId => sessionMemberId ?? "MEM_001_9910";
+
   // Support both Physical Device via ADB / localhost and Emulator (10.0.2.2)
   static const List<String> candidateBaseUrls = [
     "http://localhost:8080/api/v1",
@@ -110,22 +117,92 @@ class ApiService {
     return false;
   }
 
-  /// Restore a persisted token into memory on app launch, so a returning admin
-  /// keeps a working session without signing in again.
+  /// Restore a persisted token + member session into memory on app launch.
   static Future<void> restoreSession() async {
     authToken = await AppPrefs.authToken();
+    sessionMemberId = await AppPrefs.memberId();
   }
 
-  /// Drop the token from memory and storage on sign-out.
+  /// Drop the token + member session from memory and storage on sign-out.
   static Future<void> logout() async {
     authToken = null;
-    await AppPrefs.clearAuthToken();
+    sessionMemberId = null;
+    await AppPrefs.clearSession();
+  }
+
+  /// Resolve an OTP-verified phone to an identity within the tenant. Returns the
+  /// raw map: {status: ALLOWED|PENDING|UNREGISTERED, role, member_id, name, token}.
+  Future<Map<String, dynamic>?> resolveLogin(String phone) async {
+    final response = await _requestWithFallback(
+      (dio) => dio.post("/auth/resolve", data: {"phone": phone}),
+    );
+    final data = response?.data;
+    if (data is! Map<String, dynamic>) return null;
+    if (data["status"] == "ALLOWED") {
+      if (data["token"] is String) {
+        authToken = data["token"] as String;
+        await AppPrefs.setAuthToken(authToken!);
+      }
+      if (data["member_id"] is String) {
+        sessionMemberId = data["member_id"] as String;
+        await AppPrefs.setMemberSession(
+          sessionMemberId!,
+          data["name"]?.toString() ?? "",
+        );
+      }
+    }
+    return data;
+  }
+
+  /// Self-register an unregistered phone as a PENDING member. Returns the raw
+  /// map: {status: PENDING|ALLOWED, member_id, name} or {error}.
+  Future<Map<String, dynamic>?> registerSelf({
+    required String phone,
+    required String mahalId,
+    required String name,
+  }) async {
+    final response = await _requestWithFallback(
+      (dio) => dio.post("/auth/register", data: {
+        "phone": phone,
+        "mahal_id": mahalId,
+        "name": name,
+      }),
+    );
+    final data = response?.data;
+    return data is Map<String, dynamic> ? data : null;
+  }
+
+  // Admin: pending member approvals.
+  Future<List<dynamic>> getPendingMembers() async {
+    final response = await _requestWithFallback(
+      (dio) => dio.get("/admin/members/pending"),
+    );
+    final data = response?.data;
+    if (data is Map<String, dynamic> && data["pending"] is List) {
+      return data["pending"] as List;
+    }
+    return [];
+  }
+
+  Future<bool> approveMember(String memberId) async {
+    final response = await _requestWithFallback(
+      (dio) => dio.post("/admin/members/$memberId/approve"),
+    );
+    return response != null;
+  }
+
+  Future<bool> rejectMember(String memberId) async {
+    final response = await _requestWithFallback(
+      (dio) => dio.post("/admin/members/$memberId/reject"),
+    );
+    return response != null;
   }
 
   // 1. Fetch Member Dashboard from Live MongoDB API
-  Future<Map<String, dynamic>?> getMemberDashboard({String memberId = "MEM_001_9910"}) async {
+  Future<Map<String, dynamic>?> getMemberDashboard({String? memberId}) async {
+    memberId ??= currentMemberId;
     final response = await _requestWithFallback(
-      (dio) => dio.get("/member/dashboard?member_id=$memberId"),
+      (dio) => dio.get("/member/dashboard?member_id=${memberId ?? currentMemberId}"),
     );
     if (response != null && response.data != null) {
       final data = response.data as Map<String, dynamic>;
@@ -255,7 +332,7 @@ class ApiService {
 
   // 4. Update Member Profile
   Future<bool> updateMemberProfile({
-    String memberId = "MEM_001_9910",
+    String? memberId,
     required String name,
     String? email,
     String? address,
@@ -284,7 +361,8 @@ class ApiService {
   }
 
   // 5. Get Member Profile
-  Future<Map<String, dynamic>?> getMemberProfile({String memberId = "MEM_001_9910"}) async {
+  Future<Map<String, dynamic>?> getMemberProfile({String? memberId}) async {
+    memberId ??= currentMemberId;
     final response = await _requestWithFallback(
       (dio) => dio.get("/members/profile/$memberId"),
     );
@@ -310,9 +388,10 @@ class ApiService {
   }
 
   // 7. Get Member Receipts List
-  Future<List<dynamic>> getMemberReceipts({String memberId = "MEM_001_9910"}) async {
+  Future<List<dynamic>> getMemberReceipts({String? memberId}) async {
+    memberId ??= currentMemberId;
     final response = await _requestWithFallback(
-      (dio) => dio.get("/member/receipts?member_id=$memberId"),
+      (dio) => dio.get("/member/receipts?member_id=${memberId ?? currentMemberId}"),
     );
     if (response != null && response.data != null) {
       final map = response.data as Map<String, dynamic>;
@@ -323,13 +402,14 @@ class ApiService {
     return [];
   }
 
-  Future<List<dynamic>> getRecentReceipts({String memberId = "MEM_001_9910"}) =>
+  Future<List<dynamic>> getRecentReceipts({String? memberId}) =>
       getMemberReceipts(memberId: memberId);
 
   // 8. Alerts Live APIs
-  Future<List<dynamic>> getAlerts({String memberId = "MEM_001_9910"}) async {
+  Future<List<dynamic>> getAlerts({String? memberId}) async {
+    memberId ??= currentMemberId;
     final response = await _requestWithFallback(
-      (dio) => dio.get("/member/alerts?member_id=$memberId"),
+      (dio) => dio.get("/member/alerts?member_id=${memberId ?? currentMemberId}"),
     );
     if (response != null && response.data != null) {
       final map = response.data as Map<String, dynamic>;
@@ -541,7 +621,7 @@ class ApiService {
 
   // 20. AutoPay Mandate APIs (PayU Recurring / e-Mandate)
   Future<Map<String, dynamic>?> createAutoPayMandate({
-    String memberId = "MEM_001_9910",
+    String? memberId,
     double maxAmount = 1000.0,
     double? debitAmount,
     String frequency = "MONTHLY",
@@ -551,7 +631,7 @@ class ApiService {
       (dio) => dio.post(
         "/autopay/mandate/create",
         data: {
-          "member_id": memberId,
+          "member_id": memberId ?? currentMemberId,
           "max_amount": maxAmount,
           "debit_amount": debitAmount ?? maxAmount,
           "frequency": frequency,
@@ -586,10 +666,40 @@ class ApiService {
     return null;
   }
 
+  // Register this device's FCM token so the backend can send push notifications.
+  Future<bool> registerDeviceToken(
+    String token, {
+    String? memberId,
+    String platform = "android",
+  }) async {
+    final response = await _requestWithFallback(
+      (dio) => dio.post(
+        "/notifications/register-token",
+        data: {
+          "token": token,
+          "member_id": memberId ?? currentMemberId,
+          "platform": platform,
+        },
+      ),
+    );
+    return response != null;
+  }
+
+  // Stop push to this device (sign-out).
+  Future<bool> unregisterDeviceToken(String token) async {
+    final response = await _requestWithFallback(
+      (dio) => dio.post(
+        "/notifications/unregister-token",
+        data: {"token": token},
+      ),
+    );
+    return response != null;
+  }
+
   // Stop a mandate so the backend scheduler no longer debits it.
   Future<Map<String, dynamic>?> cancelAutoPayMandate({
     String? mandateId,
-    String memberId = "MEM_001_9910",
+    String? memberId,
     String reason = "Cancelled by member",
   }) async {
     final response = await _requestWithFallback(
@@ -597,7 +707,7 @@ class ApiService {
         "/autopay/mandate/cancel",
         data: {
           if (mandateId != null && mandateId.isNotEmpty) "mandate_id": mandateId,
-          "member_id": memberId,
+          "member_id": memberId ?? currentMemberId,
           "reason": reason,
         },
       ),
@@ -609,10 +719,10 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>?> getAutoPayStatus({
-    String memberId = "MEM_001_9910",
+    String? memberId,
   }) async {
     final response = await _requestWithFallback(
-      (dio) => dio.get("/autopay/mandate/status?member_id=$memberId"),
+      (dio) => dio.get("/autopay/mandate/status?member_id=${memberId ?? currentMemberId}"),
     );
     if (response != null && response.data != null) {
       return response.data as Map<String, dynamic>;

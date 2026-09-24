@@ -96,7 +96,7 @@ class _ContributionScreenState extends State<ContributionScreen>
 
     final idempKey = "IDEMP_DON_${DateTime.now().millisecondsSinceEpoch}";
     final res = await _apiService.initializeContribution(
-      memberId: "MEM_001_9910",
+      memberId: ApiService.currentMemberId,
       amount: amount,
       fund: _selectedFund,
       idempotencyKey: idempKey,

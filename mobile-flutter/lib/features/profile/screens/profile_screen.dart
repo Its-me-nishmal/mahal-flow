@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/network/api_service.dart';
+import '../../../core/services/push_notification_service.dart';
 import '../../../core/storage/app_prefs.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_tokens.dart';
@@ -29,7 +30,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _state = "Kerala";
   String _pincode = "673001";
   String _mahalName = "Central Juma Masjid Mahal";
-  String _memberId = "MEM_001_9910";
+  String _memberId = ApiService.currentMemberId;
 
   @override
   void initState() {
@@ -108,6 +109,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       icon: Icons.logout_rounded,
     );
     if (confirmed == true && mounted) {
+      await PushNotificationService.instance.onSignOut();
+      await ApiService.logout();
+      if (!mounted) return;
       Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
     }
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/network/api_service.dart';
+import '../../../core/services/push_notification_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/app_bottom_sheet.dart';
@@ -50,6 +51,18 @@ class _AlertsScreenState extends State<AlertsScreen> {
   void initState() {
     super.initState();
     _loadAlerts();
+    PushNotificationService.instance.inboxChanged.addListener(_onPush);
+  }
+
+  @override
+  void dispose() {
+    PushNotificationService.instance.inboxChanged.removeListener(_onPush);
+    super.dispose();
+  }
+
+  // A notice pushed while this screen is open should appear without a pull.
+  void _onPush() {
+    if (!_isLoading) _loadAlerts();
   }
 
   Future<void> _loadAlerts() async {

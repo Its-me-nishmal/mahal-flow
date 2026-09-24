@@ -13,6 +13,8 @@ class AppPrefs {
   static const String _kOnboardingSeen = 'onboarding_completed_v1';
   static const String _kLastRole = 'last_signed_in_role';
   static const String _kAuthToken = 'auth_jwt_token';
+  static const String _kMemberId = 'session_member_id';
+  static const String _kMemberName = 'session_member_name';
 
   /// True once the member has finished (or skipped) the welcome carousel.
   /// The carousel is a first-run introduction; showing it again on every
@@ -81,6 +83,43 @@ class AppPrefs {
 
   static Future<void> clearAuthToken() async {
     try {
+      await _storage.delete(key: _kAuthToken);
+    } catch (_) {
+      // Non-fatal.
+    }
+  }
+
+  /// The signed-in member's id/name — set after phone resolve so every screen
+  /// shows this member's data instead of a hardcoded default.
+  static Future<String?> memberId() async {
+    try {
+      return await _storage.read(key: _kMemberId);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<String?> memberName() async {
+    try {
+      return await _storage.read(key: _kMemberName);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> setMemberSession(String memberId, String name) async {
+    try {
+      await _storage.write(key: _kMemberId, value: memberId);
+      await _storage.write(key: _kMemberName, value: name);
+    } catch (_) {
+      // Non-fatal.
+    }
+  }
+
+  static Future<void> clearSession() async {
+    try {
+      await _storage.delete(key: _kMemberId);
+      await _storage.delete(key: _kMemberName);
       await _storage.delete(key: _kAuthToken);
     } catch (_) {
       // Non-fatal.

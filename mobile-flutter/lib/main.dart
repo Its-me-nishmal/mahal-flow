@@ -1,11 +1,18 @@
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'core/services/push_notification_service.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/app_tokens.dart';
 import 'features/auth/screens/splash_screen.dart';
 import 'features/auth/screens/onboarding_screen.dart';
 import 'features/auth/screens/login_screen.dart';
+import 'features/auth/screens/otp_verification_screen.dart';
+import 'features/auth/screens/register_member_screen.dart';
+import 'features/auth/screens/pending_approval_screen.dart';
+import 'features/admin/screens/pending_approvals_screen.dart';
 import 'features/dashboard/screens/member_dashboard_screen.dart';
 import 'features/admin/screens/admin_dashboard_screen.dart';
 import 'features/dues_payment/screens/monthly_payment_screen.dart';
@@ -28,8 +35,19 @@ import 'features/admin/screens/gateway_configuration_screen.dart';
 import 'features/admin/screens/bulk_excel_import_step1_screen.dart';
 import 'features/admin/screens/bulk_excel_import_preview_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Firebase (reads android/app/google-services.json). Guarded so a
+  // misconfigured environment still opens the app.
+  try {
+    await Firebase.initializeApp();
+    FirebaseMessaging.onBackgroundMessage(firebaseBackgroundHandler);
+    // Fire-and-forget: permissions + token registration must not delay start.
+    PushNotificationService.instance.init();
+  } catch (e) {
+    debugPrint('[FIREBASE] init failed: $e');
+  }
 
   // Every screen paints its own gradient behind the status bar, so the app
   // draws edge to edge with light status-bar icons by default.
@@ -47,12 +65,17 @@ class MahalFlowApp extends StatelessWidget {
     return MaterialApp(
       title: 'MahalFlow',
       debugShowCheckedModeBanner: false,
+      navigatorKey: rootNavigatorKey,
       theme: AppTheme.lightTheme,
       initialRoute: '/',
       routes: {
         '/': (context) => const SplashScreen(),
         '/onboarding': (context) => const OnboardingScreen(),
         '/login': (context) => const LoginScreen(),
+        '/otp': (context) => const OtpVerificationScreen(),
+        '/register': (context) => const RegisterMemberScreen(),
+        '/pending-approval': (context) => const PendingApprovalScreen(),
+        '/admin/pending-approvals': (context) => const PendingApprovalsScreen(),
         '/member/dashboard': (context) => const MemberDashboardScreen(),
         '/admin/dashboard': (context) => const AdminDashboardScreen(),
         '/member/pay': (context) => const MonthlyPaymentScreen(),

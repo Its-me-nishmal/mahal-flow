@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "528829023116",
+    "project_id": "mahalflow",
+    "storage_bucket": "mahalflow.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:528829023116:android:2e2c7ba9e2ea01ac3f8ca9",
+        "android_client_info": {
+          "package_name": "in.mahalflow"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD8fz4PfrHqMezqvbihsXe5C8duKa9wDJI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

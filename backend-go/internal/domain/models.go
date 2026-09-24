@@ -177,6 +177,16 @@ type RefundRequest struct {
 	ProcessedAt   *time.Time `bson:"processed_at,omitempty" json:"processed_at,omitempty"`
 }
 
+// Admin is a committee member who manages a Mahal. Phone-based identity: a
+// login whose phone matches an Admin gets a MAHAL_ADMIN session.
+type Admin struct {
+	ID        string    `bson:"_id" json:"id"`
+	MahalID   string    `bson:"mahal_id" json:"mahal_id"`
+	Name      string    `bson:"name" json:"name"`
+	Phone     string    `bson:"phone" json:"phone"`
+	CreatedAt time.Time `bson:"created_at" json:"created_at"`
+}
+
 // Mandate is a PayU Standing Instruction (recurring AutoPay authorization).
 // It is created PENDING_AUTHORIZATION, becomes ACTIVE once the member approves
 // the SI at the gateway (capturing AuthPayUID, PayU's mihpayid for the consent

@@ -15,6 +15,7 @@ import (
 	"github.com/mahalflow/backend-go/internal/config"
 	"github.com/mahalflow/backend-go/internal/database"
 	"github.com/mahalflow/backend-go/internal/domain"
+	"github.com/mahalflow/backend-go/internal/gateway/fcm"
 	"github.com/mahalflow/backend-go/internal/gateway/pg"
 	"github.com/mahalflow/backend-go/internal/gateway/whatsapp"
 	"github.com/mahalflow/backend-go/internal/logger"
@@ -46,7 +47,9 @@ func main() {
 	var alertRepo repository.AlertRepository
 	var refundRepo repository.RefundRepository
 	var mandateRepo repository.MandateRepository
+	var adminRepo repository.AdminRepository
 	var notifRepo repository.NotificationRepository
+	var deviceTokenRepo repository.DeviceTokenRepository
 	var paymentService service.PaymentService
 
 	if dbClient != nil {
@@ -58,7 +61,9 @@ func main() {
 		alertRepo = repository.NewAlertRepository(dbClient.DB)
 		refundRepo = repository.NewRefundRepository(dbClient.DB)
 		mandateRepo = repository.NewMandateRepository(dbClient.DB)
+		adminRepo = repository.NewAdminRepository(dbClient.DB)
 		notifRepo = repository.NewNotificationRepository(dbClient.DB)
+		deviceTokenRepo = repository.NewDeviceTokenRepository(dbClient.DB)
 		paymentService = service.NewPaymentService(dbClient.Client, mahalRepo, memberRepo, txnRepo, receiptRepo)
 	}
 
@@ -76,6 +81,27 @@ func main() {
 	})
 	log.Info().Str("whatsapp", waClient.Status()).Msg("WhatsApp gateway initialized")
 
+	// FCM push is optional in the same way: without a service account the
+	// client is disabled and every push is a no-op.
+	fcmClient, fcmErr := fcm.NewClient(fcm.Config{
+		ServiceAccountFile: cfg.FCMServiceAccountFile,
+		ServiceAccountJSON: cfg.FCMServiceAccountJSON,
+		DryRun:             cfg.FCMDryRun,
+	})
+	if fcmErr != nil {
+		log.Warn().Err(fcmErr).Msg("FCM service account unusable; push disabled")
+	}
+	log.Info().Str("fcm", fcmClient.Status()).Msg("FCM push gateway initialized")
+	pushService := service.NewPushService(fcmClient, deviceTokenRepo)
+
+	// Post-commit receipt side effects (WhatsApp, push). The payment service
+	// takes a single hook, so each channel registers here and one hook fans out.
+	var receiptHooks []func(ctx context.Context, receipt *domain.Receipt)
+	if pushService.Enabled() {
+		receiptHooks = append(receiptHooks, pushService.NotifyReceipt)
+		log.Info().Msg("Payment receipts will be pushed to the member app")
+	}
+
 	// Deliver a receipt over WhatsApp once a payment is durably committed.
 	// The hook runs detached from the request and its failure cannot affect
 	// the ledger or the caller's response.
@@ -85,10 +111,7 @@ func main() {
 			Receipt:      cfg.WhatsAppTemplateReceipt,
 		})
 		if notifier.Enabled() {
-			paymentService.SetReceiptIssuedHook(func(receipt *domain.Receipt) {
-				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cancel()
-
+			receiptHooks = append(receiptHooks, func(ctx context.Context, receipt *domain.Receipt) {
 				member, err := memberRepo.GetByID(ctx, receipt.MahalID, receipt.MemberID)
 				if err != nil || member == nil {
 					log.Warn().Err(err).Str("member_id", receipt.MemberID).
@@ -108,6 +131,15 @@ func main() {
 			log.Info().Msg("Payment receipts will be delivered over WhatsApp")
 		}
 	}
+	if paymentService != nil && len(receiptHooks) > 0 {
+		paymentService.SetReceiptIssuedHook(func(receipt *domain.Receipt) {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			for _, hook := range receiptHooks {
+				hook(ctx, receipt)
+			}
+		})
+	}
 
 	pgClient := pg.NewClient(pg.Config{
 		BaseURL:      cfg.PGAPIURL,
@@ -119,7 +151,8 @@ func main() {
 		TestMode:     cfg.PaymentTestMode,
 	})
 
-	handler := api.NewHandler(paymentService, mahalRepo, memberRepo, receiptRepo, txnRepo, auditRepo, alertRepo, refundRepo, mandateRepo, pgClient)
+	handler := api.NewHandler(paymentService, mahalRepo, memberRepo, receiptRepo, txnRepo, auditRepo, alertRepo, refundRepo, mandateRepo, adminRepo, pgClient)
+	handler.SetPush(deviceTokenRepo, pushService)
 
 	// AutoPay scheduler: automatically charges due mandates on a fixed interval
 	// (no manual trigger). Defaults to every 3 minutes; set AUTOPAY_INTERVAL_SECONDS=0
@@ -184,6 +217,8 @@ func main() {
 	v1 := app.Group("/api/v1", api.TenantExtractionMiddleware())
 
 	// Auth & Profile
+	v1.Post("/auth/resolve", handler.ResolveLogin)
+	v1.Post("/auth/register", handler.RegisterSelf)
 	v1.Get("/auth/me", api.JWTAuthMiddleware(), handler.GetCurrentUser)
 	v1.Get("/members/profile/:id", handler.GetMemberProfile)
 	v1.Put("/members/profile/:id", handler.UpdateMemberProfile)
@@ -209,6 +244,10 @@ func main() {
 	v1.Get("/alerts", handler.GetAlerts)
 
 	// QR Standee (BharatQR & UPI)
+	// Push notifications
+	v1.Post("/notifications/register-token", handler.RegisterDeviceToken)
+	v1.Post("/notifications/unregister-token", handler.UnregisterDeviceToken)
+
 	v1.Get("/mahal/qr-standee", handler.GetMahalQRStandee)
 	v1.Post("/mahal/qr-standee/dynamic", handler.GenerateDynamicQR)
 
@@ -222,6 +261,9 @@ func main() {
 	admin.Post("/members", handler.CreateMember)
 	admin.Delete("/members/:id", handler.DeleteMember)
 	admin.Post("/members/query", handler.QueryAdminMembers)
+	admin.Get("/members/pending", handler.GetPendingMembers)
+	admin.Post("/members/:id/approve", handler.ApproveMember)
+	admin.Post("/members/:id/reject", handler.RejectMember)
 	admin.Get("/payments", handler.GetPayments)
 	admin.Get("/subscriptions", handler.GetSubscriptions)
 	admin.Get("/refunds", handler.GetRefunds)

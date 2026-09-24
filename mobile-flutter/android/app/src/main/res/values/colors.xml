@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <color name="ic_launcher_background">#0D4F43</color>
+  <!-- Tint for the notification small icon (brand primary). -->
+  <color name="notification_accent">#146C5B</color>
+</resources>

@@ -1,4 +1,4 @@
-package com.example.mahalflow_mobile
+package `in`.mahalflow
 
 import io.flutter.embedding.android.FlutterActivity
 
