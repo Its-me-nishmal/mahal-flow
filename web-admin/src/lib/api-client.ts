@@ -1,8 +1,35 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1";
 
+const TOKEN_KEY = "mahalflow_admin_token";
+const USER_KEY = "mahalflow_admin_user";
+
 export interface ApiResponse<T> {
   data: T | null;
   error?: string;
+}
+
+export interface LoginResponse {
+  token: string;
+  role: string;
+  phone: string;
+  mahal_id: string;
+  expires_in: number;
+}
+
+export function getStoredToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function getStoredUser(): any | null {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem(USER_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
 }
 
 export async function fetchApi<T>(
@@ -11,15 +38,31 @@ export async function fetchApi<T>(
   options?: RequestInit
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
+  const token = getStoredToken();
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-Tenant-ID": tenantId,
+    ...((options?.headers as Record<string, string>) || {}),
+  };
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   const res = await fetch(url, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      "X-Tenant-ID": tenantId,
-      ...(options?.headers || {}),
-    },
+    headers,
     cache: "no-store",
   });
+
+  if (res.status === 401) {
+    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+      window.location.href = "/login";
+    }
+  }
 
   if (!res.ok) {
     const errorBody = await res.text().catch(() => "");
@@ -31,6 +74,42 @@ export async function fetchApi<T>(
 
 // Client Helper Methods for Super-Admin & Mahal Admin
 export const ApiClient = {
+  // 0. Auth Methods
+  login: async (phone: string, mahalId: string = "MH_001_CALICUT"): Promise<LoginResponse> => {
+    const res = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Tenant-ID": mahalId,
+      },
+      body: JSON.stringify({ phone, mahal_id: mahalId }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Authentication failed" }));
+      throw new Error(err.error || "Login failed");
+    }
+
+    const data = (await res.json()) as LoginResponse;
+    if (typeof window !== "undefined" && data.token) {
+      localStorage.setItem(TOKEN_KEY, data.token);
+      localStorage.setItem(USER_KEY, JSON.stringify(data));
+    }
+    return data;
+  },
+
+  logout: () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+      window.location.href = "/login";
+    }
+  },
+
+  getToken: getStoredToken,
+  getUser: getStoredUser,
+  isAuthenticated: () => !!getStoredToken(),
+
   // 1. Dashboard Statistics
   getAdminDashboard: async (tenantId: string = "MH_001_CALICUT") => {
     return fetchApi<{

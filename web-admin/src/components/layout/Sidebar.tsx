@@ -83,13 +83,13 @@ export function Sidebar() {
       </div>
 
       <div className="mt-auto pt-4 border-t border-border-base">
-        <Link
-          href="/login"
-          className="flex items-center gap-3 px-3 py-2 text-error hover:bg-error-bg rounded-lg cursor-pointer active:scale-95 duration-200 transition-all"
+        <button
+          onClick={() => ApiClient.logout()}
+          className="w-full flex items-center gap-3 px-3 py-2 text-error hover:bg-error-bg rounded-lg cursor-pointer active:scale-95 duration-200 transition-all text-left"
         >
           <span className="material-symbols-outlined">logout</span>
           <span className="font-button text-button">Log Out</span>
-        </Link>
+        </button>
       </div>
     </nav>
   );
