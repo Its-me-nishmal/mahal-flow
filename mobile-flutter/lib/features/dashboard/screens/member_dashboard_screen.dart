@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/navigation/app_routes.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/services/push_notification_service.dart';
-import '../../../core/storage/autopay_local_store.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../core/utils/dues_period.dart';
 import '../../../core/widgets/app_error_state_view.dart';
 import '../../../core/widgets/member_bottom_nav_bar.dart';
+import '../../../l10n/l10n.dart';
+import '../../profile/widgets/member_help_sheet.dart';
 import '../../receipts/screens/receipt_details_screen.dart';
 import '../widgets/member_dashboard_widgets.dart';
 
@@ -24,6 +26,9 @@ class MemberDashboardData {
   final String? lastPaidMonth;
   final Map<String, dynamic>? latestPayment;
 
+  /// The raw payload, for optional fields (e.g. an office phone for Help).
+  final Map<String, dynamic> raw;
+
   const MemberDashboardData({
     required this.memberId,
     required this.firstName,
@@ -32,17 +37,20 @@ class MemberDashboardData {
     required this.advanceCredit,
     required this.lastPaidMonth,
     required this.latestPayment,
+    this.raw = const {},
   });
 
   factory MemberDashboardData.fromJson(Map<String, dynamic> json) {
     final memberId = json['member_id']?.toString() ?? '';
-    final fullName = json['member_name']?.toString() ?? 'Member';
-    final rawOutstanding = (json['outstanding_balance'] as num?)?.toDouble() ?? 0;
+    final fullName = json['member_name']?.toString() ?? L10n.current.commonMember;
+    final rawOutstanding =
+        (json['outstanding_balance'] as num?)?.toDouble() ?? 0;
 
     // GetLatestReceipt in the Go repository filters on mahal_id only, so this
     // payload can carry another member's receipt. Drop anything that is not
     // ours rather than show one member another member's payment.
-    var latest = json['latest_payment'] as Map<String, dynamic>?;
+    final rawLatest = json['latest_payment'];
+    var latest = rawLatest is Map ? rawLatest.cast<String, dynamic>() : null;
     final latestOwner = latest?['member_id']?.toString();
     if (latest != null &&
         latestOwner != null &&
@@ -54,11 +62,12 @@ class MemberDashboardData {
     return MemberDashboardData(
       memberId: memberId,
       firstName: fullName.split(' ').first,
-      mahalName: json['mahal_name']?.toString() ?? 'Your Mahal',
+      mahalName: json['mahal_name']?.toString() ?? L10n.current.homeYourMahal,
       outstanding: rawOutstanding > 0 ? rawOutstanding : 0,
       advanceCredit: (json['advance_credit'] as num?)?.toDouble() ?? 0,
       lastPaidMonth: json['last_paid_month']?.toString(),
       latestPayment: latest,
+      raw: json,
     );
   }
 
@@ -77,8 +86,11 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
 
   _DashboardStatus _status = _DashboardStatus.loading;
   MemberDashboardData? _data;
-  bool _autoPayEnabled = true; // assume on until the local flag is read
-  int _unreadAlerts = 0;
+  ApiException? _error;
+
+  /// From GET /autopay/mandate/status. Null = unknown (loading or the call
+  /// failed): the nudge stays hidden rather than guess.
+  bool? _autoPaySetUp;
 
   @override
   void initState() {
@@ -88,102 +100,87 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
   }
 
   Future<void> _loadDashboardData({bool isRefresh = false}) async {
-    if (!isRefresh) setState(() => _status = _DashboardStatus.loading);
+    if (!isRefresh) {
+      setState(() {
+        _status = _DashboardStatus.loading;
+        _error = null;
+      });
+    }
 
-    final results = await Future.wait([
-      _apiService.getMemberDashboard(),
-      _apiService.getAlerts(),
-    ]);
-    if (!mounted) return;
+    // Alerts only refresh the unread badge; AutoPay only decides the nudge.
+    // Neither may fail the dashboard.
+    final alertsFuture = _apiService.getAlerts();
+    final autoPayFuture = _apiService.getAutoPayStatus();
 
-    final payload = results[0] as Map<String, dynamic>?;
-
-    if (payload == null) {
+    Map<String, dynamic> payload;
+    try {
+      payload = await _apiService.getMemberDashboardOrThrow();
+    } on ApiException catch (e) {
+      if (!mounted) return;
       // Never blank out financial data the member is already looking at.
       if (isRefresh && _data != null) {
-        setState(() {});
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Couldn't refresh. Showing your last known balance."),
-            duration: Duration(seconds: 3),
+          SnackBar(
+            content: Text(context.l10n.dashboardRefreshFailed(e.userMessage)),
+            duration: const Duration(seconds: 3),
           ),
         );
       } else {
-        setState(() => _status = _DashboardStatus.error);
+        setState(() {
+          _status = _DashboardStatus.error;
+          _error = e;
+        });
       }
       return;
     }
-
-    final data = MemberDashboardData.fromJson(payload);
-    final autoPay = await AutoPayLocalStore.isEnabled(data.memberId);
+    final autoPay = await autoPayFuture;
+    await alertsFuture;
     if (!mounted) return;
 
     setState(() {
-      _data = data;
-      _autoPayEnabled = autoPay;
-      _unreadAlerts = ApiService.unreadAlertsCount.value;
+      _data = MemberDashboardData.fromJson(payload);
+      if (autoPay != null) {
+        final st = autoPay['status']?.toString().toUpperCase() ?? '';
+        // A mandate waiting for the bank counts as set up: nudging would
+        // invite a duplicate mandate.
+        _autoPaySetUp = autoPay['active'] == true ||
+            st == 'ACTIVE' ||
+            st == 'PENDING_AUTHORIZATION';
+      }
       _status = _DashboardStatus.ready;
     });
   }
 
+  /// Opens a screen above home and refreshes when it closes (or is replaced,
+  /// e.g. by a payment result). Home is the stack root, so this matches what
+  /// AppNav.switchMemberTab would build for tab destinations.
   Future<void> _openRoute(String route) async {
     await Navigator.of(context).pushNamed(route);
     if (mounted) _loadDashboardData(isRefresh: true);
   }
 
-  Future<void> _openAutoPaySetup() async {
-    final result = await Navigator.of(context).pushNamed('/member/setup-autopay');
-    if (!mounted) return;
-    if (result == true) {
-      await AutoPayLocalStore.setEnabled(_data?.memberId ?? '', true);
-      if (!mounted) return;
-      setState(() => _autoPayEnabled = true);
-    }
-    _loadDashboardData(isRefresh: true);
-  }
-
   void _openLatestReceipt() {
     final receipt = _data?.latestPayment;
     if (receipt == null) return;
-
-    final isDues = receipt['payment_type']?.toString() == 'MONTHLY_DUES';
-    final paidMonths =
-        (receipt['paid_months'] as List?)?.map((m) => m.toString()).toList() ??
-            const <String>[];
-
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => ReceiptDetailsScreen(
-          title: isDues ? 'Monthly Dues' : 'Mahal Contribution',
-          subtitle: DuesPeriod.paidMonthsLabel(paidMonths),
-          amount: '₹${(receipt['amount'] as num?)?.toInt() ?? 0}',
-          status: receipt['status']?.toString() ?? 'SUCCESS',
-          receiptNumber: receipt['receipt_number']?.toString() ?? '—',
-          memberName: receipt['member_name']?.toString() ??
-              _data?.firstName ??
-              'Member',
-          date: receipt['created_at']?.toString() ?? '',
-          paymentMethod: receipt['gateway']?.toString() ?? 'UPI',
-        ),
-      ),
+      MaterialPageRoute(builder: (_) => ReceiptDetailsScreen.fromJson(receipt)),
     );
   }
 
   /// The API returns names in mixed case ("aslam"); the hero shows a proper
   /// capitalised first name.
   String get _displayName {
-    final raw = _data?.firstName ??
-        ApiService.cachedMemberName.split(' ').first;
-    if (raw.isEmpty) return 'Member';
+    final raw =
+        _data?.firstName ?? ApiService.cachedMemberName.split(' ').first;
+    if (raw.isEmpty) return context.l10n.commonMember;
     return raw[0].toUpperCase() + raw.substring(1);
   }
 
   void _showHelp() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Need help? Contact your Mahal Committee office.'),
-        duration: Duration(seconds: 2),
-      ),
+    MemberHelpSheet.show(
+      context,
+      mahalName: _data?.mahalName,
+      officePhone: MemberHelpSheet.contactPhoneFrom(_data?.raw),
     );
   }
 
@@ -197,9 +194,9 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
     final gradientHeight = topPad + 212 * textScale;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: AppOverlayStyles.gradientHeader,
+      value: context.colors.gradientHeaderOverlay,
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.colors.background,
         body: Stack(
           children: [
             Positioned(
@@ -207,14 +204,14 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
               left: 0,
               right: 0,
               height: gradientHeight,
-              child: const DecoratedBox(
-                decoration: BoxDecoration(gradient: AppGradients.hero),
+              child: DecoratedBox(
+                decoration: BoxDecoration(gradient: context.colors.heroGradient),
               ),
             ),
             RefreshIndicator(
               onRefresh: () => _loadDashboardData(isRefresh: true),
-              color: AppColors.primary,
-              backgroundColor: AppColors.surface,
+              color: context.colors.primary,
+              backgroundColor: context.colors.surface,
               edgeOffset: topPad + 72,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -223,8 +220,8 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                   children: [
                     DashboardHero(
                       firstName: _displayName,
-                      mahalName: _data?.mahalName ?? 'Loading your Mahal…',
-                      onAvatarTap: () => _openRoute('/member/profile'),
+                      mahalName: _data?.mahalName ?? context.l10n.homeLoadingMahal,
+                      onAvatarTap: () => _openRoute(AppRoutes.memberProfile),
                       onHelpTap: _showHelp,
                     ),
                     Padding(
@@ -259,8 +256,9 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
         return Padding(
           padding: const EdgeInsets.only(top: AppSpacing.xl),
           child: AppErrorStateView(
+            title: context.l10n.homeLoadErrorTitle,
             description:
-                "We couldn't load your dues. Check your connection and try again.",
+                _error?.userMessage ?? context.l10n.homeLoadErrorBody,
             onRetry: _loadDashboardData,
           ),
         );
@@ -281,10 +279,11 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
           advanceCredit: data.advanceCredit,
           pendingSummary: DuesPeriod.pendingSummary(data.lastPaidMonth),
           months: months,
-          paidUpToLabel:
-              lastPaid == null ? null : DueMonth(lastPaid, DueMonthStatus.overdue).longLabel,
-          onPayDues: () => _openRoute('/member/pay'),
-          onContribute: () => _openRoute('/member/contribution'),
+          paidUpToLabel: lastPaid == null
+              ? null
+              : DueMonth(lastPaid, DueMonthStatus.overdue).longLabel,
+          onPayDues: () => _openRoute(AppRoutes.memberPay),
+          onContribute: () => _openRoute(AppRoutes.memberContribution),
         ),
         const SizedBox(height: AppSpacing.md),
         _buildQuickActions(),
@@ -293,13 +292,13 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
           receipt: data.latestPayment,
           isUpToDate: data.isUpToDate,
           onViewReceipt: _openLatestReceipt,
-          onPrimaryAction: () => _openRoute(
-            data.isUpToDate ? '/member/contribution' : '/member/pay',
-          ),
+          onPrimaryAction: () => data.isUpToDate
+              ? _openRoute(AppRoutes.memberContribution)
+              : _openRoute(AppRoutes.memberPay),
         ),
-        if (!_autoPayEnabled) ...[
+        if (_autoPaySetUp == false) ...[
           const SizedBox(height: AppSpacing.md),
-          AutoPayNudgeCard(onSetUp: _openAutoPaySetup),
+          AutoPayNudgeCard(onSetUp: () => _openRoute(AppRoutes.memberAutopay)),
         ],
       ],
     );
@@ -315,22 +314,22 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
               Expanded(
                 child: QuickActionTile(
                   icon: Icons.volunteer_activism_outlined,
-                  iconColor: AppColors.warning,
-                  iconBackground: AppColors.warningBg,
-                  label: 'Contribute',
-                  caption: 'Zakat and general fund',
-                  onTap: () => _openRoute('/member/contribution'),
+                  iconColor: context.colors.warning,
+                  iconBackground: context.colors.warningBg,
+                  label: context.l10n.homeContribute,
+                  caption: context.l10n.homeContributeCaption,
+                  onTap: () => _openRoute(AppRoutes.memberContribution),
                 ),
               ),
               const SizedBox(width: AppSpacing.ms),
               Expanded(
                 child: QuickActionTile(
                   icon: Icons.receipt_long_outlined,
-                  iconColor: AppColors.info,
-                  iconBackground: AppColors.infoBg,
-                  label: 'Receipts',
-                  caption: 'All past payments',
-                  onTap: () => _openRoute('/member/receipts'),
+                  iconColor: context.colors.info,
+                  iconBackground: context.colors.infoBg,
+                  label: context.l10n.homeReceipts,
+                  caption: context.l10n.homeReceiptsCaption,
+                  onTap: () => _openRoute(AppRoutes.memberReceipts),
                 ),
               ),
             ],
@@ -342,25 +341,29 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
-                child: QuickActionTile(
-                  icon: Icons.campaign_outlined,
-                  iconColor: AppColors.success,
-                  iconBackground: AppColors.successBg,
-                  label: 'Notices',
-                  caption: 'From the committee',
-                  badgeCount: _unreadAlerts,
-                  onTap: () => _openRoute('/member/alerts'),
+                // Live badge: reading an alert elsewhere updates it here.
+                child: ValueListenableBuilder<int>(
+                  valueListenable: ApiService.unreadAlertsCount,
+                  builder: (context, unread, _) => QuickActionTile(
+                    icon: Icons.campaign_outlined,
+                    iconColor: context.colors.success,
+                    iconBackground: context.colors.successBg,
+                    label: context.l10n.homeNotices,
+                    caption: context.l10n.homeNoticesCaption,
+                    badgeCount: unread,
+                    onTap: () => _openRoute(AppRoutes.memberAlerts),
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.ms),
               Expanded(
                 child: QuickActionTile(
                   icon: Icons.person_outline_rounded,
-                  iconColor: AppColors.textSecondary,
-                  iconBackground: AppColors.neutralBg,
-                  label: 'Profile',
-                  caption: 'Details and settings',
-                  onTap: () => _openRoute('/member/profile'),
+                  iconColor: context.colors.textSecondary,
+                  iconBackground: context.colors.neutralBg,
+                  label: context.l10n.homeProfile,
+                  caption: context.l10n.homeProfileCaption,
+                  onTap: () => _openRoute(AppRoutes.memberProfile),
                 ),
               ),
             ],

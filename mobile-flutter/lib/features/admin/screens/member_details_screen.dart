@@ -1,15 +1,33 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/navigation/app_routes.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_tokens.dart';
+import '../../../core/utils/app_date.dart';
 import '../../../core/utils/currency_format.dart';
+import '../../../core/utils/dues_period.dart';
+import '../../../core/utils/phone_format.dart';
+import '../../../core/widgets/app_avatar.dart';
 import '../../../core/widgets/app_bottom_sheet.dart';
 import '../../../core/widgets/app_buttons.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_page_scaffold.dart';
+import '../../../core/widgets/empty_state_view.dart';
 import '../../../core/widgets/shimmer_loading.dart';
-import 'edit_member_details_screen.dart';
+import '../data/admin_context.dart';
+import '../utils/admin_format.dart';
+import '../widgets/receipt_sheet.dart';
+import '../widgets/record_payment_sheet.dart';
+
+/// One row of the dues history.
+class _DuesMonth {
+  final DateTime month;
+  final String status; // Paid | Due | Overdue
+  final String? receiptNumber;
+  const _DuesMonth(this.month, this.status, this.receiptNumber);
+}
 
 class MemberDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> member;
@@ -21,466 +39,347 @@ class MemberDetailsScreen extends StatefulWidget {
 }
 
 class _MemberDetailsScreenState extends State<MemberDetailsScreen> {
-  final ApiService _apiService = ApiService();
-  List<Map<String, dynamic>> _duesHistory = [];
-  List<dynamic> _receiptsList = [];
-  bool _isLoadingHistory = true;
+  static const int _historyMonths = 6;
 
-  Map<String, dynamic> get member => widget.member;
+  final ApiService _api = ApiService();
+  late Map<String, dynamic> _member = Map<String, dynamic>.from(widget.member);
+
+  List<Map<String, dynamic>> _receipts = const [];
+  bool _loading = true;
+  ApiException? _error;
+
+  String get _id => AdminFormat.memberId(_member);
 
   @override
   void initState() {
     super.initState();
-    _loadDuesHistory();
+    if (_id.isNotEmpty) {
+      _load();
+    } else {
+      _loading = false;
+    }
   }
 
-  Future<void> _loadDuesHistory() async {
-    final memberId = member["id"]?.toString() ?? "MEM_001_9910";
-    final receipts = await _apiService.getMemberReceipts(memberId: memberId);
+  Future<void> _load() async {
+    setState(() => _error = null);
+    try {
+      final results = await Future.wait([
+        _api.getMemberReceiptsOrThrow(memberId: _id),
+        // Fresh record (last_paid_month / balance move after a payment).
+        _api
+            .getAdminMemberOrThrow(_id)
+            .then<Map<String, dynamic>?>((m) => m, onError: (Object _) => null),
+      ]);
+      if (!mounted) return;
+      final receipts = (results[0] as List)
+          .whereType<Map>()
+          .map(Map<String, dynamic>.from)
+          .toList();
+      final fresh = results[1] as Map<String, dynamic>?;
+      setState(() {
+        _receipts = receipts;
+        if (fresh != null) _member = {..._member, ...fresh};
+        _loading = false;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e;
+        _loading = false;
+      });
+    }
+  }
 
-    if (!mounted) return;
+  // -------------------------------------------------------------------------
+  // Derived
+  // -------------------------------------------------------------------------
 
-    final Map<String, String> paidMonths = {};
-    for (final r in receipts) {
-      if (r is Map<String, dynamic>) {
-        final paidFor = r["paid_months"] ?? r["selected_months"];
-        final createdAt = r["created_at"]?.toString() ?? "";
-        if (paidFor is List) {
-          for (final m in paidFor) {
-            paidMonths[m.toString()] =
-                r["receipt_number"]?.toString() ?? "Paid";
-          }
-        } else if (createdAt.length >= 7) {
-          paidMonths[createdAt.substring(0, 7)] =
-              r["receipt_number"]?.toString() ?? "Paid";
+  /// Month the member joined (created_at), if known.
+  DateTime? get _joinMonth {
+    final d = AppDate.tryParse(_member['created_at'] ?? _member['joined_at']);
+    return d == null ? null : DateTime(d.year, d.month, 1);
+  }
+
+  List<_DuesMonth> get _history {
+    final paidByMonth = <String, String>{};
+    for (final r in _receipts) {
+      final months = r['paid_months'] ?? r['selected_months'];
+      final number = r['receipt_number']?.toString();
+      if (months is List && number != null) {
+        for (final m in months) {
+          paidByMonth[m.toString()] = number;
         }
       }
     }
+    final lastPaid =
+        DuesPeriod.parseMonthKey(_member['last_paid_month']?.toString());
 
     final now = DateTime.now();
-    final List<Map<String, dynamic>> history = [];
-    for (int i = 0; i < 6; i++) {
-      final date = DateTime(now.year, now.month - i, 1);
-      final key = "${date.year}-${date.month.toString().padLeft(2, '0')}";
-      const monthNames = [
-        "", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-      ];
-      final label = "${monthNames[date.month]} ${date.year}";
-
-      String status;
-      String? receiptNo;
-      if (paidMonths.containsKey(key)) {
-        status = "Paid";
-        receiptNo = paidMonths[key];
-      } else if (i == 0) {
-        status = "Current Due";
-      } else {
-        status = "Overdue";
-      }
-
-      history.add({
-        "month": label,
-        "key": key,
-        "status": status,
-        "receipt_number": receiptNo,
-      });
+    final thisMonth = DateTime(now.year, now.month, 1);
+    final join = _joinMonth;
+    final rows = <_DuesMonth>[];
+    for (var i = 0; i < _historyMonths; i++) {
+      final month = DateTime(thisMonth.year, thisMonth.month - i, 1);
+      // Nothing was owed before the member joined.
+      if (join != null && month.isBefore(join)) break;
+      final key = DuesPeriod.monthKeyOf(month);
+      final receipt = paidByMonth[key];
+      final paid =
+          receipt != null || (lastPaid != null && !month.isAfter(lastPaid));
+      rows.add(_DuesMonth(
+        month,
+        paid
+            ? 'Paid'
+            : month.isAtSameMomentAs(thisMonth)
+                ? 'Due'
+                : 'Overdue',
+        receipt,
+      ));
     }
-
-    setState(() {
-      _duesHistory = history;
-      _receiptsList = receipts;
-      _isLoadingHistory = false;
-    });
+    return rows;
   }
 
-  int get _paidCount =>
-      _duesHistory.where((h) => h["status"] == "Paid").length;
-
-  int get _unpaidCount => _duesHistory.length - _paidCount;
-
-  String get _lastPaidLabel {
-    for (final h in _duesHistory) {
-      if (h["status"] == "Paid") return h["month"]?.toString() ?? '—';
-    }
-    return 'Never';
-  }
-
-  ({Color color, Color background}) get _statusColors {
-    final status = member["status"] as String? ?? 'Active';
-    if (status == 'Active') {
-      return (color: AppColors.success, background: AppColors.successBg);
-    }
-    if (status == 'Grace Period') {
-      return (color: AppColors.warning, background: AppColors.warningBg);
-    }
-    return (color: AppColors.error, background: AppColors.errorBg);
-  }
+  // -------------------------------------------------------------------------
+  // Actions
+  // -------------------------------------------------------------------------
 
   Future<void> _openEdit() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => EditMemberDetailsScreen(member: member),
-      ),
-    );
-    _loadDuesHistory();
+    final result = await Navigator.of(context)
+        .pushNamed(AppRoutes.adminEditMember, arguments: _member);
+    if (!mounted || result is! Map) return;
+    setState(
+        () => _member = {..._member, ...Map<String, dynamic>.from(result)});
+    AdminContext.invalidateMembers();
   }
 
-  // -----------------------------------------------------------------------
+  Future<void> _recordPayment() async {
+    final res = await RecordPaymentSheet.show(context, member: _member);
+    if (res == null || !mounted) return;
+    final receipt = Map<String, dynamic>.from(res['receipt'] as Map);
+    final number = receipt['receipt_number']?.toString() ?? '';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+            '${Inr.formatAny(receipt['amount'] ?? res['amount'])} recorded'),
+        backgroundColor: context.colors.primary,
+        action: number.isEmpty
+            ? null
+            : SnackBarAction(
+                label: 'Receipt',
+                textColor: context.colors.onPrimary,
+                onPressed: () => ReceiptSheet.show(context, number),
+              ),
+      ),
+    );
+    _load();
+  }
 
-  void _showReceiptModal(String receiptNo) {
-    dynamic matched;
-    for (final r in _receiptsList) {
-      if (r is Map<String, dynamic> && r["receipt_number"] == receiptNo) {
-        matched = r;
-        break;
-      }
+  /// There is no per-member notice endpoint (POST /admin/alerts only targets
+  /// ALL / OVERDUE_ONLY / FAMILY_HEADS), so a personal reminder goes out
+  /// through the admin's own WhatsApp or SMS app with the text prefilled.
+  Future<void> _sendReminder() async {
+    final phone =
+        PhoneFormat.nationalDigits(_member['phone']?.toString() ?? '');
+    if (phone.length != 10) {
+      _snack('This member has no valid mobile number on record.');
+      return;
     }
+    final name = _member['name']?.toString() ?? 'member';
+    final outstanding = AdminFormat.outstanding(_member) ?? 0;
+    final mahal = AdminContext.mahalName ?? 'the Mahal committee';
+    final amountLine = outstanding > 0
+        ? ' Pending amount: ${Inr.format(outstanding).replaceAll('₹', 'Rs. ')}.'
+        : '';
+    final text = 'Assalamu alaikum $name, this is a reminder from $mahal that '
+        'your monthly dues are pending.$amountLine You can pay in the '
+        'MahalFlow app. Thank you.';
 
-    final amount = (matched?["amount"] as num?)?.toDouble() ?? 500;
-    final date = matched?["created_at"]?.toString() ?? 'Recent';
-    final hash = matched?["receipt_hash"]?.toString() ?? '3a8f9c…d4e1';
-
-    AppBottomSheet.show(
+    final channel = await AppBottomSheet.show<String>(
       context: context,
-      title: 'Receipt',
-      subtitle: 'Signed entry in the Mahal ledger',
-      icon: Icons.verified_outlined,
+      title: 'Send a dues reminder',
+      subtitle: 'Opens your messaging app with the text filled in',
+      icon: Icons.sms_outlined,
       builder: (ctx, _) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          AppDetailRow(
-            label: 'Receipt number',
-            value: receiptNo,
-            emphasize: true,
+          AppCard(
+            color: context.colors.background,
+            child: Text(text, style: context.text.body),
           ),
-          const Divider(height: 1, color: AppColors.border),
-          AppDetailRow(
-            label: 'Member',
-            value: member["name"]?.toString() ?? 'Member',
-          ),
-          const Divider(height: 1, color: AppColors.border),
-          AppDetailRow(label: 'Amount', value: Inr.format(amount)),
-          const Divider(height: 1, color: AppColors.border),
-          AppDetailRow(label: 'Date', value: date.split('T').first),
-          const Divider(height: 1, color: AppColors.border),
-          AppDetailRow(
-            label: 'Ledger hash',
-            value: hash.length > 16 ? '${hash.substring(0, 16)}…' : hash,
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'To ${PhoneFormat.display(phone)}. Nothing is sent until you press '
+            'send in the other app.',
+            style: context.text.caption,
           ),
           const SizedBox(height: AppSpacing.lg),
           AppPrimaryButton(
-            label: 'Verify on ledger',
-            icon: Icons.verified_rounded,
-            onPressed: () async {
-              final verify =
-                  await _apiService.verifyReceiptCryptographic(receiptNo);
-              if (!mounted) return;
-              final valid = verify?["cryptographic_valid"] == true;
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    valid
-                        ? 'Signature valid — this receipt has not been altered.'
-                        : 'Receipt found in the database.',
-                  ),
-                  backgroundColor:
-                      valid ? AppColors.success : AppColors.primary,
-                ),
-              );
-            },
+            label: 'Open WhatsApp',
+            icon: Icons.chat_outlined,
+            onPressed: () => Navigator.of(ctx).pop('whatsapp'),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AppSecondaryButton(
+            label: 'Open SMS',
+            icon: Icons.sms_outlined,
+            onPressed: () => Navigator.of(ctx).pop('sms'),
           ),
         ],
       ),
     );
+    if (channel == null || !mounted) return;
+
+    final uri = channel == 'whatsapp'
+        ? Uri.parse('https://wa.me/91$phone?text=${Uri.encodeComponent(text)}')
+        : Uri(
+            scheme: 'sms',
+            path: '+91$phone',
+            query: 'body=${Uri.encodeComponent(text)}',
+          );
+    var opened = false;
+    try {
+      opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      opened = false;
+    }
+    if (!mounted || opened) return;
+    _snack(channel == 'whatsapp'
+        ? "Couldn't open WhatsApp on this phone."
+        : "Couldn't open the SMS app on this phone.");
   }
 
-  void _showRecordPaymentDialog(BuildContext context) {
-    final memberId = member["id"]?.toString() ?? "MEM_001_9910";
-    final memberName = member["name"]?.toString() ?? "Member";
-    String selectedMode = "CASH";
-    int selectedMonthsCount = 1;
-    bool isProcessing = false;
+  void _snack(String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
 
-    AppBottomSheet.show(
-      context: context,
-      title: 'Record a payment',
-      subtitle: memberName,
-      icon: Icons.receipt_long_rounded,
-      builder: (ctx, setDialogState) {
-        final totalAmount = 500 * selectedMonthsCount;
+  // -------------------------------------------------------------------------
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+  @override
+  Widget build(BuildContext context) {
+    final name = _member['name']?.toString() ?? 'Member';
+    final rawPhone = _member['phone']?.toString() ?? '';
+    final code = _member['member_code']?.toString() ?? '';
+    final missingId = _id.isEmpty;
+
+    return PopScope<Object?>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) Navigator.of(context).pop(_member);
+      },
+      child: AppPageScaffold(
+        title: name,
+        eyebrow: 'Member',
+        onRefresh: missingId ? null : _load,
+        actions: [
+          if (!missingId) ...[
+            AppHeaderIconButton(
+              icon: Icons.sms_outlined,
+              tooltip: 'Send dues reminder',
+              onTap: _sendReminder,
+            ),
+            AppHeaderIconButton(
+              icon: Icons.edit_outlined,
+              tooltip: 'Edit member',
+              onTap: _openEdit,
+            ),
+          ],
+        ],
+        headerChild: Row(
           children: [
-            Text('HOW MANY MONTHS', style: AppTextStyles.label),
-            const SizedBox(height: AppSpacing.sm),
-            Row(
-              children: [1, 2, 3, 6].map((cnt) {
-                final isSel = selectedMonthsCount == cnt;
-                return Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(
-                      right: cnt == 6 ? 0 : AppSpacing.sm,
-                    ),
-                    child: InkWell(
-                      onTap: () =>
-                          setDialogState(() => selectedMonthsCount = cnt),
-                      borderRadius: BorderRadius.circular(AppRadius.button),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: AppSpacing.ms,
-                        ),
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: isSel
-                              ? AppColors.primaryLight
-                              : AppColors.surface,
-                          borderRadius:
-                              BorderRadius.circular(AppRadius.button),
-                          border: Border.all(
-                            color:
-                                isSel ? AppColors.primary : AppColors.border,
-                          ),
-                        ),
-                        child: Text(
-                          cnt == 1 ? '1 mo' : '$cnt mos',
-                          style: AppTextStyles.button.copyWith(
-                            fontSize: 13,
-                            color: isSel
-                                ? AppColors.primary
-                                : AppColors.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Text('PAYMENT METHOD', style: AppTextStyles.label),
-            const SizedBox(height: AppSpacing.sm - 2),
-            DropdownButtonFormField<String>(
-              initialValue: selectedMode,
-              isExpanded: true,
-              style: AppTextStyles.body,
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: AppColors.surface,
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md - 2,
-                  vertical: AppSpacing.ms + 2,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.button),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.button),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.button),
-                  borderSide:
-                      const BorderSide(color: AppColors.primary, width: 1.6),
-                ),
-              ),
-              items: const [
-                DropdownMenuItem(
-                    value: "CASH", child: Text("Cash (collected offline)")),
-                DropdownMenuItem(
-                    value: "BANK_TRANSFER", child: Text("Bank transfer")),
-                DropdownMenuItem(value: "UPI", child: Text("UPI / QR code")),
-              ],
-              onChanged: (val) {
-                if (val != null) setDialogState(() => selectedMode = val);
-              },
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.ms + 2),
-              decoration: BoxDecoration(
-                color: AppColors.primaryLight,
-                borderRadius: BorderRadius.circular(AppRadius.button),
-              ),
-              child: Row(
+            AppAvatar(name: name, size: 56, onHero: true),
+            const SizedBox(width: AppSpacing.ms),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Text(
-                      'Total payable',
-                      style: AppTextStyles.body.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
                   Text(
-                    Inr.format(totalAmount),
-                    style: AppTextStyles.sectionTitle.copyWith(
-                      color: AppColors.primary,
-                    ),
+                    rawPhone.isEmpty
+                        ? 'No phone on record'
+                        : PhoneFormat.display(rawPhone),
+                    style: context.text.body
+                        .copyWith(color: AdminHeroColors.muted),
+                  ),
+                  const SizedBox(height: AppSpacing.xs / 2),
+                  Text(
+                    code.isNotEmpty
+                        ? 'Member code $code'
+                        : 'ID ${_id.isEmpty ? '—' : _id}',
+                    style: context.text.small
+                        .copyWith(color: AdminHeroColors.faint),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: AppSpacing.lg),
-            AppPrimaryButton(
-              label: 'Confirm & Issue Receipt',
-              isLoading: isProcessing,
-              onPressed: () async {
-                setDialogState(() => isProcessing = true);
-                final now = DateTime.now();
-                final List<String> monthsToCredit = [];
-                for (int i = 0; i < selectedMonthsCount; i++) {
-                  final dt = DateTime(now.year, now.month + i, 1);
-                  monthsToCredit
-                      .add("${dt.year}-${dt.month.toString().padLeft(2, '0')}");
-                }
-
-                final idemp =
-                    "ADMIN_REC_${DateTime.now().millisecondsSinceEpoch}";
-                final res = await _apiService.initializeDuesPayment(
-                  memberId: memberId,
-                  selectedMonths: monthsToCredit,
-                  gateway: selectedMode,
-                  idempotencyKey: idemp,
-                );
-
-                if (context.mounted) {
-                  Navigator.of(ctx).pop();
-                  if (mounted) {
-                    final receipt = res?["receipt"] as Map<String, dynamic>?;
-                    final receiptNo = receipt?["receipt_number"] ??
-                        res?["transaction_id"] ??
-                        "Verified";
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          '${Inr.format(totalAmount)} recorded · receipt $receiptNo',
-                        ),
-                        backgroundColor: AppColors.primary,
-                      ),
-                    );
-                    _loadDuesHistory();
-                  }
-                }
-              },
-            ),
           ],
-        );
-      },
-    );
-  }
-
-  // -----------------------------------------------------------------------
-
-  @override
-  Widget build(BuildContext context) {
-    final name = member["name"]?.toString() ?? 'Member';
-    final phone = member["phone"]?.toString() ?? '';
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'M';
-
-    return AppPageScaffold(
-      title: name,
-      eyebrow: 'Member',
-      onRefresh: _loadDuesHistory,
-      actions: [
-        AppHeaderIconButton(
-          icon: Icons.sms_outlined,
-          tooltip: 'Send dues notice',
-          onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Dues notice sent to this member.')),
-          ),
         ),
-        AppHeaderIconButton(
-          icon: Icons.edit_outlined,
-          tooltip: 'Edit member',
-          onTap: _openEdit,
-        ),
-      ],
-      headerChild: Row(
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.16),
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.28),
-                width: 2,
+        floatingChild: missingId ? null : _summaryCard(),
+        content: [
+          const SizedBox(height: AppSpacing.md),
+          if (missingId)
+            AppCard(
+              child: AppErrorStateView(
+                title: 'This member record is incomplete',
+                description: 'It has no member ID, so its history cannot be '
+                    'loaded and no payment can be recorded. Go back and open '
+                    'the member again from the directory.',
+                actionLabel: 'Back to members',
+                icon: Icons.person_off_outlined,
+                onRetry: () => Navigator.of(context).maybePop(),
               ),
+            )
+          else ...[
+            AppSectionHeader(
+              title: _joinMonth != null && _history.length < _historyMonths
+                  ? 'Since joining'
+                  : 'Last six months',
             ),
-            child: Text(
-              initial,
-              style: AppTextStyles.display.copyWith(
-                color: Colors.white,
-                fontSize: 23,
-              ),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.ms),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  phone.isEmpty ? 'No phone on record' : phone,
-                  style: AppTextStyles.body.copyWith(
-                    color: Colors.white.withValues(alpha: 0.82),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'ID ${member["id"]?.toString() ?? "—"}',
-                  style: AppTextStyles.small.copyWith(
-                    color: Colors.white.withValues(alpha: 0.6),
-                  ),
-                ),
-              ],
-            ),
-          ),
+            _duesHistoryCard(),
+          ],
         ],
-      ),
-      floatingChild: _summaryCard(),
-      content: [
-        const SizedBox(height: AppSpacing.md),
-        const AppSectionHeader(title: 'Last six months'),
-        _duesHistoryCard(),
-      ],
-      bottomBar: AppBottomActionBar(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: AppSecondaryButton(
-                  label: 'Edit member',
-                  icon: Icons.edit_outlined,
-                  height: 48,
-                  onPressed: _openEdit,
-                ),
+        bottomBar: missingId
+            ? null
+            : AppBottomActionBar(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: AppSecondaryButton(
+                          label: 'Edit member',
+                          icon: Icons.edit_outlined,
+                          height: AppSizes.minTouch,
+                          onPressed: _openEdit,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.ms),
+                      Expanded(
+                        child: AppPrimaryButton(
+                          label: 'Record payment',
+                          height: AppSizes.minTouch,
+                          onPressed: AdminFormat.isSuspended(
+                                  _member['status']?.toString())
+                              ? null
+                              : _recordPayment,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              const SizedBox(width: AppSpacing.ms),
-              Expanded(
-                child: AppPrimaryButton(
-                  label: 'Record payment',
-                  height: 48,
-                  onPressed: () => _showRecordPaymentDialog(context),
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
 
   Widget _summaryCard() {
-    final colors = _statusColors;
-    final duesAmount = member["amount"]?.toString() ?? '₹500';
-    final house = member["house_name"]?.toString() ?? '';
+    final status = AdminFormat.memberStatus(_member['status']?.toString());
+    final dues = AdminFormat.monthlyDues(_member);
+    final outstanding = AdminFormat.outstanding(_member);
+    final house = _member['house_name']?.toString() ?? '';
+    final lastPaid =
+        DuesPeriod.parseMonthKey(_member['last_paid_month']?.toString());
+    final history =
+        _loading || _error != null ? const <_DuesMonth>[] : _history;
+    final unpaid = history.where((h) => h.status != 'Paid').length;
 
     return AppCard.floating(
       child: Column(
@@ -488,44 +387,52 @@ class _MemberDetailsScreenState extends State<MemberDetailsScreen> {
         children: [
           Row(
             children: [
-              Expanded(
-                child: Text('MONTHLY DUES', style: AppTextStyles.label),
-              ),
+              Expanded(child: Text('MONTHLY DUES', style: context.text.label)),
               StatusPill(
-                label: member["status"]?.toString() ?? 'Active',
-                foreground: colors.color,
-                background: colors.background,
+                label: status.label,
+                foreground: status.foreground(context),
+                background: status.background(context),
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.ms),
           Text(
-            duesAmount,
-            style: AppTextStyles.amount.copyWith(color: AppColors.primary),
+            dues == null ? '—' : Inr.format(dues),
+            style: context.text.amount.copyWith(color: context.colors.primary),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            _isLoadingHistory
+            _loading
                 ? 'Loading payment history…'
-                : _unpaidCount == 0
-                    ? 'Paid every month in the last six.'
-                    : '$_unpaidCount of ${_duesHistory.length} recent months unpaid.',
-            style: AppTextStyles.body.copyWith(color: AppColors.textSecondary),
+                : _error != null
+                    ? 'Payment history unavailable.'
+                    : history.isEmpty
+                        ? 'No dues months yet.'
+                        : unpaid == 0
+                            ? 'Paid every month shown below.'
+                            : '$unpaid of ${history.length} recent months unpaid.',
+            style: context.text.body.copyWith(color: context.colors.textSecondary),
           ),
           const SizedBox(height: AppSpacing.md),
-          const Divider(height: 1, color: AppColors.border),
-          AppDetailRow(label: 'Last paid', value: _lastPaidLabel),
-          const Divider(height: 1, color: AppColors.border),
+          Divider(height: 1, color: context.colors.border),
+          AppDetailRow(
+            label: 'Outstanding',
+            value: outstanding == null ? '—' : Inr.format(outstanding),
+          ),
+          Divider(height: 1, color: context.colors.border),
+          AppDetailRow(
+            label: 'Paid up to',
+            value: lastPaid == null ? '—' : AppDate.formatMonthYear(lastPaid),
+          ),
+          Divider(height: 1, color: context.colors.border),
           AppDetailRow(
             label: 'House',
             value: house.isEmpty ? 'Not recorded' : house,
           ),
-          const Divider(height: 1, color: AppColors.border),
+          Divider(height: 1, color: context.colors.border),
           AppDetailRow(
-            label: 'Email',
-            value: (member["email"]?.toString().isNotEmpty ?? false)
-                ? member["email"].toString()
-                : 'Not recorded',
+            label: 'Member since',
+            value: AppDate.formatMonthYear(_member['created_at']),
           ),
         ],
       ),
@@ -533,14 +440,31 @@ class _MemberDetailsScreenState extends State<MemberDetailsScreen> {
   }
 
   Widget _duesHistoryCard() {
-    if (_isLoadingHistory) {
-      return ShimmerLoading(
-        child: Container(
-          height: 260,
-          decoration: BoxDecoration(
-            color: AppColors.border.withValues(alpha: 0.6),
-            borderRadius: BorderRadius.circular(AppRadius.card),
-          ),
+    if (_loading) {
+      return const ShimmerLoading(
+        semanticsLabel: 'Loading dues history',
+        child: ShimmerCardSkeleton(height: 260),
+      );
+    }
+    if (_error != null) {
+      return AppCard(
+        child: AppErrorStateView(
+          title: "Couldn't load dues history",
+          description: _error!.userMessage,
+          onRetry: () {
+            setState(() => _loading = true);
+            _load();
+          },
+        ),
+      );
+    }
+    final history = _history;
+    if (history.isEmpty) {
+      return const AppCard(
+        child: EmptyStateView(
+          icon: Icons.event_available_outlined,
+          title: 'No dues yet',
+          description: 'Dues start from the month the member joined.',
         ),
       );
     }
@@ -549,59 +473,78 @@ class _MemberDetailsScreenState extends State<MemberDetailsScreen> {
       padding: EdgeInsets.zero,
       child: Column(
         children: [
-          for (var i = 0; i < _duesHistory.length; i++) ...[
-            if (i > 0) const Divider(height: 1, color: AppColors.border),
-            _duesRow(_duesHistory[i]),
+          for (var i = 0; i < history.length; i++) ...[
+            if (i > 0) Divider(height: 1, color: context.colors.border),
+            _duesRow(history[i]),
           ],
         ],
       ),
     );
   }
 
-  Widget _duesRow(Map<String, dynamic> m) {
-    final status = m["status"]?.toString() ?? 'Unknown';
-    final receiptNo = m["receipt_number"] as String?;
-
-    late final Color chipColor;
-    late final Color chipBg;
-    if (status == 'Paid') {
-      chipColor = AppColors.success;
-      chipBg = AppColors.successBg;
-    } else if (status == 'Overdue') {
-      chipColor = AppColors.error;
-      chipBg = AppColors.errorBg;
-    } else {
-      chipColor = AppColors.warning;
-      chipBg = AppColors.warningBg;
+  Widget _duesRow(_DuesMonth m) {
+    late final Color fg;
+    late final Color bg;
+    late final IconData icon;
+    switch (m.status) {
+      case 'Paid':
+        fg = context.colors.success;
+        bg = context.colors.successBg;
+        icon = Icons.check_circle_rounded;
+      case 'Overdue':
+        fg = context.colors.error;
+        bg = context.colors.errorBg;
+        icon = Icons.error_outline_rounded;
+      default:
+        fg = context.colors.warning;
+        bg = context.colors.warningBg;
+        icon = Icons.schedule_rounded;
     }
+    final receipt = m.receiptNumber;
 
-    return InkWell(
-      onTap: receiptNo != null ? () => _showReceiptModal(receiptNo) : null,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md - 2,
-          vertical: AppSpacing.ms + 2,
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                m["month"]?.toString() ?? '',
-                style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w500),
-              ),
+    final row = Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.ms,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  AppDate.formatMonthYear(m.month),
+                  style:
+                      context.text.body.copyWith(fontWeight: FontWeight.w500),
+                ),
+                if (receipt != null)
+                  Text('Receipt $receipt',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.text.caption),
+              ],
             ),
-            if (receiptNo != null) ...[
-              const Icon(Icons.receipt_long_rounded,
-                  size: 15, color: AppColors.primary),
-              const SizedBox(width: AppSpacing.sm),
-            ],
-            StatusPill(
-              label: status,
-              foreground: chipColor,
-              background: chipBg,
-            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          StatusPill(
+              label: m.status, foreground: fg, background: bg, icon: icon),
+          if (receipt != null) ...[
+            const SizedBox(width: AppSpacing.xs),
+            Icon(Icons.chevron_right_rounded,
+                size: 20, color: context.colors.textMuted),
           ],
-        ),
+        ],
+      ),
+    );
+
+    if (receipt == null) return row;
+    return Semantics(
+      button: true,
+      hint: 'Open receipt',
+      child: InkWell(
+        onTap: () => ReceiptSheet.show(context, receipt),
+        child: row,
       ),
     );
   }

@@ -24,6 +24,12 @@ class PaymentResultView extends StatelessWidget {
   final VoidCallback onSecondary;
   final List<Widget> details;
 
+  /// Content under the amount card (notices, progress).
+  final List<Widget> footer;
+
+  /// Primary action busy state (e.g. "Check again" while polling).
+  final bool primaryLoading;
+
   const PaymentResultView({
     super.key,
     required this.headline,
@@ -39,19 +45,21 @@ class PaymentResultView extends StatelessWidget {
     required this.secondaryLabel,
     required this.onSecondary,
     this.details = const [],
+    this.footer = const [],
+    this.primaryLoading = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: AppOverlayStyles.gradientHeader,
+      value: context.colors.gradientHeaderOverlay,
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.colors.background,
         body: Column(
           children: [
             Container(
               width: double.infinity,
-              decoration: const BoxDecoration(gradient: AppGradients.hero),
+              decoration: BoxDecoration(gradient: context.colors.heroGradient),
               padding: EdgeInsets.only(
                 left: AppSpacing.screenH,
                 right: AppSpacing.screenH,
@@ -80,9 +88,8 @@ class PaymentResultView extends StatelessWidget {
                     child: Text(
                       headline,
                       textAlign: TextAlign.center,
-                      style: AppTextStyles.display.copyWith(
+                      style: context.text.display.copyWith(
                         color: Colors.white,
-                        fontSize: 26,
                       ),
                     ),
                   ),
@@ -90,7 +97,7 @@ class PaymentResultView extends StatelessWidget {
                   Text(
                     message,
                     textAlign: TextAlign.center,
-                    style: AppTextStyles.body.copyWith(
+                    style: context.text.body.copyWith(
                       color: Colors.white.withValues(alpha: 0.78),
                       height: 20 / 14,
                     ),
@@ -109,7 +116,8 @@ class PaymentResultView extends StatelessWidget {
                 child: Column(
                   children: [
                     Container(
-                      transform: Matrix4.translationValues(0, -AppSpacing.lg, 0),
+                      transform:
+                          Matrix4.translationValues(0, -AppSpacing.lg, 0),
                       child: AppCard.floating(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -119,7 +127,7 @@ class PaymentResultView extends StatelessWidget {
                                 Expanded(
                                   child: Text(
                                     'AMOUNT',
-                                    style: AppTextStyles.label,
+                                    style: context.text.label,
                                   ),
                                 ),
                                 StatusPill(
@@ -136,28 +144,29 @@ class PaymentResultView extends StatelessWidget {
                               alignment: Alignment.centerLeft,
                               child: Text(
                                 amount,
-                                style: AppTextStyles.amount.copyWith(
+                                style: context.text.amount.copyWith(
                                   color: color,
                                 ),
                               ),
                             ),
                             if (details.isNotEmpty) ...[
                               const SizedBox(height: AppSpacing.md),
-                              const Divider(height: 1, color: AppColors.border),
+                              Divider(height: 1, color: context.colors.border),
                               ...details,
                             ],
                           ],
                         ),
                       ),
                     ),
+                    ...footer,
                   ],
                 ),
               ),
             ),
             Container(
-              decoration: const BoxDecoration(
-                color: AppColors.surface,
-                border: Border(top: BorderSide(color: AppColors.border)),
+              decoration: BoxDecoration(
+                color: context.colors.surface,
+                border: Border(top: BorderSide(color: context.colors.border)),
               ),
               child: SafeArea(
                 top: false,
@@ -174,6 +183,7 @@ class PaymentResultView extends StatelessWidget {
                       AppPrimaryButton(
                         label: primaryLabel,
                         icon: primaryIcon,
+                        isLoading: primaryLoading,
                         onPressed: onPrimary,
                       ),
                       const SizedBox(height: AppSpacing.sm),

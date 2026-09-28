@@ -1,69 +1,98 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../core/network/api_service.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/services/phone_auth_service.dart';
-import '../../../core/storage/app_prefs.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_tokens.dart';
+import '../../../core/utils/phone_format.dart';
 import '../../../core/widgets/app_buttons.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_page_scaffold.dart';
 import '../../../core/widgets/app_text_field.dart';
+import '../../../l10n/l10n.dart';
+import '../auth_flow.dart';
 
 /// Arguments passed from the login screen after the first OTP is sent.
 class OtpArgs {
+  /// E.164, e.g. "+919847123456".
   final String phone;
   final String verificationId;
   final int? resendToken;
-  final bool isAdmin;
   const OtpArgs({
     required this.phone,
     required this.verificationId,
-    required this.isAdmin,
     this.resendToken,
   });
 }
 
 class OtpVerificationScreen extends StatefulWidget {
-  const OtpVerificationScreen({super.key});
+  final OtpArgs args;
+
+  const OtpVerificationScreen({super.key, required this.args});
 
   @override
   State<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
 }
 
 class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
-  final ApiService _apiService = ApiService();
+  static const int _codeLength = 6;
+
   final TextEditingController _codeController = TextEditingController();
 
-  late OtpArgs _args;
-  bool _argsLoaded = false;
+  late OtpArgs _args = widget.args;
   bool _isVerifying = false;
   bool _isResending = false;
   String? _error;
 
+  Timer? _cooldownTimer;
+  int _cooldown = 0;
+
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!_argsLoaded) {
-      _args = ModalRoute.of(context)!.settings.arguments as OtpArgs;
-      _argsLoaded = true;
-    }
+  void initState() {
+    super.initState();
+    // The first code was just sent from the login screen.
+    _startCooldown(rebuild: false);
   }
 
   @override
   void dispose() {
+    _cooldownTimer?.cancel();
     _codeController.dispose();
     super.dispose();
   }
 
+  void _startCooldown({bool rebuild = true}) {
+    _cooldownTimer?.cancel();
+    _cooldown = AppConfig.otpResendCooldownSeconds;
+    if (rebuild) setState(() {});
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      setState(() => _cooldown--);
+      if (_cooldown <= 0) t.cancel();
+    });
+  }
+
+  void _onCodeChanged(String value) {
+    if (_error != null) setState(() => _error = null);
+    // Auto-submit once the full code is in (typed or SMS autofill).
+    if (value.length == _codeLength && !_isVerifying) _verify();
+  }
+
   Future<void> _verify() async {
+    if (_isVerifying) return;
     final code = _codeController.text.trim();
-    if (code.length < 6) {
-      setState(() => _error = 'Enter the 6-digit code');
+    if (code.length < _codeLength) {
+      setState(() => _error = context.l10n.otpCodeRequired);
       return;
     }
+    FocusScope.of(context).unfocus();
     setState(() {
       _error = null;
       _isVerifying = true;
@@ -76,16 +105,20 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       );
       await _completeLogin();
     } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
       setState(() {
         _isVerifying = false;
-        _error = e.code == 'invalid-verification-code'
-            ? 'That code is incorrect. Try again.'
-            : (e.message ?? 'Verification failed');
+        _error = AuthFlow.firebaseErrorMessage(
+          context,
+          e,
+          fallback: context.l10n.otpVerificationFailed,
+        );
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isVerifying = false;
-        _error = 'Verification failed. Try again.';
+        _error = context.l10n.otpVerificationFailed;
       });
     }
   }
@@ -94,134 +127,141 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   /// learn who this is (admin / active member / pending / unregistered) and
   /// route accordingly.
   Future<void> _completeLogin() async {
-    final resolved = await _apiService.resolveLogin(_args.phone);
+    final result =
+        await AuthFlow.resolveAndRoute(Navigator.of(context), _args.phone);
     if (!mounted) return;
-
-    if (resolved == null) {
+    if (result.status == ResolveStatus.networkError) {
       setState(() {
         _isVerifying = false;
-        _error = 'Signed in, but could not reach the server. Try again.';
+        _error = context.l10n.authSignedInServerUnreachable;
       });
-      return;
     }
-
-    final status = resolved['status']?.toString();
-    final role = resolved['role']?.toString();
-
-    if (status == 'ALLOWED') {
-      final isAdmin = role == 'MAHAL_ADMIN';
-      await AppPrefs.setLastRole(isAdmin ? 'admin' : 'member');
-      if (!mounted) return;
-      Navigator.of(context).pushNamedAndRemoveUntil(
-        isAdmin ? '/admin/dashboard' : '/member/dashboard',
-        (route) => false,
-      );
-      return;
-    }
-
-    if (status == 'PENDING') {
-      Navigator.of(context).pushNamedAndRemoveUntil(
-        '/pending-approval',
-        (route) => false,
-        arguments: resolved['name']?.toString(),
-      );
-      return;
-    }
-
-    // UNREGISTERED — collect identity (Mahal ID + name) and register.
-    Navigator.of(context).pushNamedAndRemoveUntil(
-      '/register',
-      (route) => false,
-      arguments: _args.phone,
-    );
   }
 
   Future<void> _resend() async {
+    if (_isResending || _cooldown > 0 || _isVerifying) return;
     setState(() {
       _isResending = true;
       _error = null;
     });
-    await PhoneAuthService.instance.sendOtp(
-      phone: _args.phone,
-      resendToken: _args.resendToken,
-      codeSent: (verificationId, token) {
-        if (!mounted) return;
-        setState(() {
-          _args = OtpArgs(
-            phone: _args.phone,
-            verificationId: verificationId,
-            resendToken: token,
-            isAdmin: _args.isAdmin,
+    try {
+      await PhoneAuthService.instance.sendOtp(
+        phone: _args.phone,
+        resendToken: _args.resendToken,
+        codeSent: (verificationId, token) {
+          if (!mounted) return;
+          setState(() {
+            _args = OtpArgs(
+              phone: _args.phone,
+              verificationId: verificationId,
+              resendToken: token,
+            );
+            _isResending = false;
+          });
+          _codeController.clear();
+          _startCooldown();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(context.l10n.otpNewCodeSent)),
           );
-          _isResending = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('A new code has been sent.')),
-        );
-      },
-      failed: (e) {
-        if (!mounted) return;
-        setState(() {
-          _isResending = false;
-          _error = e.message ?? 'Could not resend the code';
-        });
-      },
-      autoVerified: (_) => _completeLogin(),
-    );
+        },
+        failed: (e) {
+          if (!mounted) return;
+          setState(() {
+            _isResending = false;
+            _error = AuthFlow.firebaseErrorMessage(
+              context,
+              e,
+              fallback: context.l10n.otpResendFailed,
+            );
+          });
+        },
+        autoVerified: (_) {
+          if (!mounted) return;
+          setState(() {
+            _isResending = false;
+            _isVerifying = true;
+          });
+          _completeLogin();
+        },
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isResending = false;
+        _error = context.l10n.otpResendFailed;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final phone = PhoneFormat.display(_args.phone);
+    final canResend = _cooldown <= 0 && !_isResending && !_isVerifying;
+    final l10n = context.l10n;
+    final resendLabel = _isResending
+        ? l10n.otpSending
+        : _cooldown > 0
+            ? l10n.otpResendIn(_cooldown)
+            : l10n.otpResend;
+
     return AppPageScaffold(
-      title: 'Verify your number',
+      title: l10n.otpTitle,
       eyebrow: 'MahalFlow',
-      subtitle: 'Enter the 6-digit code sent to ${_args.phone}.',
+      subtitle: l10n.otpSubtitle(phone),
       floatingChild: AppCard.floating(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const AppSectionLabel('One-time password'),
+            AppSectionLabel(l10n.otpSectionLabel),
             const SizedBox(height: AppSpacing.sm),
-            AppTextField(
-              controller: _codeController,
-              label: '6-digit code',
-              hint: '••••••',
-              keyboardType: TextInputType.number,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(6),
-              ],
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                _error!,
-                style: AppTextStyles.small.copyWith(color: AppColors.error),
+            AutofillGroup(
+              child: AppTextField(
+                controller: _codeController,
+                label: l10n.otpCodeLabel,
+                hint: '••••••',
+                keyboardType: TextInputType.number,
+                autofocus: true,
+                autofillHints: const [AutofillHints.oneTimeCode],
+                textInputAction: TextInputAction.done,
+                enabled: !_isVerifying,
+                errorText: _error,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(_codeLength),
+                ],
+                onChanged: _onCodeChanged,
+                onSubmitted: (_) => _verify(),
               ),
-            ],
+            ),
           ],
         ),
       ),
       content: [
         const SizedBox(height: AppSpacing.md),
-        TextButton(
-          onPressed: _isResending ? null : _resend,
-          child: Text(_isResending ? 'Sending…' : 'Resend code'),
+        Semantics(
+          liveRegion: _cooldown == 0,
+          child: AppTextActionButton(
+            label: resendLabel,
+            icon: Icons.refresh_rounded,
+            color:
+                canResend ? context.colors.primary : context.colors.textMuted,
+            onPressed: canResend ? _resend : null,
+          ),
         ),
       ],
       bottomBar: AppBottomActionBar(
         children: [
           AppPrimaryButton(
-            label: _isVerifying ? 'Verifying…' : 'Verify & continue',
+            label: _isVerifying ? l10n.otpVerifying : l10n.otpVerifyContinue,
             icon: Icons.check_rounded,
             isLoading: _isVerifying,
             onPressed: _isVerifying ? null : _verify,
           ),
           const SizedBox(height: AppSpacing.sm),
           AppSecondaryButton(
-            label: 'Change number',
-            color: AppColors.textSecondary,
-            onPressed: () => Navigator.pop(context),
+            label: l10n.otpChangeNumber,
+            color: context.colors.textSecondary,
+            onPressed: _isVerifying ? null : () => Navigator.pop(context),
           ),
         ],
       ),

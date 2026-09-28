@@ -2,9 +2,10 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Device-level app preferences that survive restarts.
 ///
-/// Uses the same secure store as [AutoPayLocalStore] rather than adding a
-/// second persistence dependency. Every read is defensive: if the keystore is
-/// unavailable the app must still open, so failures fall back to a safe value.
+/// Uses flutter_secure_storage (already needed for the session token) rather
+/// than adding a second persistence dependency. Every read is defensive: if
+/// the keystore is unavailable the app must still open, so failures fall back
+/// to a safe value.
 class AppPrefs {
   AppPrefs._();
 
@@ -15,6 +16,42 @@ class AppPrefs {
   static const String _kAuthToken = 'auth_jwt_token';
   static const String _kMemberId = 'session_member_id';
   static const String _kMemberName = 'session_member_name';
+  static const String _kThemeMode = 'pref_theme_mode';
+  static const String _kLanguage = 'pref_language';
+
+  /// 'system' | 'light' | 'dark'; null when never set.
+  static Future<String?> themeMode() async {
+    try {
+      return await _storage.read(key: _kThemeMode);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> setThemeMode(String mode) async {
+    try {
+      await _storage.write(key: _kThemeMode, value: mode);
+    } catch (_) {
+      // Non-fatal: the choice still applies for this session.
+    }
+  }
+
+  /// 'system' | 'en' | 'ml'; null when never set.
+  static Future<String?> languageCode() async {
+    try {
+      return await _storage.read(key: _kLanguage);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> setLanguageCode(String code) async {
+    try {
+      await _storage.write(key: _kLanguage, value: code);
+    } catch (_) {
+      // Non-fatal: the choice still applies for this session.
+    }
+  }
 
   /// True once the member has finished (or skipped) the welcome carousel.
   /// The carousel is a first-run introduction; showing it again on every
@@ -45,7 +82,8 @@ class AppPrefs {
     }
   }
 
-  /// 'member' or 'admin'. Remembered only to pre-select the sign-in mode.
+  /// 'member' or 'admin'. Read by the splash screen to send a returning,
+  /// still-signed-in user straight to the right dashboard.
   static Future<String?> lastRole() async {
     try {
       return await _storage.read(key: _kLastRole);
@@ -111,6 +149,17 @@ class AppPrefs {
     try {
       await _storage.write(key: _kMemberId, value: memberId);
       await _storage.write(key: _kMemberName, value: name);
+    } catch (_) {
+      // Non-fatal.
+    }
+  }
+
+  /// Forget the member id/name only (keeps the auth token) — used when an
+  /// admin identity signs in on a device a member used before.
+  static Future<void> clearMemberSession() async {
+    try {
+      await _storage.delete(key: _kMemberId);
+      await _storage.delete(key: _kMemberName);
     } catch (_) {
       // Non-fatal.
     }

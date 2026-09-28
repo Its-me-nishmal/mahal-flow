@@ -1,16 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
+import '../../../core/navigation/app_routes.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/services/push_notification_service.dart';
 import '../../../core/storage/app_prefs.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_tokens.dart';
+import '../../../core/utils/phone_format.dart';
+import '../../../core/widgets/app_avatar.dart';
 import '../../../core/widgets/app_bottom_sheet.dart';
 import '../../../core/widgets/app_buttons.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_page_scaffold.dart';
+import '../../../core/widgets/empty_state_view.dart';
 import '../../../core/widgets/member_bottom_nav_bar.dart';
+import '../../../core/widgets/shimmer_loading.dart';
+import '../widgets/member_help_sheet.dart';
 import 'edit_personal_details_screen.dart';
+import '../../../core/widgets/app_settings_sheet.dart';
+import '../../../l10n/l10n.dart';
+
+enum _LoadState { loading, ready, error }
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -21,36 +32,100 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final ApiService _apiService = ApiService();
+
+  _LoadState _loadState = _LoadState.loading;
+  ApiException? _error;
+
+  // Everything below comes from GET /members/profile/:id (and the mahal
+  // name from the dashboard). Empty = not on record, rendered as "—".
   String _memberName = ApiService.cachedMemberName;
-  String _phone = ApiService.cachedPhone;
-  String _email = ApiService.cachedEmail;
-  String _address1 = ApiService.cachedAddress;
-  String _address2 = "";
-  String _city = "Calicut";
-  String _state = "Kerala";
-  String _pincode = "673001";
-  String _mahalName = "Central Juma Masjid Mahal";
-  String _memberId = ApiService.currentMemberId;
+  String _phone = '';
+  String _email = '';
+  String _address1 = '';
+  String _address2 = '';
+  String _city = '';
+  String _region = ''; // state / province
+  String _pincode = '';
+  String _memberCode = '';
+  String _status = '';
+  String? _mahalName;
+  Map<String, dynamic>? _rawProfile;
+  Map<String, dynamic>? _rawDashboard;
+  String? _version;
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
+    _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (mounted) {
+        setState(() => _version = '${info.version} (${info.buildNumber})');
+      }
+    } catch (_) {
+      // No platform info (tests): simply omit the version line.
+    }
+  }
+
+  static String _str(Map<String, dynamic>? m, List<String> keys) {
+    for (final k in keys) {
+      final v = m?[k]?.toString().trim();
+      if (v != null && v.isNotEmpty) return v;
+    }
+    return '';
   }
 
   Future<void> _loadProfile() async {
-    final profile = await _apiService.getMemberProfile();
-    if (profile != null && mounted) {
+    final firstLoad = _loadState != _LoadState.ready;
+    if (firstLoad) {
       setState(() {
-        _memberName = profile["name"]?.toString() ?? _memberName;
-        _phone = profile["phone"]?.toString() ?? _phone;
-        _email = profile["email"]?.toString() ?? _email;
-        _address1 = profile["house_name"]?.toString() ??
-            profile["address"]?.toString() ??
-            _address1;
-        _memberId = profile["member_id"]?.toString() ?? _memberId;
-        _mahalName = profile["mahal_name"]?.toString() ?? _mahalName;
+        _loadState = _LoadState.loading;
+        _error = null;
       });
+    }
+    try {
+      // The dashboard is only needed for the Mahal name; its failure must not
+      // hide the profile.
+      final dashboardFuture = _apiService.getMemberDashboard();
+      final profile = await _apiService.getMemberProfileOrThrow();
+      final dashboard = await dashboardFuture;
+      if (!mounted) return;
+      setState(() {
+        _rawProfile = profile;
+        _rawDashboard = dashboard;
+        _memberName = _str(profile, ['name']);
+        _phone = _str(profile, ['phone']);
+        _email = _str(profile, ['email']);
+        _address1 = _str(profile, ['house_name', 'address']);
+        _address2 = _str(profile, ['address2', 'street']);
+        _city = _str(profile, ['city']);
+        _region = _str(profile, ['state']);
+        _pincode = _str(profile, ['pincode', 'pin_code']);
+        _memberCode = _str(profile, ['member_code', 'id', 'member_id']);
+        _status = _str(profile, ['status']).toUpperCase();
+        final mahal = _str(dashboard, ['mahal_name']);
+        _mahalName = mahal.isEmpty ? _mahalName : mahal;
+        _loadState = _LoadState.ready;
+        _error = null;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (firstLoad) {
+        setState(() {
+          _loadState = _LoadState.error;
+          _error = e;
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.l10n.profileRefreshFailed(e.userMessage)),
+          ),
+        );
+      }
     }
   }
 
@@ -58,6 +133,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final updated = await Navigator.push<Map<String, String>>(
       context,
       MaterialPageRoute(
+        settings: const RouteSettings(name: AppRoutes.memberEditProfile),
         builder: (_) => EditPersonalDetailsScreen(
           name: _memberName,
           email: _email,
@@ -65,245 +141,223 @@ class _ProfileScreenState extends State<ProfileScreen> {
           address1: _address1,
           address2: _address2,
           city: _city,
-          state: _state,
+          state: _region,
           pincode: _pincode,
         ),
       ),
     );
-
-    if (updated != null && mounted) {
-      setState(() {
-        _memberName = updated['name'] ?? _memberName;
-        _email = updated['email'] ?? _email;
-        _phone = updated['phone'] ?? _phone;
-        _address1 = updated['address1'] ?? _address1;
-        _address2 = updated['address2'] ?? _address2;
-        _city = updated['city'] ?? _city;
-        _state = updated['state'] ?? _state;
-        _pincode = updated['pincode'] ?? _pincode;
-      });
-
-      _apiService.updateMemberProfile(
-        name: _memberName,
-        email: _email,
-        address: _address1,
-        city: _city,
-        state: _state,
-        pincode: _pincode,
-      );
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Your details were updated.')),
-      );
-    }
+    // The edit screen only returns values the server accepted.
+    if (updated == null || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.l10n.profileUpdated)),
+    );
+    // Show what the server actually stored.
+    _loadProfile();
   }
 
   Future<void> _logout() async {
     final confirmed = await AppBottomSheet.showConfirmation(
       context: context,
-      title: 'Log out?',
-      message: 'You will need your mobile number to sign in again.',
-      confirmLabel: 'Log Out',
-      confirmColor: AppColors.error,
+      title: context.l10n.profileLogoutTitle,
+      message: context.l10n.profileLogoutMessage,
+      confirmLabel: context.l10n.profileLogout,
+      destructive: true,
       icon: Icons.logout_rounded,
     );
     if (confirmed == true && mounted) {
       await PushNotificationService.instance.onSignOut();
       await ApiService.logout();
       if (!mounted) return;
-      Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+      Navigator.pushNamedAndRemoveUntil(
+          context, AppRoutes.login, (route) => false);
     }
   }
 
   Future<void> _replayWelcome() async {
     await AppPrefs.resetOnboarding();
     if (!mounted) return;
-    Navigator.pushNamedAndRemoveUntil(context, '/onboarding', (route) => false);
+    Navigator.pushNamedAndRemoveUntil(
+        context, AppRoutes.onboarding, (route) => false);
+  }
+
+  void _showHelp() {
+    MemberHelpSheet.show(
+      context,
+      mahalName: _mahalName,
+      officePhone: MemberHelpSheet.contactPhoneFrom(_rawDashboard) ??
+          MemberHelpSheet.contactPhoneFrom(_rawProfile),
+    );
   }
 
   String get _fullAddress {
-    final parts = [
-      _address1,
-      if (_address2.isNotEmpty) _address2,
-      _city,
-      _state,
-      _pincode,
-    ].where((p) => p.trim().isNotEmpty);
-    return parts.join(', ');
+    final parts = [_address1, _address2, _city, _region, _pincode]
+        .where((p) => p.trim().isNotEmpty);
+    return parts.isEmpty ? '—' : parts.join(', ');
   }
+
+  String _orDash(String v) => v.isEmpty ? '—' : v;
 
   @override
   Widget build(BuildContext context) {
+    final ready = _loadState == _LoadState.ready;
+    final l10n = context.l10n;
     return AppPageScaffold(
-      title: 'Profile',
-      eyebrow: 'Your account',
+      title: l10n.commonProfile,
+      eyebrow: l10n.profileEyebrow,
       showBack: false,
-      onRefresh: _loadProfile,
+      onRefresh: _loadState == _LoadState.loading ? null : _loadProfile,
       actions: [
-        AppHeaderIconButton(
-          icon: Icons.edit_outlined,
-          tooltip: 'Edit your details',
-          onTap: _openEditProfile,
-        ),
+        if (ready)
+          AppHeaderIconButton(
+            icon: Icons.edit_outlined,
+            tooltip: l10n.profileEditTooltip,
+            onTap: _openEditProfile,
+          ),
       ],
       headerChild: _identityBlock(),
-      floatingChild: _detailsCard(),
+      floatingChild: switch (_loadState) {
+        _LoadState.ready => _detailsCard(),
+        _LoadState.loading => ShimmerLoading(
+            semanticsLabel: l10n.profileLoading,
+            child: const ShimmerCardSkeleton(height: 220),
+          ),
+        _LoadState.error => AppCard.floating(
+            child: AppErrorStateView(
+              title: l10n.profileLoadError,
+              description: _error?.userMessage ?? l10n.profileLoadErrorFallback,
+              onRetry: _loadProfile,
+            ),
+          ),
+      },
       content: [
         const SizedBox(height: AppSpacing.lg),
-        const AppSectionHeader(title: 'Payments'),
+        AppSectionHeader(title: l10n.profileSectionPayments),
         _settingsCard([
           _SettingsItem(
             icon: Icons.sync_rounded,
-            iconColor: AppColors.info,
-            iconBackground: AppColors.infoBg,
-            title: 'AutoPay',
-            subtitle: 'UPI mandate for your monthly dues',
-            onTap: () => Navigator.pushNamed(context, '/member/autopay-setup'),
+            iconColor: context.colors.info,
+            iconBackground: context.colors.infoBg,
+            title: l10n.profileAutopay,
+            subtitle: l10n.profileAutopaySubtitle,
+            onTap: () => Navigator.pushNamed(context, AppRoutes.memberAutopay),
           ),
           _SettingsItem(
             icon: Icons.receipt_long_outlined,
-            iconColor: AppColors.primary,
-            iconBackground: AppColors.primaryLight,
-            title: 'Receipts',
-            subtitle: 'Every payment you have made',
+            iconColor: context.colors.primary,
+            iconBackground: context.colors.primaryLight,
+            title: l10n.profileReceipts,
+            subtitle: l10n.profileReceiptsSubtitle,
             onTap: () =>
-                Navigator.pushReplacementNamed(context, '/member/receipts'),
+                AppNav.switchMemberTab(context, AppRoutes.memberReceipts),
           ),
           _SettingsItem(
             icon: Icons.payments_outlined,
-            iconColor: AppColors.warning,
-            iconBackground: AppColors.warningBg,
-            title: 'Pay dues',
-            subtitle: 'Clear pending months',
-            onTap: () => Navigator.pushNamed(context, '/member/pay'),
+            iconColor: context.colors.warning,
+            iconBackground: context.colors.warningBg,
+            title: l10n.profilePayDues,
+            subtitle: l10n.profilePayDuesSubtitle,
+            onTap: () => AppNav.switchMemberTab(context, AppRoutes.memberPay),
           ),
         ]),
         const SizedBox(height: AppSpacing.lg),
-        const AppSectionHeader(title: 'App'),
+        AppSectionHeader(title: l10n.profileSectionApp),
         _settingsCard([
           _SettingsItem(
+            icon: Icons.tune_rounded,
+            iconColor: context.colors.primary,
+            iconBackground: context.colors.primaryLight,
+            title: context.l10n.settingsRowTitle,
+            subtitle: AppSettingsSheet.summary(context),
+            onTap: () async {
+              await AppSettingsSheet.show(context);
+              if (mounted) setState(() {});
+            },
+          ),
+          _SettingsItem(
             icon: Icons.campaign_outlined,
-            iconColor: AppColors.success,
-            iconBackground: AppColors.successBg,
-            title: 'Notices',
-            subtitle: 'Announcements from the committee',
+            iconColor: context.colors.success,
+            iconBackground: context.colors.successBg,
+            title: l10n.profileNotices,
+            subtitle: l10n.profileNoticesSubtitle,
             onTap: () =>
-                Navigator.pushReplacementNamed(context, '/member/alerts'),
+                AppNav.switchMemberTab(context, AppRoutes.memberAlerts),
           ),
           _SettingsItem(
             icon: Icons.help_outline_rounded,
-            iconColor: AppColors.textSecondary,
-            iconBackground: AppColors.neutralBg,
-            title: 'Help & support',
-            subtitle: 'Contact your Mahal committee office',
-            onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Call the Mahal office for help with your dues.'),
-              ),
-            ),
+            iconColor: context.colors.textSecondary,
+            iconBackground: context.colors.neutralBg,
+            title: l10n.helpTitle,
+            subtitle: l10n.profileHelpSubtitle,
+            onTap: _showHelp,
           ),
           _SettingsItem(
             icon: Icons.slideshow_outlined,
-            iconColor: AppColors.textSecondary,
-            iconBackground: AppColors.neutralBg,
-            title: 'Replay welcome',
-            subtitle: 'Show the introduction again',
+            iconColor: context.colors.textSecondary,
+            iconBackground: context.colors.neutralBg,
+            title: l10n.profileReplayWelcome,
+            subtitle: l10n.profileReplayWelcomeSubtitle,
             onTap: _replayWelcome,
           ),
         ]),
         const SizedBox(height: AppSpacing.lg),
         AppSecondaryButton(
-          label: 'Log Out',
+          label: l10n.profileLogout,
           icon: Icons.logout_rounded,
-          color: AppColors.error,
+          color: context.colors.error,
           onPressed: _logout,
         ),
-        const SizedBox(height: AppSpacing.ms),
-        Center(
-          child: Text(
-            'MahalFlow · v1.0.0',
-            style: AppTextStyles.small.copyWith(color: AppColors.textMuted),
+        if (_version != null) ...[
+          const SizedBox(height: AppSpacing.ms),
+          Center(
+            child: Text(
+              l10n.profileVersion(_version!),
+              style:
+                  context.text.small.copyWith(color: context.colors.textMuted),
+            ),
           ),
-        ),
+        ],
       ],
       bottomNavigationBar: const MemberBottomNavBar(currentIndex: 4),
     );
   }
 
   Widget _identityBlock() {
-    final initial =
-        _memberName.trim().isNotEmpty ? _memberName.trim()[0].toUpperCase() : 'M';
-
+    final name = _memberName.trim();
     return Row(
       children: [
-        Container(
-          width: 66,
-          height: 66,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.16),
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 2),
-          ),
-          child: Text(
-            initial,
-            style: AppTextStyles.display.copyWith(
-              color: Colors.white,
-              fontSize: 27,
-            ),
-          ),
+        AppAvatar(
+          name: name,
+          size: 66,
+          onHero: true,
+          excludeFromSemantics: true,
         ),
         const SizedBox(width: AppSpacing.md),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                _memberName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.sectionTitle.copyWith(
-                  color: Colors.white,
-                  fontSize: 19,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                _phone,
-                style: AppTextStyles.small.copyWith(
-                  color: Colors.white.withValues(alpha: 0.74),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.ms,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.26),
+              Semantics(
+                header: true,
+                child: Text(
+                  name.isEmpty ? context.l10n.commonMember : name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.text.sectionTitle.copyWith(
+                    color: Colors.white,
                   ),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.verified_rounded,
-                        size: 13, color: Colors.white),
-                    const SizedBox(width: AppSpacing.xs),
-                    Text(
-                      'Verified member',
-                      style: AppTextStyles.small.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
               ),
+              if (_phone.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  PhoneFormat.display(_phone),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.text.small.copyWith(
+                    color: Colors.white.withValues(alpha: 0.74),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -312,32 +366,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _detailsCard() {
+    final l10n = context.l10n;
     return AppCard.floating(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const AppSectionLabel(
-            'Membership',
-            trailing: StatusPill(
-              label: 'Active',
-              foreground: AppColors.success,
-              background: AppColors.successBg,
-              icon: Icons.check_circle_rounded,
-            ),
+          AppSectionLabel(
+            l10n.profileMembership,
+            trailing:
+                _status.isEmpty ? null : StatusPill.forStatus(context, _status),
           ),
           const SizedBox(height: AppSpacing.sm),
-          AppDetailRow(label: 'Member ID', value: _memberId, emphasize: true),
-          const Divider(height: 1, color: AppColors.border),
-          AppDetailRow(label: 'Mahal', value: _mahalName),
-          const Divider(height: 1, color: AppColors.border),
-          AppDetailRow(label: 'Email', value: _email),
-          const Divider(height: 1, color: AppColors.border),
-          AppDetailRow(label: 'Address', value: _fullAddress),
+          AppDetailRow(
+              label: l10n.profileMemberId,
+              value: _orDash(_memberCode),
+              emphasize: true),
+          Divider(height: 1, color: context.colors.border),
+          AppDetailRow(
+              label: l10n.profileMahal, value: _orDash(_mahalName ?? '')),
+          Divider(height: 1, color: context.colors.border),
+          AppDetailRow(label: l10n.profileEmail, value: _orDash(_email)),
+          Divider(height: 1, color: context.colors.border),
+          AppDetailRow(label: l10n.profileAddress, value: _fullAddress),
           const SizedBox(height: AppSpacing.md),
           AppSecondaryButton(
-            label: 'Edit details',
+            label: l10n.profileEditDetails,
             icon: Icons.edit_outlined,
-            height: 46,
+            height: AppSizes.buttonHeightCompact,
             onPressed: _openEditProfile,
           ),
         ],
@@ -351,47 +406,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Column(
         children: [
           for (var i = 0; i < items.length; i++) ...[
-            if (i > 0) const Divider(height: 1, color: AppColors.border),
-            InkWell(
-              onTap: items[i].onTap,
-              borderRadius: BorderRadius.circular(
-                i == 0 || i == items.length - 1 ? AppRadius.card : 0,
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md - 2,
-                  vertical: AppSpacing.ms,
+            if (i > 0) Divider(height: 1, color: context.colors.border),
+            Semantics(
+              button: true,
+              label: '${items[i].title}. ${items[i].subtitle}',
+              excludeSemantics: true,
+              child: InkWell(
+                onTap: items[i].onTap,
+                borderRadius: BorderRadius.vertical(
+                  top: Radius.circular(i == 0 ? AppRadius.card : 0),
+                  bottom: Radius.circular(
+                      i == items.length - 1 ? AppRadius.card : 0),
                 ),
-                child: Row(
-                  children: [
-                    AppIconChip(
-                      icon: items[i].icon,
-                      color: items[i].iconColor,
-                      background: items[i].iconBackground,
-                      size: 38,
-                    ),
-                    const SizedBox(width: AppSpacing.ms),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            items[i].title,
-                            style: AppTextStyles.cardTitle.copyWith(
-                              fontSize: 15,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(items[i].subtitle, style: AppTextStyles.small),
-                        ],
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.ms,
+                    vertical: AppSpacing.ms,
+                  ),
+                  child: Row(
+                    children: [
+                      AppIconChip(
+                        icon: items[i].icon,
+                        color: items[i].iconColor,
+                        background: items[i].iconBackground,
+                        size: 38,
                       ),
-                    ),
-                    const Icon(
-                      Icons.chevron_right_rounded,
-                      size: 20,
-                      color: AppColors.textMuted,
-                    ),
-                  ],
+                      const SizedBox(width: AppSpacing.ms),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(items[i].title, style: context.text.listTitle),
+                            const SizedBox(height: 2),
+                            Text(items[i].subtitle, style: context.text.small),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 20,
+                        color: context.colors.textMuted,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

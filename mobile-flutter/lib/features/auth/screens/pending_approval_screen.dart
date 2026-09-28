@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/navigation/app_routes.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/services/phone_auth_service.dart';
 import '../../../core/theme/app_theme.dart';
@@ -7,109 +8,118 @@ import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/app_buttons.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_page_scaffold.dart';
+import '../../../l10n/l10n.dart';
+import '../auth_flow.dart';
 
 /// Waiting room for a member whose registration is pending committee approval.
-/// They can re-check (which re-resolves their phone) or sign out.
+/// They can re-check (button or pull-to-refresh, which re-resolves their
+/// phone) or sign out.
 class PendingApprovalScreen extends StatefulWidget {
-  const PendingApprovalScreen({super.key});
+  final String? name;
+
+  const PendingApprovalScreen({super.key, this.name});
 
   @override
   State<PendingApprovalScreen> createState() => _PendingApprovalScreenState();
 }
 
 class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
-  final ApiService _apiService = ApiService();
-  String _name = '';
-  bool _argsLoaded = false;
   bool _isChecking = false;
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!_argsLoaded) {
-      _name = (ModalRoute.of(context)?.settings.arguments as String?) ?? '';
-      _argsLoaded = true;
-    }
-  }
-
   Future<void> _recheck() async {
+    if (_isChecking) return;
     final phone = PhoneAuthService.instance.currentPhone;
     if (phone == null) {
       _goToLogin();
       return;
     }
     setState(() => _isChecking = true);
-    final resolved = await _apiService.resolveLogin(phone);
+    final result = await AuthFlow.resolve(phone);
     if (!mounted) return;
     setState(() => _isChecking = false);
 
-    if (resolved?['status'] == 'ALLOWED') {
-      final isAdmin = resolved?['role'] == 'MAHAL_ADMIN';
-      Navigator.of(context).pushNamedAndRemoveUntil(
-        isAdmin ? '/admin/dashboard' : '/member/dashboard',
-        (route) => false,
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Still awaiting approval.')),
-      );
+    switch (result.status) {
+      case ResolveStatus.pending:
+        _snack(context.l10n.pendingApprovalStillWaiting);
+      case ResolveStatus.networkError:
+        _snack(context.l10n.authServerUnreachable);
+      case ResolveStatus.allowed:
+      case ResolveStatus.unregistered:
+        // Approved → dashboard (AuthFlow records the role); rejected and
+        // removed → back to registration.
+        AuthFlow.route(Navigator.of(context), result);
     }
+  }
+
+  void _snack(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _goToLogin() async {
     await PhoneAuthService.instance.signOut();
     await ApiService.logout();
     if (!mounted) return;
-    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+    Navigator.of(context)
+        .pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final name = widget.name?.trim() ?? '';
     return AppPageScaffold(
-      title: 'Waiting for approval',
+      title: l10n.pendingApprovalTitle,
       eyebrow: 'MahalFlow',
-      subtitle: _name.isEmpty ? 'Your request has been sent.' : 'Thanks, $_name.',
+      subtitle: name.isEmpty
+          ? l10n.pendingApprovalRequestSent
+          : l10n.pendingApprovalThanks(name),
+      showBack: false,
+      onRefresh: _recheck,
       floatingChild: AppCard.floating(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const Icon(Icons.hourglass_top_rounded,
-                size: 44, color: AppColors.warning),
+            ExcludeSemantics(
+              child: Icon(Icons.hourglass_top_rounded,
+                  size: 44, color: context.colors.warning),
+            ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              'The Mahal committee needs to approve your account before you can '
-              'view dues and pay.',
+              l10n.pendingApprovalBody,
               textAlign: TextAlign.center,
-              style: AppTextStyles.body.copyWith(color: AppColors.textSecondary),
+              style: context.text.body
+                  .copyWith(color: context.colors.textSecondary),
             ),
           ],
         ),
       ),
-      content: const [
-        SizedBox(height: AppSpacing.md),
+      content: [
+        const SizedBox(height: AppSpacing.md),
         AppNoticeCard(
           icon: Icons.info_outline_rounded,
-          title: 'Almost there',
-          message:
-              'You’ll get access as soon as the committee approves you. Tap '
-              'refresh to check, or come back later.',
-          color: AppColors.info,
-          background: AppColors.infoBg,
+          title: l10n.pendingApprovalNoticeTitle,
+          message: l10n.pendingApprovalNoticeBody,
+          color: context.colors.info,
+          background: context.colors.infoBg,
         ),
       ],
       bottomBar: AppBottomActionBar(
         children: [
           AppPrimaryButton(
-            label: _isChecking ? 'Checking…' : 'Check again',
+            label: _isChecking
+                ? l10n.pendingApprovalChecking
+                : l10n.pendingApprovalCheckAgain,
             icon: Icons.refresh_rounded,
             isLoading: _isChecking,
             onPressed: _isChecking ? null : _recheck,
           ),
           const SizedBox(height: AppSpacing.sm),
           AppSecondaryButton(
-            label: 'Sign out',
-            color: AppColors.textSecondary,
-            onPressed: _goToLogin,
+            label: l10n.authSignOut,
+            color: context.colors.textSecondary,
+            onPressed: _isChecking ? null : _goToLogin,
           ),
         ],
       ),

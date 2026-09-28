@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
+import '../../l10n/l10n.dart';
 
 class AppBottomSheet {
   static Future<T?> show<T>({
@@ -11,6 +12,8 @@ class AppBottomSheet {
     required String title,
     String? subtitle,
     IconData? icon,
+    Color? iconColor,
+    Color? iconBackground,
     required Widget Function(BuildContext context, StateSetter setState) builder,
     List<Widget>? actions,
     bool isDismissible = true,
@@ -29,9 +32,9 @@ class AppBottomSheet {
               maxHeight: MediaQuery.of(context).size.height * 0.88,
             ),
             padding: EdgeInsets.only(
-              left: 20,
-              right: 20,
-              top: 12,
+              left: AppSpacing.md + AppSpacing.xs,
+              right: AppSpacing.md + AppSpacing.xs,
+              top: AppSpacing.ms,
               // The sheet paints under the system navigation bar in edge to
               // edge, so the actions need that inset too. max(), not a sum:
               // when the keyboard is up it already covers the bar.
@@ -40,18 +43,13 @@ class AppBottomSheet {
                     MediaQuery.viewInsetsOf(context).bottom,
                     MediaQuery.viewPaddingOf(context).bottom,
                   ) +
-                  20,
+                  AppSpacing.md + AppSpacing.xs,
             ),
-            decoration: const BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              boxShadow: [
-                BoxShadow(
-                  color: Color.fromRGBO(0, 0, 0, 0.15),
-                  blurRadius: 20,
-                  offset: Offset(0, -4),
-                ),
-              ],
+            decoration: BoxDecoration(
+              color: context.colors.surfaceRaised,
+              borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(AppRadius.sheet)),
+              boxShadow: context.colors.sheetShadow,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -62,10 +60,10 @@ class AppBottomSheet {
                   child: Container(
                     width: 36,
                     height: 4,
-                    margin: const EdgeInsets.only(bottom: 14),
+                    margin: const EdgeInsets.only(bottom: AppSpacing.ms),
                     decoration: BoxDecoration(
-                      color: AppColors.border,
-                      borderRadius: BorderRadius.circular(999),
+                      color: context.colors.border,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
                     ),
                   ),
                 ),
@@ -77,12 +75,14 @@ class AppBottomSheet {
                       Container(
                         width: 36,
                         height: 36,
-                        margin: const EdgeInsets.only(right: 12),
+                        margin: const EdgeInsets.only(right: AppSpacing.ms),
                         decoration: BoxDecoration(
-                          color: AppColors.primaryLight,
+                          color: iconBackground ?? context.colors.primaryLight,
                           borderRadius: BorderRadius.circular(AppRadius.button),
                         ),
-                        child: Icon(icon, color: AppColors.primary, size: 20),
+                        child: Icon(icon,
+                            color: iconColor ?? context.colors.primary,
+                            size: 20),
                       ),
                     ],
                     Expanded(
@@ -91,26 +91,26 @@ class AppBottomSheet {
                         children: [
                           Text(
                             title,
-                            style: AppTextStyles.sectionTitle,
+                            style: context.text.sectionTitle,
                           ),
                           if (subtitle != null) ...[
                             const SizedBox(height: 2),
                             Text(
                               subtitle,
-                              style: AppTextStyles.small,
+                              style: context.text.small,
                             ),
                           ],
                         ],
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close_rounded, size: 20, color: AppColors.textMuted),
-                      splashRadius: 18,
+                      tooltip: context.l10n.commonClose,
+                      icon: Icon(Icons.close_rounded, size: 20, color: context.colors.textMuted),
                       onPressed: () => Navigator.of(ctx).pop(),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.md),
 
                 // Body Content
                 Flexible(
@@ -121,11 +121,11 @@ class AppBottomSheet {
                 ),
 
                 if (actions != null && actions.isNotEmpty) ...[
-                  const SizedBox(height: 18),
+                  const SizedBox(height: AppSpacing.md),
                   Row(
                     children: [
                       for (var i = 0; i < actions.length; i++) ...[
-                        if (i > 0) const SizedBox(width: 10),
+                        if (i > 0) const SizedBox(width: AppSpacing.ms),
                         Expanded(child: actions[i]),
                       ],
                     ],
@@ -139,23 +139,35 @@ class AppBottomSheet {
     );
   }
 
+  /// Yes/no sheet. Resolves true on confirm, false on cancel, null when
+  /// dismissed. Set [destructive] for delete / sign-out / irreversible
+  /// actions: the confirm button and icon turn red and the icon defaults to a
+  /// warning glyph.
   static Future<bool?> showConfirmation({
     required BuildContext context,
     required String title,
     required String message,
-    String confirmLabel = "Confirm",
-    String cancelLabel = "Cancel",
-    Color confirmColor = AppColors.primary,
-    IconData icon = Icons.help_outline_rounded,
+    String? confirmLabel,
+    String? cancelLabel,
+    Color? confirmColor,
+    IconData? icon,
+    bool destructive = false,
   }) {
+    final accent =
+        confirmColor ?? (destructive ? context.colors.error : context.colors.primary);
     return show<bool>(
       context: context,
       title: title,
-      icon: icon,
+      icon: icon ??
+          (destructive
+              ? Icons.warning_amber_rounded
+              : Icons.help_outline_rounded),
+      iconColor: destructive ? context.colors.error : context.colors.primary,
+      iconBackground: destructive ? context.colors.errorBg : context.colors.primaryLight,
       builder: (ctx, _) => Text(
         message,
-        style: AppTextStyles.body.copyWith(
-          color: AppColors.textSecondary,
+        style: context.text.body.copyWith(
+          color: context.colors.textSecondary,
           height: 20 / 14,
         ),
       ),
@@ -163,32 +175,30 @@ class AppBottomSheet {
         OutlinedButton(
           onPressed: () => Navigator.of(context).pop(false),
           style: OutlinedButton.styleFrom(
-            minimumSize: const Size.fromHeight(44),
-            side: const BorderSide(color: AppColors.border),
+            minimumSize: const Size.fromHeight(AppSizes.minTouch),
+            side: BorderSide(color: context.colors.border),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.button)),
           ),
           child: Text(
-            cancelLabel,
-            style: AppTextStyles.button.copyWith(
-              fontSize: 14,
-              color: AppColors.textSecondary,
+            cancelLabel ?? context.l10n.commonCancel,
+            style: context.text.buttonMedium.copyWith(
+              color: context.colors.textSecondary,
             ),
           ),
         ),
         ElevatedButton(
           onPressed: () => Navigator.of(context).pop(true),
           style: ElevatedButton.styleFrom(
-            backgroundColor: confirmColor,
-            foregroundColor: Colors.white,
-            minimumSize: const Size.fromHeight(44),
+            backgroundColor: accent,
+            foregroundColor: context.colors.onPrimary,
+            minimumSize: const Size.fromHeight(AppSizes.minTouch),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.button)),
             elevation: 0,
           ),
           child: Text(
-            confirmLabel,
-            style: AppTextStyles.button.copyWith(
-              fontSize: 14,
-              color: Colors.white,
+            confirmLabel ?? context.l10n.commonConfirm,
+            style: context.text.buttonMedium.copyWith(
+              color: context.colors.onPrimary,
             ),
           ),
         ),

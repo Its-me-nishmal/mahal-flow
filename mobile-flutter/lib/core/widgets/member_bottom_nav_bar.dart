@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../navigation/app_routes.dart';
 import '../network/api_service.dart';
 import 'app_bottom_nav_bar.dart';
+import '../../l10n/l10n.dart';
 
+/// Member tabs. Navigation goes through [AppNav.switchMemberTab], so Back from
+/// any tab returns to Home instead of leaving the app.
 class MemberBottomNavBar extends StatelessWidget {
   final int currentIndex;
 
@@ -10,27 +14,7 @@ class MemberBottomNavBar extends StatelessWidget {
 
   void _onItemTapped(BuildContext context, int index) {
     if (index == currentIndex) return;
-
-    switch (index) {
-      case 0:
-        Navigator.of(context).pushNamedAndRemoveUntil(
-          '/member/dashboard',
-          (route) => false,
-        );
-        break;
-      case 1:
-        Navigator.of(context).pushReplacementNamed('/member/monthly-payment');
-        break;
-      case 2:
-        Navigator.of(context).pushReplacementNamed('/member/receipts');
-        break;
-      case 3:
-        Navigator.of(context).pushReplacementNamed('/member/alerts');
-        break;
-      case 4:
-        Navigator.of(context).pushReplacementNamed('/member/profile');
-        break;
-    }
+    AppNav.switchMemberTab(context, AppRoutes.memberTabs[index]);
   }
 
   @override
@@ -42,31 +26,31 @@ class MemberBottomNavBar extends StatelessWidget {
           currentIndex: currentIndex,
           onTap: (index) => _onItemTapped(context, index),
           items: [
-            const AppNavItem(
+            AppNavItem(
               icon: Icons.home_outlined,
               activeIcon: Icons.home_rounded,
-              label: 'Home',
+              label: context.l10n.navHome,
             ),
-            const AppNavItem(
+            AppNavItem(
               icon: Icons.payments_outlined,
               activeIcon: Icons.payments_rounded,
-              label: 'Pay',
+              label: context.l10n.navPay,
             ),
-            const AppNavItem(
+            AppNavItem(
               icon: Icons.receipt_long_outlined,
               activeIcon: Icons.receipt_long_rounded,
-              label: 'Receipts',
+              label: context.l10n.navReceipts,
             ),
             AppNavItem(
               icon: Icons.campaign_outlined,
               activeIcon: Icons.campaign_rounded,
-              label: 'Notices',
-              showBadge: unreadCount > 0,
+              label: context.l10n.navNotices,
+              badgeCount: unreadCount,
             ),
-            const AppNavItem(
+            AppNavItem(
               icon: Icons.person_outline_rounded,
               activeIcon: Icons.person_rounded,
-              label: 'Profile',
+              label: context.l10n.navProfile,
             ),
           ],
         );

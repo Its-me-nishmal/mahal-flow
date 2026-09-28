@@ -11,7 +11,9 @@ class PhoneAuthService {
   PhoneAuthService._();
   static final PhoneAuthService instance = PhoneAuthService._();
 
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  // Resolved lazily: if Firebase failed to initialise, touching the instance
+  // throws, and that must surface as a sign-in error, not a crash on import.
+  FirebaseAuth get _auth => FirebaseAuth.instance;
 
   /// Normalize an Indian mobile number to E.164 (+91…). Accepts input with or
   /// without country code, spaces or punctuation.
@@ -66,8 +68,28 @@ class PhoneAuthService {
     return result.user?.getIdToken();
   }
 
-  String? get currentUid => _auth.currentUser?.uid;
-  String? get currentPhone => _auth.currentUser?.phoneNumber;
+  String? get currentUid {
+    try {
+      return _auth.currentUser?.uid;
+    } catch (_) {
+      return null;
+    }
+  }
 
-  Future<void> signOut() => _auth.signOut();
+  /// E.164 phone of the Firebase-signed-in user, or null.
+  String? get currentPhone {
+    try {
+      return _auth.currentUser?.phoneNumber;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> signOut() async {
+    try {
+      await _auth.signOut();
+    } catch (e) {
+      debugPrint('[PHONE_AUTH] sign-out failed: $e');
+    }
+  }
 }

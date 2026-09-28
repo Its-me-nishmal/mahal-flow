@@ -5,6 +5,8 @@ import '../../../core/storage/app_prefs.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/app_buttons.dart';
+import '../../../core/widgets/app_settings_sheet.dart';
+import '../../../l10n/l10n.dart';
 
 /// First-run welcome. Shown once: both Skip and Get Started record the flag
 /// before leaving, so a returning member goes straight from splash to sign in.
@@ -19,41 +21,37 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
-  static const List<_WelcomeSlide> _slides = [
-    _WelcomeSlide(
-      icon: Icons.account_balance_wallet_outlined,
-      title: 'Know exactly what you owe',
-      description:
-          'Your monthly dues, pending months and advance credit — all on one '
-          'screen, updated the moment a payment clears.',
-      highlights: [
-        'Outstanding balance at a glance',
-        'Month-by-month breakdown',
-      ],
-    ),
-    _WelcomeSlide(
-      icon: Icons.volunteer_activism_outlined,
-      title: 'Give in a few taps',
-      description:
-          'Pay dues or contribute to the Mahal fund with UPI, cards or net '
-          'banking. AutoPay can handle the monthly dues for you.',
-      highlights: [
-        'UPI, card and net banking',
-        'Optional AutoPay mandate',
-      ],
-    ),
-    _WelcomeSlide(
-      icon: Icons.verified_outlined,
-      title: 'Every payment has a receipt',
-      description:
-          'Each transaction produces a receipt you can verify, download and '
-          'share — so the committee and you always see the same record.',
-      highlights: [
-        'Cryptographically verifiable',
-        'Download as PDF anytime',
-      ],
-    ),
-  ];
+  static const int _slideCount = 3;
+
+  List<_WelcomeSlide> _slides(AppLocalizations l10n) => [
+        _WelcomeSlide(
+          icon: Icons.account_balance_wallet_outlined,
+          title: l10n.onboardingSlide1Title,
+          description: l10n.onboardingSlide1Body,
+          highlights: [
+            l10n.onboardingSlide1Point1,
+            l10n.onboardingSlide1Point2
+          ],
+        ),
+        _WelcomeSlide(
+          icon: Icons.volunteer_activism_outlined,
+          title: l10n.onboardingSlide2Title,
+          description: l10n.onboardingSlide2Body,
+          highlights: [
+            l10n.onboardingSlide2Point1,
+            l10n.onboardingSlide2Point2
+          ],
+        ),
+        _WelcomeSlide(
+          icon: Icons.verified_outlined,
+          title: l10n.onboardingSlide3Title,
+          description: l10n.onboardingSlide3Body,
+          highlights: [
+            l10n.onboardingSlide3Point1,
+            l10n.onboardingSlide3Point2
+          ],
+        ),
+      ];
 
   @override
   void dispose() {
@@ -68,7 +66,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _next() {
-    if (_currentPage == _slides.length - 1) {
+    if (_currentPage == _slideCount - 1) {
       _finish();
       return;
     }
@@ -80,21 +78,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isLast = _currentPage == _slides.length - 1;
+    final isLast = _currentPage == _slideCount - 1;
+    final slides = _slides(context.l10n);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: AppOverlayStyles.gradientHeader,
+      value: context.colors.gradientHeaderOverlay,
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.colors.background,
         body: Column(
           children: [
-            _buildHeader(),
+            _buildHeader(isLast),
             Expanded(
               child: PageView.builder(
                 controller: _pageController,
-                itemCount: _slides.length,
+                itemCount: slides.length,
                 onPageChanged: (i) => setState(() => _currentPage = i),
-                itemBuilder: (context, i) => _buildSlide(_slides[i]),
+                itemBuilder: (context, i) => _buildSlide(slides[i]),
               ),
             ),
             _buildFooter(isLast),
@@ -104,10 +103,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(bool isLast) {
     return Container(
       width: double.infinity,
-      decoration: const BoxDecoration(gradient: AppGradients.hero),
+      decoration: BoxDecoration(gradient: context.colors.heroGradient),
       padding: EdgeInsets.only(
         left: AppSpacing.screenH,
         right: AppSpacing.sm,
@@ -125,30 +124,50 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               borderRadius: BorderRadius.circular(AppRadius.sm + 2),
               border: Border.all(color: Colors.white.withValues(alpha: 0.24)),
             ),
-            child: const Icon(Icons.mosque_rounded,
-                size: 18, color: Colors.white),
+            child:
+                const Icon(Icons.mosque_rounded, size: 18, color: Colors.white),
           ),
           const SizedBox(width: AppSpacing.ms),
           Expanded(
             child: Text(
               'MahalFlow',
-              style: AppTextStyles.pageTitle.copyWith(
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: context.text.sectionTitle.copyWith(
                 color: Colors.white,
-                fontSize: 18,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
-          TextButton(
-            onPressed: _finish,
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.white,
-              minimumSize: const Size(0, 44),
-            ),
-            child: Text(
-              'Skip',
-              style: AppTextStyles.button.copyWith(
-                fontSize: 14,
-                color: Colors.white.withValues(alpha: 0.86),
+          const AppLanguageButton(),
+          // Hidden on the last slide, where "Get Started" does the same job.
+          // The slot keeps its size so the header does not jump.
+          Visibility(
+            visible: !isLast,
+            maintainSize: true,
+            maintainAnimation: true,
+            maintainState: true,
+            // Capped so a long translation ("ഒഴിവാക്കുക") never squeezes the
+            // brand title to nothing at 360dp / large text.
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 120),
+              child: TextButton(
+                onPressed: _finish,
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(AppSizes.minTouch, AppSizes.minTouch),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                ),
+                child: Text(
+                  context.l10n.commonSkip,
+                  semanticsLabel: context.l10n.onboardingSkipSemantics,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.text.buttonMedium.copyWith(
+                    color: Colors.white.withValues(alpha: 0.86),
+                  ),
+                ),
               ),
             ),
           ),
@@ -174,25 +193,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               height: 128,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: AppColors.primaryLight,
-                borderRadius: BorderRadius.circular(36),
+                color: context.colors.primaryLight,
+                borderRadius: BorderRadius.circular(AppRadius.illustration),
                 border: Border.all(
-                  color: AppColors.primary.withValues(alpha: 0.12),
+                  color: context.colors.primary.withValues(alpha: 0.12),
                 ),
               ),
-              child: Icon(slide.icon, size: 56, color: AppColors.primary),
+              child: Icon(slide.icon, size: 56, color: context.colors.primary),
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
           Text(
             slide.title,
-            style: AppTextStyles.display.copyWith(fontSize: 26),
+            style: context.text.display.copyWith(fontSize: 26),
           ),
           const SizedBox(height: AppSpacing.ms),
           Text(
             slide.description,
-            style: AppTextStyles.body.copyWith(
-              color: AppColors.textSecondary,
+            style: context.text.body.copyWith(
+              color: context.colors.textSecondary,
               height: 22 / 14,
             ),
           ),
@@ -206,22 +225,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     width: 22,
                     height: 22,
                     alignment: Alignment.center,
-                    decoration: const BoxDecoration(
-                      color: AppColors.successBg,
+                    decoration: BoxDecoration(
+                      color: context.colors.successBg,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.check_rounded,
                       size: 14,
-                      color: AppColors.success,
+                      color: context.colors.success,
                     ),
                   ),
                   const SizedBox(width: AppSpacing.ms),
                   Expanded(
                     child: Text(
                       highlight,
-                      style: AppTextStyles.body.copyWith(
-                        color: AppColors.textSecondary,
+                      style: context.text.body.copyWith(
+                        color: context.colors.textSecondary,
                       ),
                     ),
                   ),
@@ -235,9 +254,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   Widget _buildFooter(bool isLast) {
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border)),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        border: Border(top: BorderSide(color: context.colors.border)),
       ),
       child: SafeArea(
         top: false,
@@ -251,25 +270,35 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(_slides.length, (i) {
-                  final active = i == _currentPage;
-                  return AnimatedContainer(
-                    duration: const Duration(milliseconds: 250),
-                    margin: const EdgeInsets.symmetric(horizontal: 3),
-                    width: active ? 26 : 7,
-                    height: 7,
-                    decoration: BoxDecoration(
-                      color: active ? AppColors.primary : AppColors.border,
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                    ),
-                  );
-                }),
+              Semantics(
+                label: context.l10n
+                    .onboardingPageOf(_currentPage + 1, _slideCount),
+                liveRegion: true,
+                excludeSemantics: true,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(_slideCount, (i) {
+                    final active = i == _currentPage;
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      width: active ? 26 : 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color: active
+                            ? context.colors.primary
+                            : context.colors.border,
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                      ),
+                    );
+                  }),
+                ),
               ),
               const SizedBox(height: AppSpacing.md),
               AppPrimaryButton(
-                label: isLast ? 'Get Started' : 'Next',
+                label: isLast
+                    ? context.l10n.onboardingGetStarted
+                    : context.l10n.commonNext,
                 icon: Icons.arrow_forward_rounded,
                 onPressed: _next,
               ),

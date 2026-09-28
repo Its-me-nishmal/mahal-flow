@@ -1,12 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/network/api_service.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_tokens.dart';
+import '../../../core/utils/phone_format.dart';
+import '../../../core/widgets/app_avatar.dart';
+import '../../../core/widgets/app_bottom_sheet.dart';
 import '../../../core/widgets/app_buttons.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_page_scaffold.dart';
 import '../../../core/widgets/app_text_field.dart';
+import '../../../l10n/l10n.dart';
 
+/// Edits the signed-in member's contact details. Saving calls the API and
+/// only closes (returning the saved values) once the server accepted them;
+/// on failure the member stays here with their edits intact.
 class EditPersonalDetailsScreen extends StatefulWidget {
   final String name;
   final String email;
@@ -19,14 +28,14 @@ class EditPersonalDetailsScreen extends StatefulWidget {
 
   const EditPersonalDetailsScreen({
     super.key,
-    this.name = 'Muhammed Ameen',
-    this.email = 'muhammed@example.com',
-    this.phone = '+91 98765 43210',
-    this.address1 = '123, Palm Grove',
+    this.name = '',
+    this.email = '',
+    this.phone = '',
+    this.address1 = '',
     this.address2 = '',
-    this.city = 'Kochi',
-    this.state = 'Kerala',
-    this.pincode = '682001',
+    this.city = '',
+    this.state = '',
+    this.pincode = '',
   });
 
   @override
@@ -35,204 +44,306 @@ class EditPersonalDetailsScreen extends StatefulWidget {
 }
 
 class _EditPersonalDetailsScreenState extends State<EditPersonalDetailsScreen> {
-  late TextEditingController _nameController;
-  late TextEditingController _emailController;
-  late TextEditingController _address1Controller;
-  late TextEditingController _address2Controller;
-  late TextEditingController _cityController;
-  late TextEditingController _stateController;
-  late TextEditingController _pincodeController;
+  final ApiService _api = ApiService();
+
+  late final TextEditingController _nameController;
+  late final TextEditingController _emailController;
+  late final TextEditingController _address1Controller;
+  late final TextEditingController _address2Controller;
+  late final TextEditingController _cityController;
+  late final TextEditingController _stateController;
+  late final TextEditingController _pincodeController;
 
   String? _nameError;
   String? _emailError;
+  String? _pincodeError;
+  bool _saving = false;
+
+  static final RegExp _emailPattern = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]{2,}$');
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.name)
-      ..addListener(() => setState(() {}));
-    _emailController = TextEditingController(text: widget.email);
-    _address1Controller = TextEditingController(text: widget.address1);
-    _address2Controller = TextEditingController(text: widget.address2);
-    _cityController = TextEditingController(text: widget.city);
-    _stateController = TextEditingController(text: widget.state);
-    _pincodeController = TextEditingController(text: widget.pincode);
+      ..addListener(_onChanged);
+    _emailController = TextEditingController(text: widget.email)
+      ..addListener(_onChanged);
+    _address1Controller = TextEditingController(text: widget.address1)
+      ..addListener(_onChanged);
+    _address2Controller = TextEditingController(text: widget.address2)
+      ..addListener(_onChanged);
+    _cityController = TextEditingController(text: widget.city)
+      ..addListener(_onChanged);
+    _stateController = TextEditingController(text: widget.state)
+      ..addListener(_onChanged);
+    _pincodeController = TextEditingController(text: widget.pincode)
+      ..addListener(_onChanged);
   }
+
+  void _onChanged() => setState(() {});
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _emailController.dispose();
-    _address1Controller.dispose();
-    _address2Controller.dispose();
-    _cityController.dispose();
-    _stateController.dispose();
-    _pincodeController.dispose();
+    for (final c in [
+      _nameController,
+      _emailController,
+      _address1Controller,
+      _address2Controller,
+      _cityController,
+      _stateController,
+      _pincodeController,
+    ]) {
+      c.dispose();
+    }
     super.dispose();
   }
 
-  void _saveChanges() {
-    final updatedName = _nameController.text.trim();
-    final email = _emailController.text.trim();
+  Map<String, String> get _values => {
+        'name': _nameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'phone': widget.phone,
+        'address1': _address1Controller.text.trim(),
+        'address2': _address2Controller.text.trim(),
+        'city': _cityController.text.trim(),
+        'state': _stateController.text.trim(),
+        'pincode': _pincodeController.text.trim(),
+      };
 
+  bool get _isDirty {
+    final v = _values;
+    return v['name'] != widget.name.trim() ||
+        v['email'] != widget.email.trim() ||
+        v['address1'] != widget.address1.trim() ||
+        v['address2'] != widget.address2.trim() ||
+        v['city'] != widget.city.trim() ||
+        v['state'] != widget.state.trim() ||
+        v['pincode'] != widget.pincode.trim();
+  }
+
+  void _unfocus() => FocusManager.instance.primaryFocus?.unfocus();
+
+  Future<void> _saveChanges() async {
+    if (_saving) return;
+    _unfocus();
+    final v = _values;
+    final email = v['email']!;
+    final pincode = v['pincode']!;
+
+    final l10n = context.l10n;
     setState(() {
-      _nameError = updatedName.isEmpty ? 'Your name cannot be empty' : null;
+      _nameError = v['name']!.isEmpty ? l10n.editProfileNameRequired : null;
       // An empty email is allowed; a malformed one is not, because the
       // committee uses it to send receipts.
-      _emailError = email.isNotEmpty && !email.contains('@')
-          ? 'That does not look like an email address'
+      _emailError = email.isNotEmpty && !_emailPattern.hasMatch(email)
+          ? l10n.editProfileEmailInvalid
+          : null;
+      _pincodeError = pincode.isNotEmpty && pincode.length != 6
+          ? l10n.editProfilePincodeInvalid
           : null;
     });
+    if (_nameError != null || _emailError != null || _pincodeError != null) {
+      return;
+    }
+    if (!_isDirty) {
+      Navigator.pop(context);
+      return;
+    }
 
-    if (_nameError != null || _emailError != null) return;
+    setState(() => _saving = true);
+    final ok = await _api.updateMemberProfile(
+      name: v['name']!,
+      email: email,
+      address: v['address1'],
+      address2: v['address2'],
+      city: v['city'],
+      state: v['state'],
+      pincode: pincode,
+    );
+    if (!mounted) return;
+    setState(() => _saving = false);
 
-    Navigator.pop(context, {
-      'name': updatedName,
-      'email': email,
-      'phone': widget.phone,
-      'address1': _address1Controller.text.trim(),
-      'address2': _address2Controller.text.trim(),
-      'city': _cityController.text.trim(),
-      'state': _stateController.text.trim(),
-      'pincode': _pincodeController.text.trim(),
-    });
+    if (ok) {
+      Navigator.pop(context, v);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.editProfileSaveFailed)),
+      );
+    }
+  }
+
+  Future<bool> _confirmDiscard() async {
+    final discard = await AppBottomSheet.showConfirmation(
+      context: context,
+      title: context.l10n.editProfileDiscardTitle,
+      message: context.l10n.editProfileDiscardMessage,
+      confirmLabel: context.l10n.editProfileDiscard,
+      cancelLabel: context.l10n.editProfileKeepEditing,
+      destructive: true,
+    );
+    return discard == true;
   }
 
   @override
   Widget build(BuildContext context) {
-    final initial = _nameController.text.trim().isNotEmpty
-        ? _nameController.text.trim()[0].toUpperCase()
-        : 'M';
-
-    return AppPageScaffold(
-      title: 'Edit details',
-      eyebrow: 'Profile',
-      subtitle: 'Keep your contact details current so receipts reach you.',
-      headerChild: Row(
-        children: [
-          Container(
-            width: 58,
-            height: 58,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.16),
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.3),
-                width: 2,
-              ),
-            ),
-            child: Text(
-              initial,
-              style: AppTextStyles.display.copyWith(
-                color: Colors.white,
-                fontSize: 24,
-              ),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.ms),
-          Expanded(
-            child: Text(
-              'Your mobile number and member ID are managed by the committee.',
-              style: AppTextStyles.small.copyWith(
-                color: Colors.white.withValues(alpha: 0.74),
-              ),
-            ),
-          ),
-        ],
-      ),
-      floatingChild: AppCard.floating(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const AppSectionLabel('Personal'),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-              controller: _nameController,
-              label: 'Full name',
-              icon: Icons.person_outline_rounded,
-              errorText: _nameError,
-              textCapitalization: TextCapitalization.words,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-              controller: _emailController,
-              label: 'Email',
-              hint: 'you@example.com',
-              icon: Icons.mail_outline_rounded,
-              keyboardType: TextInputType.emailAddress,
-              errorText: _emailError,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            AppReadOnlyField(
-              label: 'Mobile number',
-              value: widget.phone,
-              icon: Icons.phone_iphone_rounded,
-              note: 'Contact the Mahal office to change this.',
-            ),
-          ],
-        ),
-      ),
-      content: [
-        const SizedBox(height: AppSpacing.md),
-        AppCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+    final l10n = context.l10n;
+    return PopScope(
+      canPop: !_isDirty && !_saving,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop || _saving) return;
+        if (await _confirmDiscard() && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: _unfocus,
+        child: AppPageScaffold(
+          title: l10n.editProfileTitle,
+          eyebrow: l10n.commonProfile,
+          subtitle: l10n.editProfileSubtitle,
+          headerChild: Row(
             children: [
-              const AppSectionLabel('Address'),
-              const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                controller: _address1Controller,
-                label: 'House name or number',
-                icon: Icons.home_outlined,
-                textCapitalization: TextCapitalization.words,
+              AppAvatar(
+                name: _nameController.text,
+                size: 58,
+                onHero: true,
+                excludeFromSemantics: true,
               ),
-              const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                controller: _address2Controller,
-                label: 'Street or landmark (optional)',
-                textCapitalization: TextCapitalization.words,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Row(
-                children: [
-                  Expanded(
-                    child: AppTextField(
-                      controller: _cityController,
-                      label: 'City',
-                      textCapitalization: TextCapitalization.words,
-                    ),
+              const SizedBox(width: AppSpacing.ms),
+              Expanded(
+                child: Text(
+                  l10n.editProfileManagedNote,
+                  style: context.text.small.copyWith(
+                    color: Colors.white.withValues(alpha: 0.74),
                   ),
-                  const SizedBox(width: AppSpacing.ms),
-                  Expanded(
-                    child: AppTextField(
-                      controller: _stateController,
-                      label: 'State',
-                      textCapitalization: TextCapitalization.words,
-                    ),
+                ),
+              ),
+            ],
+          ),
+          floatingChild: AppCard.floating(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AppSectionLabel(l10n.editProfilePersonal),
+                const SizedBox(height: AppSpacing.md),
+                AppTextField(
+                  controller: _nameController,
+                  label: l10n.authFullName,
+                  icon: Icons.person_outline_rounded,
+                  errorText: _nameError,
+                  enabled: !_saving,
+                  textCapitalization: TextCapitalization.words,
+                  textInputAction: TextInputAction.next,
+                  autofillHints: const [AutofillHints.name],
+                ),
+                const SizedBox(height: AppSpacing.md),
+                AppTextField(
+                  controller: _emailController,
+                  label: l10n.editProfileEmail,
+                  hint: l10n.editProfileEmailHint,
+                  icon: Icons.mail_outline_rounded,
+                  keyboardType: TextInputType.emailAddress,
+                  errorText: _emailError,
+                  enabled: !_saving,
+                  textInputAction: TextInputAction.next,
+                  autofillHints: const [AutofillHints.email],
+                ),
+                const SizedBox(height: AppSpacing.md),
+                AppReadOnlyField(
+                  label: l10n.authMobileNumber,
+                  value: widget.phone.isEmpty
+                      ? '—'
+                      : PhoneFormat.display(widget.phone),
+                  icon: Icons.phone_iphone_rounded,
+                  note: l10n.editProfileMobileNote,
+                ),
+              ],
+            ),
+          ),
+          content: [
+            const SizedBox(height: AppSpacing.md),
+            AppCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  AppSectionLabel(l10n.editProfileAddress),
+                  const SizedBox(height: AppSpacing.md),
+                  AppTextField(
+                    controller: _address1Controller,
+                    label: l10n.editProfileHouse,
+                    icon: Icons.home_outlined,
+                    enabled: !_saving,
+                    textCapitalization: TextCapitalization.words,
+                    textInputAction: TextInputAction.next,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  AppTextField(
+                    controller: _address2Controller,
+                    label: l10n.editProfileStreet,
+                    enabled: !_saving,
+                    textCapitalization: TextCapitalization.words,
+                    textInputAction: TextInputAction.next,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: AppTextField(
+                          controller: _cityController,
+                          label: l10n.editProfileCity,
+                          enabled: !_saving,
+                          textCapitalization: TextCapitalization.words,
+                          textInputAction: TextInputAction.next,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.ms),
+                      Expanded(
+                        child: AppTextField(
+                          controller: _stateController,
+                          label: l10n.editProfileState,
+                          enabled: !_saving,
+                          textCapitalization: TextCapitalization.words,
+                          textInputAction: TextInputAction.next,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  AppTextField(
+                    controller: _pincodeController,
+                    label: l10n.editProfilePincode,
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    errorText: _pincodeError,
+                    enabled: !_saving,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => _saveChanges(),
                   ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                controller: _pincodeController,
-                label: 'PIN code',
-                keyboardType: TextInputType.number,
-                maxLength: 6,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            AppNoticeCard(
+              icon: Icons.info_outline_rounded,
+              title: l10n.editProfileOfficeKeepsTitle,
+              message: l10n.editProfileOfficeKeepsBody,
+              color: context.colors.info,
+              background: context.colors.infoBg,
+            ),
+          ],
+          bottomBar: AppBottomActionBar(
+            children: [
+              AppPrimaryButton(
+                label: _saving ? l10n.editProfileSaving : l10n.editProfileSave,
+                icon: Icons.check_rounded,
+                isLoading: _saving,
+                onPressed: _saving ? null : _saveChanges,
               ),
             ],
           ),
         ),
-      ],
-      bottomBar: AppBottomActionBar(
-        children: [
-          AppPrimaryButton(
-            label: 'Save Changes',
-            icon: Icons.check_rounded,
-            onPressed: _saveChanges,
-          ),
-        ],
       ),
     );
   }

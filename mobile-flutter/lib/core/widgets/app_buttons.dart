@@ -14,7 +14,8 @@ class AppPrimaryButton extends StatelessWidget {
   final bool isLoading;
   final bool expand;
   final double height;
-  final Color color;
+  /// Accent; defaults to the theme primary.
+  final Color? color;
 
   const AppPrimaryButton({
     super.key,
@@ -24,11 +25,13 @@ class AppPrimaryButton extends StatelessWidget {
     this.isLoading = false,
     this.expand = true,
     this.height = 52,
-    this.color = AppColors.primary,
+    this.color,
   });
 
   @override
   Widget build(BuildContext context) {
+    final color = this.color ?? context.colors.primary;
+    final onColor = context.colors.onPrimary;
     final button = SizedBox(
       height: height,
       width: expand ? double.infinity : null,
@@ -36,9 +39,9 @@ class AppPrimaryButton extends StatelessWidget {
         onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
-          foregroundColor: Colors.white,
+          foregroundColor: onColor,
           disabledBackgroundColor: color.withValues(alpha: 0.45),
-          disabledForegroundColor: Colors.white.withValues(alpha: 0.9),
+          disabledForegroundColor: onColor.withValues(alpha: 0.9),
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
           shape: RoundedRectangleBorder(
@@ -46,12 +49,12 @@ class AppPrimaryButton extends StatelessWidget {
           ),
         ),
         child: isLoading
-            ? const SizedBox(
+            ? SizedBox(
                 width: 20,
                 height: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2.2,
-                  valueColor: AlwaysStoppedAnimation(Colors.white),
+                  valueColor: AlwaysStoppedAnimation(onColor),
                 ),
               )
             // Scale down rather than ellipsize: a truncated amount on a pay
@@ -65,7 +68,7 @@ class AppPrimaryButton extends StatelessWidget {
                     Text(
                       label,
                       maxLines: 1,
-                      style: AppTextStyles.button.copyWith(color: Colors.white),
+                      style: context.text.button.copyWith(color: onColor),
                     ),
                     if (icon != null) ...[
                       const SizedBox(width: AppSpacing.sm),
@@ -86,7 +89,8 @@ class AppSecondaryButton extends StatelessWidget {
   final IconData? icon;
   final bool expand;
   final double height;
-  final Color color;
+  /// Accent; defaults to the theme primary.
+  final Color? color;
 
   const AppSecondaryButton({
     super.key,
@@ -95,11 +99,12 @@ class AppSecondaryButton extends StatelessWidget {
     this.icon,
     this.expand = true,
     this.height = 50,
-    this.color = AppColors.primary,
+    this.color,
   });
 
   @override
   Widget build(BuildContext context) {
+    final color = this.color ?? context.colors.primary;
     return SizedBox(
       height: height,
       width: expand ? double.infinity : null,
@@ -107,8 +112,8 @@ class AppSecondaryButton extends StatelessWidget {
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
           foregroundColor: color,
-          backgroundColor: AppColors.surface,
-          side: const BorderSide(color: AppColors.border),
+          backgroundColor: context.colors.surface,
+          side: BorderSide(color: context.colors.border),
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.button),
@@ -127,7 +132,7 @@ class AppSecondaryButton extends StatelessWidget {
               Text(
                 label,
                 maxLines: 1,
-                style: AppTextStyles.button.copyWith(fontSize: 14, color: color),
+                style: context.text.buttonMedium.copyWith(color: color),
               ),
             ],
           ),
@@ -141,18 +146,20 @@ class AppTextActionButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
   final IconData? icon;
-  final Color color;
+  /// Accent; defaults to the theme primary.
+  final Color? color;
 
   const AppTextActionButton({
     super.key,
     required this.label,
     required this.onPressed,
     this.icon,
-    this.color = AppColors.primary,
+    this.color,
   });
 
   @override
   Widget build(BuildContext context) {
+    final color = this.color ?? context.colors.primary;
     return TextButton(
       onPressed: onPressed,
       style: TextButton.styleFrom(
@@ -165,7 +172,7 @@ class AppTextActionButton extends StatelessWidget {
         children: [
           Text(
             label,
-            style: AppTextStyles.button.copyWith(fontSize: 14, color: color),
+            style: context.text.buttonMedium.copyWith(color: color),
           ),
           if (icon != null) ...[
             const SizedBox(width: AppSpacing.xs + 2),

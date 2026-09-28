@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/navigation/app_routes.dart';
 import '../../../core/network/api_service.dart';
+import '../../../core/services/phone_auth_service.dart';
 import '../../../core/storage/app_prefs.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_tokens.dart';
+import '../../../l10n/l10n.dart';
+import '../auth_flow.dart';
 
 /// Brand splash. Holds for a fixed minimum so the logo does not flash, and
-/// resolves the first-run gate while it waits — the welcome carousel is shown
-/// only until it has been completed once.
+/// decides where to go while it waits: the welcome carousel (first run only),
+/// the last dashboard for a returning signed-in user, or sign-in.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -41,21 +45,56 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _bootstrap() async {
-    // Read the flag and hold the splash at the same time, so a slow keystore
+    // Read the flags and hold the splash at the same time, so a slow keystore
     // never adds to the wait a member sees.
-    final results = await Future.wait([
+    final results = await Future.wait<Object?>([
       AppPrefs.hasSeenOnboarding(),
-      Future.delayed(_minimumHold).then((_) => false),
-      // Rehydrate a persisted admin JWT so a returning admin keeps a working
-      // session; result unused, the token lands in ApiService.authToken.
-      ApiService.restoreSession().then((_) => false),
+      AppPrefs.lastRole(),
+      Future<void>.delayed(_minimumHold),
+      // Rehydrate the persisted JWT + member id into ApiService.
+      ApiService.restoreSession(),
     ]);
     if (!mounted) return;
 
-    final seenOnboarding = results.first;
-    Navigator.of(context).pushReplacementNamed(
-      seenOnboarding ? '/login' : '/onboarding',
-    );
+    final seenOnboarding = results[0] == true;
+    final lastRole = results[1] as String?;
+    final nav = Navigator.of(context);
+
+    if (!seenOnboarding) {
+      nav.pushReplacementNamed(AppRoutes.onboarding);
+      return;
+    }
+
+    // Returning user with a live session: straight to their dashboard.
+    final isAdmin = lastRole == 'admin';
+    final hasLiveSession = isAdmin
+        ? !AuthFlow.isJwtExpired(ApiService.authToken)
+        : ApiService.sessionMemberId != null;
+    if (lastRole != null && hasLiveSession) {
+      nav.pushReplacementNamed(
+        isAdmin ? AppRoutes.adminDashboard : AppRoutes.memberDashboard,
+      );
+      return;
+    }
+
+    // Firebase still remembers the verified phone (e.g. admin token expired,
+    // or approval came through): re-resolve it for a fresh session.
+    final phone = PhoneAuthService.instance.currentPhone;
+    if (phone != null) {
+      final result = await AuthFlow.resolve(phone);
+      if (!mounted) return;
+      if (result.status != ResolveStatus.networkError) {
+        AuthFlow.route(nav, result);
+        return;
+      }
+      // Offline: a member with a stored id can still open the app.
+      if (lastRole == 'member' && ApiService.sessionMemberId != null) {
+        nav.pushReplacementNamed(AppRoutes.memberDashboard);
+        return;
+      }
+    }
+
+    nav.pushReplacementNamed(AppRoutes.login);
   }
 
   @override
@@ -69,13 +108,13 @@ class _SplashScreenState extends State<SplashScreen>
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: AppOverlayStyles.fullBleed,
       child: Scaffold(
-        backgroundColor: AppColors.primaryDark,
+        backgroundColor: context.colors.primaryDark,
         // SizedBox.expand is load-bearing: Scaffold hands its body loose
         // constraints, and a Column sizes its cross axis to the widest child,
         // so without it the gradient would only be as wide as the tagline.
         body: SizedBox.expand(
           child: DecoratedBox(
-            decoration: const BoxDecoration(gradient: AppGradients.hero),
+            decoration: BoxDecoration(gradient: context.colors.heroGradient),
             child: SafeArea(
               child: FadeTransition(
                 opacity: _fade,
@@ -92,16 +131,15 @@ class _SplashScreenState extends State<SplashScreen>
                       const SizedBox(height: AppSpacing.lg),
                       Text(
                         'MahalFlow',
-                        style: AppTextStyles.display.copyWith(
+                        style: context.text.display.copyWith(
                           color: Colors.white,
-                          fontSize: 34,
                         ),
                       ),
                       const SizedBox(height: AppSpacing.sm),
                       Text(
-                        'Dues, contributions and receipts\nfor your Mahal',
+                        context.l10n.splashTagline,
                         textAlign: TextAlign.center,
-                        style: AppTextStyles.body.copyWith(
+                        style: context.text.body.copyWith(
                           color: Colors.white.withValues(alpha: 0.76),
                         ),
                       ),
@@ -110,6 +148,7 @@ class _SplashScreenState extends State<SplashScreen>
                         width: 26,
                         height: 26,
                         child: CircularProgressIndicator(
+                          semanticsLabel: context.l10n.commonLoading,
                           strokeWidth: 2.2,
                           valueColor: AlwaysStoppedAnimation(
                             Colors.white.withValues(alpha: 0.7),
@@ -118,8 +157,9 @@ class _SplashScreenState extends State<SplashScreen>
                       ),
                       const SizedBox(height: AppSpacing.lg),
                       Text(
-                        'Secure payments · Verified receipts',
-                        style: AppTextStyles.small.copyWith(
+                        context.l10n.splashFooter,
+                        textAlign: TextAlign.center,
+                        style: context.text.small.copyWith(
                           color: Colors.white.withValues(alpha: 0.6),
                         ),
                       ),
@@ -145,7 +185,7 @@ class _SplashScreenState extends State<SplashScreen>
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(AppRadius.brandMark),
         border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
       ),
       child: const Icon(Icons.mosque_rounded, size: 50, color: Colors.white),

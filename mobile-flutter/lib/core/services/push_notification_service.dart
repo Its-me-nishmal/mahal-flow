@@ -8,6 +8,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../../features/alerts/screens/alert_details_screen.dart';
 import '../network/api_service.dart';
+import '../../l10n/l10n.dart';
 
 /// Root navigator, so a notification tap can route from outside any widget.
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -37,12 +38,14 @@ class PushNotificationService {
   PushNotificationService._();
   static final PushNotificationService instance = PushNotificationService._();
 
-  static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
-    'mahalflow_default',
-    'Notices & payments',
-    description: 'Committee notices, dues reminders and payment updates',
-    importance: Importance.high,
-  );
+  // Built on demand so the channel name follows the app language; Android
+  // updates the name/description when the same id is created again.
+  static AndroidNotificationChannel get _channel => AndroidNotificationChannel(
+        'mahalflow_default',
+        L10n.current.notifChannelName,
+        description: L10n.current.notifChannelDescription,
+        importance: Importance.high,
+      );
 
   /// Bumped whenever a push arrives in the foreground, so open inbox screens
   /// can reload instead of showing a stale list.
@@ -215,13 +218,17 @@ class PushNotificationService {
       case 'ALERT':
         final alertId = data['alert_id']?.toString();
         if (alertId != null && alertId.isNotEmpty) {
-          unawaited(_api.acknowledgeAlert(alertId));
+          // Unknown whether it was unread, so refetch rather than guess the
+          // badge count.
+          unawaited(
+            _api.acknowledgeAlert(alertId).then((_) => _api.getAlerts()),
+          );
         }
         nav.push(MaterialPageRoute(
           builder: (_) => AlertDetailsScreen(
-            title: data['title']?.toString() ?? 'Notice',
+            title: data['title']?.toString() ?? L10n.current.notifNoticeTitle,
             body: data['body']?.toString() ?? '',
-            time: 'Just now',
+            time: L10n.current.dateJustNow,
             type: _alertTypeFor(data),
           ),
         ));
@@ -237,20 +244,9 @@ class PushNotificationService {
     }
   }
 
-  AlertType _alertTypeFor(Map<String, dynamic> data) {
-    switch (data['severity']?.toString().toUpperCase()) {
-      case 'WARNING':
-      case 'ERROR':
-        return AlertType.overdue;
-      case 'SUCCESS':
-        return AlertType.success;
-    }
-    final title = (data['title']?.toString() ?? '').toLowerCase();
-    if (title.contains('payment') || title.contains('due')) {
-      return AlertType.payment;
-    }
-    return AlertType.system;
-  }
+  // Structured fields only (type / audience / severity): a title such as
+  // "Payment received" must not turn into a "Pay Dues Now" prompt.
+  AlertType _alertTypeFor(Map<String, dynamic> data) => alertTypeFromApi(data);
 
   Map<String, dynamic> _decode(String? payload) {
     if (payload == null || payload.isEmpty) return {};

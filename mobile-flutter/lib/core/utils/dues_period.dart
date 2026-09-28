@@ -1,5 +1,7 @@
 import 'package:intl/intl.dart';
 
+import '../../l10n/l10n.dart';
+
 /// Status of a single unpaid monthly obligation.
 enum DueMonthStatus { overdue, dueNow, upcoming }
 
@@ -14,10 +16,10 @@ class DueMonth {
   String get key => DuesPeriod.monthKeyOf(date);
 
   /// "Aug"
-  String get shortLabel => DateFormat('MMM').format(date);
+  String get shortLabel => DateFormat('MMM', L10n.localeName).format(date);
 
   /// "August 2026"
-  String get longLabel => DateFormat('MMMM y').format(date);
+  String get longLabel => DateFormat('MMMM y', L10n.localeName).format(date);
 }
 
 /// Derives unpaid monthly-dues periods from `last_paid_month`.
@@ -77,7 +79,7 @@ class DuesPeriod {
   static String? pendingSummary(String? lastPaidMonth, {DateTime? now}) {
     final count = unpaidMonths(lastPaidMonth, now: now).length;
     if (count == 0) return null;
-    return count == 1 ? '1 pending month' : '$count pending months';
+    return L10n.current.duesPendingMonths(count);
   }
 
   /// Label for months credited on a receipt: "August 2026" or "Jun–Aug 2026".
@@ -88,12 +90,15 @@ class DuesPeriod {
         .toList()
       ..sort();
     if (dates.isEmpty) return '';
-    if (dates.length == 1) return DateFormat('MMMM y').format(dates.first);
+    final locale = L10n.localeName;
+    if (dates.length == 1) {
+      return DateFormat('MMMM y', locale).format(dates.first);
+    }
 
     final first = dates.first;
     final last = dates.last;
-    final start = DateFormat('MMM').format(first);
-    final end = DateFormat('MMM').format(last);
+    final start = DateFormat('MMM', locale).format(first);
+    final end = DateFormat('MMM', locale).format(last);
     if (first.year == last.year) return '$start–$end ${last.year}';
     return '$start ${first.year}–$end ${last.year}';
   }

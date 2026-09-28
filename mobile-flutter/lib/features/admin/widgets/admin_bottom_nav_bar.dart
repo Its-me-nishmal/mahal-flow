@@ -1,34 +1,25 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/navigation/app_routes.dart';
 import '../../../core/widgets/app_bottom_nav_bar.dart';
 
 class AdminBottomNavBar extends StatelessWidget {
+  /// Index into [AppRoutes.adminTabs]; pass -1 on a screen that is not a tab
+  /// (e.g. gateways) so no tab is highlighted and every tab is tappable.
   final int currentIndex;
 
   const AdminBottomNavBar({super.key, required this.currentIndex});
 
   void _onTap(BuildContext context, int index) {
     if (index == currentIndex) return;
-    switch (index) {
-      case 0:
-        Navigator.of(context).pushReplacementNamed('/admin/dashboard');
-        break;
-      case 1:
-        Navigator.of(context).pushReplacementNamed('/admin/members');
-        break;
-      case 2:
-        Navigator.of(context).pushReplacementNamed('/admin/reports');
-        break;
-      case 3:
-        Navigator.of(context).pushReplacementNamed('/admin/audit-logs');
-        break;
-    }
+    // Dashboard stays the stack root, so Back from any tab returns to it.
+    AppNav.switchAdminTab(context, AppRoutes.adminTabs[index]);
   }
 
   @override
   Widget build(BuildContext context) {
     return AppBottomNavBar(
-      currentIndex: currentIndex.clamp(0, 3),
+      currentIndex: currentIndex,
       onTap: (index) => _onTap(context, index),
       items: const [
         AppNavItem(

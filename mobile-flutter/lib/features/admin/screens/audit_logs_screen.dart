@@ -1,14 +1,21 @@
-import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'dart:async';
 
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../../../core/navigation/app_routes.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_tokens.dart';
+import '../../../core/utils/app_date.dart';
+import '../../../core/widgets/app_bottom_sheet.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_page_scaffold.dart';
 import '../../../core/widgets/app_search_bar.dart';
 import '../../../core/widgets/empty_state_view.dart';
 import '../../../core/widgets/shimmer_loading.dart';
+import '../../../l10n/l10n.dart';
+import '../utils/admin_format.dart';
 import '../widgets/admin_bottom_nav_bar.dart';
 
 class AuditLogsScreen extends StatefulWidget {
@@ -19,8 +26,9 @@ class AuditLogsScreen extends StatefulWidget {
 }
 
 class _AuditLogsScreenState extends State<AuditLogsScreen> {
-  final ApiService _apiService = ApiService();
-  final TextEditingController _searchController = TextEditingController();
+  static const int _pageSize = 40;
+  /// Internal filter keys (also what [typeOf] returns); shown via
+  /// [_filterLabel].
   static const List<String> _filters = [
     'All',
     'Payment',
@@ -29,187 +37,382 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
     'System',
   ];
 
-  String _activeFilter = 'All';
+  String _filterLabel(String key) {
+    final l = context.l10n;
+    switch (key) {
+      case 'Payment':
+        return l.auditFilterPayment;
+      case 'Member':
+        return l.auditFilterMember;
+      case 'Alerts':
+        return l.auditFilterAlerts;
+      case 'System':
+        return l.auditFilterSystem;
+      default:
+        return l.auditFilterAll;
+    }
+  }
+
+  final ApiService _api = ApiService();
+  final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scroll = ScrollController();
+  Timer? _debounce;
+
+  final List<Map<String, dynamic>> _logs = [];
+  int _total = 0;
+  int _page = 0;
+  bool _hasMore = true;
   bool _isLoading = true;
-  List<dynamic> _logs = [];
+  bool _loadingMore = false;
+  ApiException? _error;
+  ApiException? _moreError;
+
+  String _activeFilter = 'All';
+  String _query = '';
+  DateTimeRange? _range;
 
   @override
   void initState() {
     super.initState();
-    _loadLogs();
-    _searchController.addListener(() => setState(() {}));
+    _scroll.addListener(_onScroll);
+    _refresh();
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
+    _scroll.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadLogs() async {
-    if (mounted) setState(() => _isLoading = true);
-    final data = await _apiService.getAuditLogs();
-    if (mounted) {
+  Future<void> _refresh() async {
+    setState(() {
+      _isLoading = _logs.isEmpty;
+      _error = null;
+      _moreError = null;
+    });
+    try {
+      final res = await _api.getAuditLogsPage(page: 1, limit: _pageSize);
+      if (!mounted) return;
       setState(() {
-        _logs = data;
+        _logs
+          ..clear()
+          ..addAll(res.items.whereType<Map>().map(Map<String, dynamic>.from));
+        _total = res.total;
+        _page = 1;
+        _hasMore = res.hasMore && res.items.isNotEmpty;
+        _isLoading = false;
+      });
+      _maybeFillViewport();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e;
         _isLoading = false;
       });
     }
   }
 
-  String _formatTimestamp(dynamic rawDate) {
-    if (rawDate == null) return 'Just now';
+  Future<void> _loadMore() async {
+    if (_loadingMore || !_hasMore || _error != null) return;
+    setState(() {
+      _loadingMore = true;
+      _moreError = null;
+    });
     try {
-      final dt = DateTime.parse(rawDate.toString()).toLocal();
-      if (dt.year < 2000) return 'Recent';
-      final diff = DateTime.now().difference(dt);
-      if (diff.inMinutes < 1) return 'Just now';
-      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-      if (diff.inHours < 24) return '${diff.inHours}h ago';
-      return DateFormat('MMM d · h:mm a').format(dt);
-    } catch (_) {
-      return 'Recent';
+      final res =
+          await _api.getAuditLogsPage(page: _page + 1, limit: _pageSize);
+      if (!mounted) return;
+      setState(() {
+        _logs.addAll(res.items.whereType<Map>().map(Map<String, dynamic>.from));
+        _total = res.total;
+        _page = res.page;
+        _hasMore = res.hasMore && res.items.isNotEmpty;
+        _loadingMore = false;
+      });
+      _maybeFillViewport();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _moreError = e;
+        _loadingMore = false;
+      });
     }
   }
 
-  String _deriveType(dynamic action) {
-    final act = action?.toString().toUpperCase() ?? '';
-    if (act.contains('PAYMENT') ||
-        act.contains('DUES') ||
-        act.contains('RECEIPT') ||
-        act.contains('DONATION')) {
+  void _onScroll() {
+    if (_scroll.hasClients && _scroll.position.extentAfter < 400) _loadMore();
+  }
+
+  void _maybeFillViewport() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scroll.hasClients) return;
+      if (_scroll.position.maxScrollExtent < 200 && !_pastRange) _loadMore();
+    });
+  }
+
+  /// Logs arrive newest first; once the oldest loaded entry is before the
+  /// chosen range there is nothing more to find by paging further.
+  bool get _pastRange {
+    final r = _range;
+    if (r == null || _logs.isEmpty) return false;
+    final oldest = AppDate.tryParse(_logs.last['timestamp']);
+    return oldest != null && oldest.isBefore(r.start);
+  }
+
+  void _onSearchChanged(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      setState(() => _query = value.trim().toLowerCase());
+      _maybeFillViewport();
+    });
+  }
+
+  void _clearSearch() {
+    _debounce?.cancel();
+    _searchController.clear();
+    setState(() => _query = '');
+  }
+
+  Future<void> _pickRange() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 5),
+      lastDate: now,
+      initialDateRange: _range,
+      helpText: context.l10n.auditDateRangeHelp,
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _range = DateTimeRange(
+          start:
+              DateTime(picked.start.year, picked.start.month, picked.start.day),
+          end: DateTime(
+              picked.end.year, picked.end.month, picked.end.day, 23, 59, 59),
+        ));
+    _maybeFillViewport();
+  }
+
+  static String typeOf(dynamic action) {
+    final a = action?.toString().toUpperCase() ?? '';
+    if (a.startsWith('MEMBER_')) return 'Member';
+    if (a.startsWith('ALERT_')) return 'Alerts';
+    if (a.contains('PAYMENT') ||
+        a.contains('DONATION') ||
+        a.contains('REFUND') ||
+        a.startsWith('AUTOPAY_')) {
       return 'Payment';
     }
-    if (act.contains('MEMBER') || act.contains('PROFILE')) return 'Member';
-    if (act.contains('ALERT') || act.contains('BROADCAST')) return 'Alerts';
     return 'System';
   }
 
   List<Map<String, dynamic>> get _filteredLogs {
-    final query = _searchController.text.trim().toLowerCase();
-    return _logs
-        .whereType<Map>()
-        .map((raw) => Map<String, dynamic>.from(raw))
-        .where((l) {
-      final type = _deriveType(l["action"]);
-      final action = (l["action"] ?? '').toString().toLowerCase();
-      final details = (l["details"] ?? '').toString().toLowerCase();
-      final actor = (l["actor"] ?? '').toString().toLowerCase();
-
-      final matchesType = _activeFilter == 'All' || type == _activeFilter;
-      final matchesQuery = query.isEmpty ||
-          action.contains(query) ||
-          details.contains(query) ||
-          actor.contains(query);
-
-      return matchesType && matchesQuery;
+    final q = _query;
+    final r = _range;
+    return _logs.where((l) {
+      if (_activeFilter != 'All' && typeOf(l['action']) != _activeFilter) {
+        return false;
+      }
+      if (r != null) {
+        final t = AppDate.tryParse(l['timestamp'] ?? l['created_at']);
+        if (t == null || t.isBefore(r.start) || t.isAfter(r.end)) return false;
+      }
+      if (q.isEmpty) return true;
+      return [l['action'], l['details'], l['actor'], l['entity_id']]
+          .map((v) => (v ?? '').toString().toLowerCase())
+          .any((v) => v.contains(q));
     }).toList();
+  }
+
+  bool get _isFiltering =>
+      _query.isNotEmpty || _activeFilter != 'All' || _range != null;
+
+  String get _subtitle {
+    final l = context.l10n;
+    if (_isLoading) return l.auditSubtitleLoading;
+    if (_error != null) return l.auditSubtitleUnavailable;
+    if (!_isFiltering) return l.auditSubtitleShowing(_logs.length, _total);
+    final n = _filteredLogs.length;
+    return _hasMore && !_pastRange
+        ? l.auditSubtitleMatchesLoaded(n, _logs.length, _total)
+        : l.auditSubtitleMatching(n);
   }
 
   @override
   Widget build(BuildContext context) {
-    final displayed = _filteredLogs;
-
+    final r = _range;
+    final l = context.l10n;
+    final filterLabels = [for (final f in _filters) _filterLabel(f)];
     return AppPageScaffold(
-      title: 'Audit log',
-      eyebrow: 'Committee',
-      subtitle: _isLoading
-          ? 'Loading the log…'
-          : '${displayed.length} recorded actions',
-      onBack: () {
-        if (Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
-        } else {
-          Navigator.of(context).pushReplacementNamed('/admin/dashboard');
-        }
-      },
+      title: l.auditTitle,
+      eyebrow: l.auditEyebrow,
+      subtitle: _subtitle,
+      onBack: () => AppNav.adminHome(context),
       actions: [
         AppHeaderIconButton(
-          icon: Icons.refresh_rounded,
-          tooltip: 'Refresh',
-          onTap: _loadLogs,
+          icon:
+              r == null ? Icons.date_range_outlined : Icons.event_busy_outlined,
+          tooltip: r == null ? l.auditFilterByDate : l.auditClearDateFilter,
+          onTap: r == null ? _pickRange : () => setState(() => _range = null),
         ),
       ],
       headerChild: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           AppSearchBar(
             controller: _searchController,
-            hintText: 'Search action, actor or details…',
+            hintText: l.auditSearchHint,
+            onChanged: _onSearchChanged,
+            onClear: _clearSearch,
           ),
           const SizedBox(height: AppSpacing.ms),
           AppHeroFilterChips(
-            options: _filters,
-            selected: _activeFilter,
-            onSelected: (val) => setState(() => _activeFilter = val),
+            options: filterLabels,
+            selected: _filterLabel(_activeFilter),
+            onSelected: (label) {
+              final i = filterLabels.indexOf(label);
+              setState(() => _activeFilter = i < 0 ? 'All' : _filters[i]);
+              _maybeFillViewport();
+            },
           ),
+          if (r != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              '${AppDate.formatDate(r.start)} – ${AppDate.formatDate(r.end)}',
+              style: context.text.small.copyWith(color: AdminHeroColors.muted),
+            ),
+          ],
         ],
       ),
       expandedChild: RefreshIndicator(
-        onRefresh: _loadLogs,
-        color: AppColors.primary,
-        backgroundColor: AppColors.surface,
-        child: _isLoading
-            ? _skeleton()
-            : displayed.isEmpty
-                ? _empty()
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.screenH,
-                      AppSpacing.md,
-                      AppSpacing.screenH,
-                      AppSpacing.xl,
-                    ),
-                    itemCount: displayed.length,
-                    separatorBuilder: (_, __) =>
-                        const SizedBox(height: AppSpacing.sm),
-                    itemBuilder: (context, index) {
-                      final log = displayed[index];
-                      return _logEntry(log, _deriveType(log["action"]));
-                    },
-                  ),
+        onRefresh: _refresh,
+        color: context.colors.primary,
+        backgroundColor: context.colors.surface,
+        child: _body(),
       ),
       bottomNavigationBar: const AdminBottomNavBar(currentIndex: 3),
     );
   }
 
-  Widget _logEntry(Map<String, dynamic> log, String type) {
-    late final Color typeColor;
-    late final Color typeBg;
-    late final IconData typeIcon;
+  Widget _body() {
+    if (_isLoading) return _skeleton();
+    if (_error != null) {
+      return AppErrorStateView(
+        title: context.l10n.auditLoadError,
+        description: _error!.userMessage,
+        onRetry: _refresh,
+      );
+    }
+    final displayed = _filteredLogs;
+    final canLoadMore = _hasMore && !_pastRange;
+    if (displayed.isEmpty && !canLoadMore) return _empty();
 
+    return ListView.separated(
+      controller: _scroll,
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.screenH,
+        AppSpacing.md,
+        AppSpacing.screenH,
+        AppSpacing.xl,
+      ),
+      itemCount: displayed.length + 1,
+      separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
+      itemBuilder: (context, index) {
+        if (index == displayed.length) return _footer(canLoadMore);
+        return _logEntry(displayed[index]);
+      },
+    );
+  }
+
+  Widget _footer(bool canLoadMore) {
+    if (_moreError != null) {
+      return AppNoticeCard(
+        icon: Icons.cloud_off_rounded,
+        title: context.l10n.auditLoadOlderError,
+        message: _moreError!.userMessage,
+        color: context.colors.error,
+        background: context.colors.errorBg,
+        actionLabel: context.l10n.auditTryAgain,
+        onAction: _loadMore,
+      );
+    }
+    if (canLoadMore) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+        child: Center(
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2.4),
+          ),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+      child: Text(
+        _pastRange
+            ? context.l10n.auditEndOfRange
+            : context.l10n.auditStartOfLog,
+        textAlign: TextAlign.center,
+        style: context.text.caption,
+      ),
+    );
+  }
+
+  ({Color color, Color bg, IconData icon}) _style(String type) {
     switch (type) {
       case 'Payment':
-        typeColor = AppColors.success;
-        typeBg = AppColors.successBg;
-        typeIcon = Icons.payments_outlined;
+        return (
+          color: context.colors.success,
+          bg: context.colors.successBg,
+          icon: Icons.payments_outlined
+        );
       case 'Member':
-        typeColor = AppColors.info;
-        typeBg = AppColors.infoBg;
-        typeIcon = Icons.person_outline_rounded;
+        return (
+          color: context.colors.info,
+          bg: context.colors.infoBg,
+          icon: Icons.person_outline_rounded
+        );
       case 'Alerts':
-        typeColor = AppColors.warning;
-        typeBg = AppColors.warningBg;
-        typeIcon = Icons.campaign_outlined;
+        return (
+          color: context.colors.warning,
+          bg: context.colors.warningBg,
+          icon: Icons.campaign_outlined
+        );
       default:
-        typeColor = AppColors.textSecondary;
-        typeBg = AppColors.neutralBg;
-        typeIcon = Icons.settings_outlined;
+        return (
+          color: context.colors.textSecondary,
+          bg: context.colors.neutralBg,
+          icon: Icons.settings_outlined
+        );
     }
+  }
 
-    final action = log["action"]?.toString() ?? 'SYSTEM_ACTION';
-    final details = log["details"]?.toString() ?? action;
-    final actor = log["actor"]?.toString() ?? 'System';
-    final timeStr = _formatTimestamp(log["created_at"] ?? log["timestamp"]);
+  Widget _logEntry(Map<String, dynamic> log) {
+    final type = typeOf(log['action']);
+    final s = _style(type);
+    final action = AdminFormat.humanize(log['action']?.toString(),
+        fallback: context.l10n.auditSystemAction);
+    final details = (log['details']?.toString().trim().isNotEmpty ?? false)
+        ? log['details'].toString()
+        : action;
+    final actor = log['actor']?.toString().trim() ?? '';
+    final time = AppDate.relative(log['timestamp'] ?? log['created_at']);
 
     return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.md - 2),
+      padding: const EdgeInsets.all(AppSpacing.ms),
+      onTap: () => _showDetail(log),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AppIconChip(
-            icon: typeIcon,
-            color: typeColor,
-            background: typeBg,
+            icon: s.icon,
+            color: s.color,
+            background: s.bg,
             size: 38,
           ),
           const SizedBox(width: AppSpacing.ms),
@@ -219,56 +422,120 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
               children: [
                 Row(
                   children: [
-                    StatusPill(
-                      label: type,
-                      foreground: typeColor,
-                      background: typeBg,
-                    ),
-                    const Spacer(),
-                    Text(
-                      timeStr,
-                      style: AppTextStyles.small.copyWith(
-                        color: AppColors.textMuted,
+                    Flexible(
+                      child: StatusPill(
+                        label: action,
+                        foreground: s.color,
+                        background: s.bg,
                       ),
                     ),
+                    const SizedBox(width: AppSpacing.sm),
+                    const Spacer(),
+                    Text(time,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.text.caption),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
                   details,
-                  style: AppTextStyles.body.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style:
+                      context.text.body.copyWith(fontWeight: FontWeight.w500),
                 ),
-                const SizedBox(height: 2),
-                Text('By $actor', style: AppTextStyles.small),
+                const SizedBox(height: AppSpacing.xs / 2),
+                Text(context.l10n.auditBy(actor.isEmpty ? '—' : actor),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.text.small),
               ],
             ),
           ),
+          const SizedBox(width: AppSpacing.xs),
+          Icon(Icons.chevron_right_rounded,
+              size: 20, color: context.colors.textMuted),
+        ],
+      ),
+    );
+  }
+
+  void _showDetail(Map<String, dynamic> log) {
+    String v(dynamic x) {
+      final s = x?.toString().trim() ?? '';
+      return s.isEmpty ? '—' : s;
+    }
+
+    final entity = log['entity_id']?.toString() ?? '';
+    final l = context.l10n;
+    AppBottomSheet.show(
+      context: context,
+      title: AdminFormat.humanize(log['action']?.toString(),
+          fallback: l.auditLogEntry),
+      subtitle: AppDate.formatDateTime(log['timestamp'] ?? log['created_at']),
+      icon: _style(typeOf(log['action'])).icon,
+      builder: (ctx, _) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppDetailRow(label: l.auditDetailAction, value: v(log['action'])),
+          Divider(height: 1, color: context.colors.border),
+          AppDetailRow(label: l.auditDetailBy, value: v(log['actor'])),
+          Divider(height: 1, color: context.colors.border),
+          AppDetailRow(
+            label: l.auditDetailRecord,
+            value: v(entity),
+            copyable: entity.isNotEmpty,
+            onCopy: entity.isEmpty
+                ? null
+                : () {
+                    Clipboard.setData(ClipboardData(text: entity));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(l.auditRecordIdCopied)),
+                    );
+                  },
+          ),
+          Divider(height: 1, color: context.colors.border),
+          AppDetailRow(label: l.auditDetailIp, value: v(log['ip_address'])),
+          Divider(height: 1, color: context.colors.border),
+          const SizedBox(height: AppSpacing.ms),
+          Text(l.auditDetailsHeading, style: context.text.label),
+          const SizedBox(height: AppSpacing.xs),
+          SelectableText(v(log['details']), style: context.text.body),
         ],
       ),
     );
   }
 
   Widget _empty() {
-    final hasQuery = _searchController.text.isNotEmpty;
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      children: [
-        SizedBox(height: MediaQuery.sizeOf(context).height * 0.06),
-        EmptyStateView(
-          icon: Icons.history_rounded,
-          title: 'No entries',
-          description: hasQuery
-              ? "Nothing matches '${_searchController.text}'."
-              : "No '$_activeFilter' actions have been recorded yet.",
-        ),
-      ],
+    final l = context.l10n;
+    if (_logs.isEmpty) {
+      return EmptyStateView(
+        icon: Icons.history_rounded,
+        title: l.auditEmptyTitle,
+        description: l.auditEmptyDesc,
+      );
+    }
+    return EmptyStateView(
+      icon: Icons.history_rounded,
+      title: l.auditNoMatchTitle,
+      description: _query.isNotEmpty
+          ? l.auditNoMatchQuery(_searchController.text.trim())
+          : l.auditNoMatchFilters,
+      actionLabel: l.auditClearFilters,
+      onAction: () {
+        _clearSearch();
+        setState(() {
+          _activeFilter = 'All';
+          _range = null;
+        });
+      },
     );
   }
 
   Widget _skeleton() {
     return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.screenH,
         AppSpacing.md,
@@ -276,8 +543,14 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
         AppSpacing.xl,
       ),
       children: [
-        for (var i = 0; i < 6; i++)
-          const ShimmerLoading(child: ShimmerCardSkeleton(height: 80)),
+        ShimmerLoading(
+          semanticsLabel: context.l10n.auditLoadingSemantics,
+          child: Column(
+            children: [
+              for (var i = 0; i < 6; i++) const ShimmerCardSkeleton(height: 80),
+            ],
+          ),
+        ),
       ],
     );
   }

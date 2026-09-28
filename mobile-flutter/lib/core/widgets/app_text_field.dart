@@ -3,15 +3,27 @@ import 'package:flutter/services.dart';
 
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
+import '../../l10n/l10n.dart';
 
 /// Labelled text input. One field style across every form in the app.
-class AppTextField extends StatelessWidget {
+///
+/// The visible label above the box is merged into the field's semantics, so a
+/// screen reader announces "Mobile number, edit box" rather than an
+/// unlabelled field. Set [obscureText] for secrets; an eye toggle is added
+/// automatically unless [suffix] is supplied.
+class AppTextField extends StatefulWidget {
   final TextEditingController? controller;
   final String label;
   final String? hint;
+
+  /// Helper line under the field. [helperText] wins over the older [helper].
+  final String? helperText;
   final String? helper;
   final String? errorText;
   final IconData? icon;
+
+  /// Fixed text before the input, e.g. "+91 ".
+  final String? prefixText;
   final Widget? suffix;
   final TextInputType keyboardType;
   final List<TextInputFormatter>? inputFormatters;
@@ -19,19 +31,32 @@ class AppTextField extends StatelessWidget {
   final int? maxLength;
   final bool enabled;
   final bool readOnly;
+
+  /// Starting text when no [controller] is given.
   final String? initialValue;
   final ValueChanged<String>? onChanged;
   final VoidCallback? onTap;
   final TextCapitalization textCapitalization;
+  final bool obscureText;
+  final Iterable<String>? autofillHints;
+  final FocusNode? focusNode;
+  final bool autofocus;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
+
+  /// Overrides the label announced by screen readers.
+  final String? semanticsLabel;
 
   const AppTextField({
     super.key,
     this.controller,
     required this.label,
     this.hint,
+    this.helperText,
     this.helper,
     this.errorText,
     this.icon,
+    this.prefixText,
     this.suffix,
     this.keyboardType = TextInputType.text,
     this.inputFormatters,
@@ -43,7 +68,46 @@ class AppTextField extends StatelessWidget {
     this.onChanged,
     this.onTap,
     this.textCapitalization = TextCapitalization.none,
+    this.obscureText = false,
+    this.autofillHints,
+    this.focusNode,
+    this.autofocus = false,
+    this.textInputAction,
+    this.onSubmitted,
+    this.semanticsLabel,
   });
+
+  @override
+  State<AppTextField> createState() => _AppTextFieldState();
+}
+
+class _AppTextFieldState extends State<AppTextField> {
+  late bool _obscured = widget.obscureText;
+  TextEditingController? _ownController;
+
+  TextEditingController? get _controller => widget.controller ?? _ownController;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.controller == null && widget.initialValue != null) {
+      _ownController = TextEditingController(text: widget.initialValue);
+    }
+  }
+
+  @override
+  void dispose() {
+    _ownController?.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant AppTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.obscureText != widget.obscureText) {
+      _obscured = widget.obscureText;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,61 +118,99 @@ class AppTextField extends StatelessWidget {
       );
     }
 
+    final enabled = widget.enabled;
+    Widget? suffix = widget.suffix;
+    if (suffix == null && widget.obscureText) {
+      suffix = IconButton(
+        tooltip: _obscured
+            ? context.l10n.commonShowLabel(widget.label)
+            : context.l10n.commonHideLabel(widget.label),
+        icon: Icon(
+          _obscured ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+          size: 19,
+          color: context.colors.textMuted,
+        ),
+        onPressed: () => setState(() => _obscured = !_obscured),
+      );
+    }
+
+    final field = TextField(
+      controller: _controller,
+      onChanged: widget.onChanged,
+      onTap: widget.onTap,
+      onSubmitted: widget.onSubmitted,
+      enabled: enabled,
+      readOnly: widget.readOnly,
+      keyboardType: widget.keyboardType,
+      inputFormatters: widget.inputFormatters,
+      // Obscured fields must be single line.
+      maxLines: widget.obscureText ? 1 : widget.maxLines,
+      maxLength: widget.maxLength,
+      textCapitalization: widget.textCapitalization,
+      obscureText: _obscured,
+      enableSuggestions: !widget.obscureText,
+      autocorrect: !widget.obscureText,
+      autofillHints: enabled ? widget.autofillHints : null,
+      focusNode: widget.focusNode,
+      autofocus: widget.autofocus,
+      textInputAction: widget.textInputAction,
+      style: context.text.body.copyWith(
+        fontWeight: FontWeight.w500,
+        color: enabled ? context.colors.textPrimary : context.colors.textMuted,
+      ),
+      decoration: InputDecoration(
+        hintText: widget.hint,
+        counterText: '',
+        helperText: widget.helperText ?? widget.helper,
+        helperMaxLines: 3,
+        helperStyle: context.text.caption,
+        errorText: widget.errorText,
+        errorMaxLines: 3,
+        errorStyle: context.text.caption.copyWith(color: context.colors.error),
+        hintStyle: context.text.body.copyWith(color: context.colors.textMuted),
+        prefixIcon: widget.icon == null
+            ? null
+            : Icon(widget.icon, size: 19, color: context.colors.textMuted),
+        prefixText: widget.prefixText,
+        prefixStyle: context.text.body.copyWith(
+          fontWeight: FontWeight.w500,
+          color: context.colors.textSecondary,
+        ),
+        suffixIcon: suffix,
+        filled: true,
+        fillColor: enabled ? context.colors.surface : context.colors.background,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md - 2,
+          vertical: AppSpacing.ms + 2,
+        ),
+        border: border(context.colors.border),
+        enabledBorder: border(context.colors.border),
+        disabledBorder: border(context.colors.border),
+        focusedBorder: border(context.colors.primary, width: 1.6),
+        errorBorder: border(context.colors.error),
+        focusedErrorBorder: border(context.colors.error, width: 1.6),
+      ),
+    );
+
+    final labelText = Text(
+      widget.label,
+      style: context.text.small.copyWith(
+        fontWeight: FontWeight.w600,
+        color: context.colors.textSecondary,
+      ),
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: AppTextStyles.small.copyWith(
-            fontWeight: FontWeight.w600,
-            color: AppColors.textSecondary,
-          ),
-        ),
+        // The visible label is decoration; the field carries it semantically.
+        ExcludeSemantics(child: labelText),
         const SizedBox(height: AppSpacing.sm - 2),
-        TextField(
-          controller: controller,
-          onChanged: onChanged,
-          onTap: onTap,
-          enabled: enabled,
-          readOnly: readOnly,
-          keyboardType: keyboardType,
-          inputFormatters: inputFormatters,
-          maxLines: maxLines,
-          maxLength: maxLength,
-          textCapitalization: textCapitalization,
-          style: AppTextStyles.body.copyWith(
-            fontWeight: FontWeight.w500,
-            color: enabled ? AppColors.textPrimary : AppColors.textMuted,
-          ),
-          decoration: InputDecoration(
-            hintText: hint,
-            counterText: '',
-            helperText: helper,
-            helperStyle: AppTextStyles.small.copyWith(fontSize: 11.5),
-            errorText: errorText,
-            errorStyle: AppTextStyles.small.copyWith(
-              fontSize: 11.5,
-              color: AppColors.error,
-            ),
-            hintStyle: AppTextStyles.body.copyWith(color: AppColors.textMuted),
-            prefixIcon: icon == null
-                ? null
-                : Icon(icon, size: 19, color: AppColors.textMuted),
-            suffixIcon: suffix,
-            filled: true,
-            fillColor: enabled ? AppColors.surface : AppColors.background,
-            isDense: true,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md - 2,
-              vertical: AppSpacing.ms + 2,
-            ),
-            border: border(AppColors.border),
-            enabledBorder: border(AppColors.border),
-            disabledBorder: border(AppColors.border),
-            focusedBorder: border(AppColors.primary, width: 1.6),
-            errorBorder: border(AppColors.error),
-            focusedErrorBorder: border(AppColors.error, width: 1.6),
-          ),
+        Semantics(
+          label: widget.semanticsLabel ?? widget.label,
+          textField: true,
+          child: field,
         ),
       ],
     );
@@ -138,9 +240,9 @@ class AppReadOnlyField extends StatelessWidget {
       children: [
         Text(
           label,
-          style: AppTextStyles.small.copyWith(
+          style: context.text.small.copyWith(
             fontWeight: FontWeight.w600,
-            color: AppColors.textSecondary,
+            color: context.colors.textSecondary,
           ),
         ),
         const SizedBox(height: AppSpacing.sm - 2),
@@ -151,33 +253,33 @@ class AppReadOnlyField extends StatelessWidget {
             vertical: AppSpacing.ms + 4,
           ),
           decoration: BoxDecoration(
-            color: AppColors.background,
+            color: context.colors.background,
             borderRadius: BorderRadius.circular(AppRadius.button),
-            border: Border.all(color: AppColors.border),
+            border: Border.all(color: context.colors.border),
           ),
           child: Row(
             children: [
               if (icon != null) ...[
-                Icon(icon, size: 18, color: AppColors.textMuted),
+                Icon(icon, size: 18, color: context.colors.textMuted),
                 const SizedBox(width: AppSpacing.sm),
               ],
               Expanded(
                 child: Text(
                   value,
-                  style: AppTextStyles.body.copyWith(
+                  style: context.text.body.copyWith(
                     fontWeight: FontWeight.w500,
-                    color: AppColors.textSecondary,
+                    color: context.colors.textSecondary,
                   ),
                 ),
               ),
-              const Icon(Icons.lock_outline_rounded,
-                  size: 15, color: AppColors.textMuted),
+              Icon(Icons.lock_outline_rounded,
+                  size: 15, color: context.colors.textMuted),
             ],
           ),
         ),
         if (note != null) ...[
           const SizedBox(height: AppSpacing.xs + 2),
-          Text(note!, style: AppTextStyles.small.copyWith(fontSize: 11.5)),
+          Text(note!, style: context.text.caption),
         ],
       ],
     );
@@ -215,29 +317,33 @@ class AppDropdownField<T> extends StatelessWidget {
       children: [
         Text(
           label,
-          style: AppTextStyles.small.copyWith(
+          style: context.text.small.copyWith(
             fontWeight: FontWeight.w600,
-            color: AppColors.textSecondary,
+            color: context.colors.textSecondary,
           ),
         ),
         const SizedBox(height: AppSpacing.sm - 2),
         DropdownButtonFormField<T>(
+          // initialValue is only read on first build; keying on the value
+          // rebuilds the field when the parent changes it.
+          key: ValueKey<T>(value),
           initialValue: value,
           isExpanded: true,
-          style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w500),
+          dropdownColor: context.colors.surfaceRaised,
+          style: context.text.body.copyWith(fontWeight: FontWeight.w500),
           decoration: InputDecoration(
             filled: true,
-            fillColor: AppColors.surface,
+            fillColor: context.colors.surface,
             isDense: true,
             helperText: helper,
-            helperStyle: AppTextStyles.small.copyWith(fontSize: 11.5),
+            helperStyle: context.text.caption,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.md - 2,
               vertical: AppSpacing.ms + 2,
             ),
-            border: border(AppColors.border),
-            enabledBorder: border(AppColors.border),
-            focusedBorder: border(AppColors.primary, width: 1.6),
+            border: border(context.colors.border),
+            enabledBorder: border(context.colors.border),
+            focusedBorder: border(context.colors.primary, width: 1.6),
           ),
           items: items,
           onChanged: onChanged,

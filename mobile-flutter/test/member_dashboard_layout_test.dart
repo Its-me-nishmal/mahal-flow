@@ -94,11 +94,13 @@ void main() {
   });
 
   group('balance card', () {
-    Widget card({required double outstanding, List<DueMonth> months = const []}) {
+    Widget card(
+        {required double outstanding, List<DueMonth> months = const []}) {
       return BalanceCard(
         outstanding: outstanding,
         advanceCredit: 0,
-        pendingSummary: months.isEmpty ? null : '${months.length} pending months',
+        pendingSummary:
+            months.isEmpty ? null : '${months.length} pending months',
         months: months,
         paidUpToLabel: 'August 2026',
         onPayDues: () {},
@@ -180,7 +182,7 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('Jun–Aug 2026 Dues'), findsOneWidget);
       expect(find.textContaining('Contribution'), findsNothing);
-      expect(find.text('Paid on Aug 15, 2026'), findsOneWidget);
+      expect(find.text('Paid on 15 Aug 2026'), findsOneWidget);
     });
   });
 

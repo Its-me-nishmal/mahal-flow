@@ -1,0 +1,2062 @@
+{
+  "@@locale": "en",
+  "adminCommitteeEyebrow": "Committee",
+  "adminMenu": "Menu",
+  "adminTryAgain": "Try again",
+  "adminViewAll": "View all",
+  "adminAddMember": "Add member",
+  "adminRecordPayment": "Record payment",
+  "adminPendingApprovals": "Pending approvals",
+  "adminBroadcastNotice": "Broadcast a notice",
+  "adminBulkImport": "Bulk import",
+  "adminReceiptAction": "Receipt",
+  "adminMemberRegistered": "{name} was registered.",
+  "@adminMemberRegistered": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "adminFullName": "Full name",
+  "adminMobileNumber": "Mobile number",
+  "adminMonthlyDuesRupees": "Monthly dues (₹)",
+  "adminPhoneInvalid": "Enter a 10-digit mobile number",
+  "adminEditMember": "Edit member",
+  "adminNavDashboard": "Dashboard",
+  "adminNavMembers": "Members",
+  "adminNavReports": "Reports",
+  "adminNavLogs": "Logs",
+  "adminFormatStatusActive": "Active",
+  "adminFormatStatusGrace": "Grace period",
+  "adminFormatStatusAwaiting": "Awaiting approval",
+  "adminFormatStatusSuspended": "Suspended",
+  "adminFormatStatusInactive": "Inactive",
+  "adminFormatStatusRejected": "Rejected",
+  "adminFormatMonths": "{count, plural, =1{1 month} other{{count} months}}",
+  "@adminFormatMonths": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "adminFormatMonthlyDues": "Monthly dues",
+  "adminFormatContribution": "Contribution",
+  "adminFormatPayment": "Payment",
+  "adminDashSubscriptionActive": "Subscription active",
+  "adminDashSubscriptionUnknown": "Subscription —",
+  "adminDashSubscriptionStatus": "Subscription: {status}",
+  "@adminDashSubscriptionStatus": {
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "adminDashLoadingCollection": "Loading collection summary",
+  "adminDashTotalCollectedCaps": "TOTAL COLLECTED",
+  "adminDashTotalCollected": "Total collected",
+  "adminDashTotalCollectedSpoken": "Total collected {amount}",
+  "@adminDashTotalCollectedSpoken": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "adminDashOutstandingAcrossMahal": "{amount} still outstanding across the Mahal.",
+  "@adminDashOutstandingAcrossMahal": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "adminDashCollectionRate": "Collection rate",
+  "adminDashPaidOfTotal": "{paid} of {total} members · {pct}%",
+  "@adminDashPaidOfTotal": {
+    "placeholders": {
+      "paid": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "pct": {
+        "type": "int"
+      }
+    }
+  },
+  "adminDashPercentValue": "{pct} percent",
+  "@adminDashPercentValue": {
+    "placeholders": {
+      "pct": {
+        "type": "int"
+      }
+    }
+  },
+  "adminDashPendingDues": "Pending dues",
+  "adminDashMembersPaid": "Members paid",
+  "adminDashOfHouseholds": "of {total} households",
+  "@adminDashOfHouseholds": {
+    "placeholders": {
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "adminDashMembersPending": "Members pending",
+  "adminDashNeedReminder": "need a reminder",
+  "adminDashOverview": "Overview",
+  "adminDashLoadingOverview": "Loading overview",
+  "adminDashTransactionsError": "Couldn't load transactions",
+  "adminDashLoadingTransactions": "Loading transactions",
+  "adminDashNoTransactions": "No transactions yet",
+  "adminDashNoTransactionsBody": "Payments appear here as members pay or you record cash.",
+  "adminDashBroadcastBody": "Send an announcement or a dues reminder to every member, only those with pending dues, or family heads.",
+  "adminDashComposeNotice": "Compose notice",
+  "adminDashTitle": "Dashboard",
+  "adminDashLiveLedger": "Live ledger",
+  "adminDashMahalLiveLedger": "{mahal} · live ledger",
+  "@adminDashMahalLiveLedger": {
+    "placeholders": {
+      "mahal": {
+        "type": "String"
+      }
+    }
+  },
+  "adminDashLoadError": "Couldn't load the dashboard",
+  "adminDashRecentTransactions": "Recent transactions",
+  "adminDashPendingApprovalsWaiting": "Pending approvals · {count} waiting",
+  "@adminDashPendingApprovalsWaiting": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "adminDashRecordedFor": "{amount} recorded for {name}",
+  "@adminDashRecordedFor": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "adminDashTheMember": "the member",
+  "adminDashNoticeSent": "Notice sent to members.",
+  "drawerFinancialReports": "Financial reports",
+  "drawerPaymentGateways": "Payment gateways",
+  "drawerAuditLog": "Audit log",
+  "drawerSwitchToMember": "Switch to member view",
+  "drawerSignOut": "Sign out",
+  "drawerSignOutTitle": "Sign out?",
+  "drawerSignOutMessage": "You will need to verify your phone number again to open the committee portal.",
+  "drawerCommitteePortal": "Committee portal",
+  "drawerCommitteePortalReg": "Committee portal · {reg}",
+  "@drawerCommitteePortalReg": {
+    "placeholders": {
+      "reg": {
+        "type": "String"
+      }
+    }
+  },
+  "drawerBadgeWaiting": "{count} waiting",
+  "@drawerBadgeWaiting": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "membersTitle": "Members",
+  "membersEyebrow": "Directory",
+  "membersFilterAll": "All",
+  "membersFilterActive": "Active",
+  "membersFilterGrace": "Grace Period",
+  "membersFilterSuspended": "Suspended",
+  "membersFilterPending": "Pending",
+  "membersLoadingDirectory": "Loading the directory…",
+  "membersDirectoryUnavailable": "Directory unavailable",
+  "membersShowingOf": "Showing {shown} of {total} households",
+  "@membersShowingOf": {
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "membersMatchesLoaded": "{shown} matches in {loaded} of {total} loaded",
+  "@membersMatchesLoaded": {
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "loaded": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "membersMatchCount": "{shown} of {total} households match",
+  "@membersMatchCount": {
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "membersSearchHint": "Search name, phone, house or code…",
+  "membersLoadError": "Couldn't load members",
+  "membersLoadMoreError": "Couldn't load more members",
+  "membersNoMatchesYet": "No matches in the {loaded} loaded so far — searching the rest…",
+  "@membersNoMatchesYet": {
+    "placeholders": {
+      "loaded": {
+        "type": "int"
+      }
+    }
+  },
+  "membersAllLoaded": "All {total} households loaded",
+  "@membersAllLoaded": {
+    "placeholders": {
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "membersDuesPerMonth": "{amount}/mo",
+  "@membersDuesPerMonth": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "membersEmptyTitle": "No members yet",
+  "membersEmptyBody": "Register households one by one or import a spreadsheet.",
+  "membersNotFound": "No members found",
+  "membersNothingMatches": "Nothing matches '{query}'.",
+  "@membersNothingMatches": {
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "membersNoneInStatus": "No households are in '{status}' status.",
+  "@membersNoneInStatus": {
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "membersShowAll": "Show all",
+  "membersLoading": "Loading members",
+  "addMemberTitle": "Register a member",
+  "addMemberSubtitle": "Adds a household to the Mahal directory",
+  "addMemberNameRequired": "Enter the member's full name",
+  "addMemberPhoneRequired": "Enter a phone number",
+  "addMemberDuesInvalid": "Enter the monthly dues in whole rupees (at least ₹1)",
+  "addMemberNameHint": "e.g. Abdul Kareem",
+  "addMemberHouseLabel": "House name (optional)",
+  "addMemberHouseHint": "e.g. Darussalam",
+  "addMemberDuesHint": "As agreed by the committee",
+  "addMemberError": "Couldn't register this member",
+  "addMemberSubmit": "Register member",
+  "memberDetailsPaid": "Paid",
+  "memberDetailsDue": "Due",
+  "memberDetailsOverdue": "Overdue",
+  "memberDetailsRecorded": "{amount} recorded",
+  "@memberDetailsRecorded": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "memberDetailsNoValidPhone": "This member has no valid mobile number on record.",
+  "memberDetailsReminderNameFallback": "member",
+  "memberDetailsReminderMahalFallback": "the Mahal committee",
+  "memberDetailsReminderWithAmount": "Assalamu alaikum {name}, this is a reminder from {mahal} that your monthly dues are pending. Pending amount: {amount}. You can pay in the MahalFlow app. Thank you.",
+  "@memberDetailsReminderWithAmount": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "mahal": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "memberDetailsReminderNoAmount": "Assalamu alaikum {name}, this is a reminder from {mahal} that your monthly dues are pending. You can pay in the MahalFlow app. Thank you.",
+  "@memberDetailsReminderNoAmount": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "mahal": {
+        "type": "String"
+      }
+    }
+  },
+  "memberDetailsReminderTitle": "Send a dues reminder",
+  "memberDetailsReminderSubtitle": "Opens your messaging app with the text filled in",
+  "memberDetailsReminderTo": "To {phone}. Nothing is sent until you press send in the other app.",
+  "@memberDetailsReminderTo": {
+    "placeholders": {
+      "phone": {
+        "type": "String"
+      }
+    }
+  },
+  "memberDetailsOpenWhatsApp": "Open WhatsApp",
+  "memberDetailsOpenSms": "Open SMS",
+  "memberDetailsWhatsAppFailed": "Couldn't open WhatsApp on this phone.",
+  "memberDetailsSmsFailed": "Couldn't open the SMS app on this phone.",
+  "memberDetailsSendReminderTooltip": "Send dues reminder",
+  "memberDetailsNoPhone": "No phone on record",
+  "memberDetailsMemberCode": "Member code {code}",
+  "@memberDetailsMemberCode": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "memberDetailsIdLabel": "ID {id}",
+  "@memberDetailsIdLabel": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "memberDetailsIncompleteTitle": "This member record is incomplete",
+  "memberDetailsIncompleteBody": "It has no member ID, so its history cannot be loaded and no payment can be recorded. Go back and open the member again from the directory.",
+  "memberDetailsBackToMembers": "Back to members",
+  "memberDetailsSinceJoining": "Since joining",
+  "memberDetailsLastSixMonths": "Last six months",
+  "memberDetailsMonthlyDuesCaps": "MONTHLY DUES",
+  "memberDetailsLoadingHistory": "Loading payment history…",
+  "memberDetailsHistoryUnavailable": "Payment history unavailable.",
+  "memberDetailsNoDuesMonths": "No dues months yet.",
+  "memberDetailsAllPaid": "Paid every month shown below.",
+  "memberDetailsUnpaidCount": "{unpaid} of {total} recent months unpaid.",
+  "@memberDetailsUnpaidCount": {
+    "placeholders": {
+      "unpaid": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "memberDetailsOutstanding": "Outstanding",
+  "memberDetailsPaidUpTo": "Paid up to",
+  "memberDetailsHouse": "House",
+  "memberDetailsNotRecorded": "Not recorded",
+  "memberDetailsMemberSince": "Member since",
+  "memberDetailsLoadingDues": "Loading dues history",
+  "memberDetailsDuesError": "Couldn't load dues history",
+  "memberDetailsNoDuesTitle": "No dues yet",
+  "memberDetailsNoDuesBody": "Dues start from the month the member joined.",
+  "memberDetailsReceiptNumber": "Receipt {number}",
+  "@memberDetailsReceiptNumber": {
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
+  "memberDetailsOpenReceipt": "Open receipt",
+  "editMemberNameRequired": "A name is required",
+  "editMemberPhoneRequired": "A phone number is required",
+  "editMemberDuesInvalid": "Monthly dues must be at least ₹1",
+  "editMemberSaveFailed": "Couldn't save the changes. {reason}",
+  "@editMemberSaveFailed": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "editMemberSuspendFailed": "Couldn't suspend this member. {reason}",
+  "@editMemberSuspendFailed": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "editMemberReactivateFailed": "Couldn't reactivate this member. {reason}",
+  "@editMemberReactivateFailed": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "editMemberUpdated": "Member details updated.",
+  "editMemberSuspendTitle": "Suspend this member?",
+  "editMemberSuspendMessage": "Dues collection for {name} will be put on hold until you reactivate them. Their history is kept.",
+  "@editMemberSuspendMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "editMemberSuspend": "Suspend",
+  "editMemberReactivateTitle": "Reactivate this member?",
+  "editMemberReactivateMessage": "{name} becomes active again and dues collection resumes.",
+  "@editMemberReactivateMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "editMemberReactivate": "Reactivate",
+  "editMemberNowSuspended": "This member is now suspended.",
+  "editMemberActiveAgain": "This member is active again.",
+  "editMemberDiscardTitle": "Discard changes?",
+  "editMemberDiscardMessage": "Your edits to this member have not been saved.",
+  "editMemberDiscard": "Discard",
+  "editMemberKeepEditing": "Keep editing",
+  "editMemberSubtitle": "Changes take effect for the next dues cycle.",
+  "editMemberHousehold": "Household",
+  "editMemberHouseLabel": "House or family name",
+  "editMemberMembership": "Membership",
+  "editMemberDuesHelper": "Change only when the committee agreed a new amount.",
+  "editMemberStatusLabel": "Membership status",
+  "editMemberReversibleTitle": "Suspending is reversible",
+  "editMemberReversibleBody": "A suspended household keeps its history and can be reactivated from this screen.",
+  "editMemberSaveChanges": "Save changes",
+  "editMemberReactivateMember": "Reactivate member",
+  "editMemberSuspendMember": "Suspend member",
+  "approvalsApproved": "{name} approved.",
+  "@approvalsApproved": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "approvalsViewMember": "View member",
+  "approvalsApproveFailed": "Couldn't approve. {reason}",
+  "@approvalsApproveFailed": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "approvalsRejectFailed": "Couldn't reject. {reason}",
+  "@approvalsRejectFailed": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "approvalsThisPerson": "this person",
+  "approvalsRejectTitle": "Reject this request?",
+  "approvalsRejectMessage": "{name} will not be added to the Mahal. They would need to register again to be reconsidered.",
+  "@approvalsRejectMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "approvalsRejectRequest": "Reject request",
+  "approvalsRejected": "Request from {name} rejected.",
+  "@approvalsRejected": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "approvalsSubtitleDefault": "New members waiting to join your Mahal.",
+  "approvalsSubtitleNone": "Nobody is waiting right now.",
+  "approvalsSubtitleCount": "{count, plural, =1{1 person is waiting to join.} other{{count} people are waiting to join.}}",
+  "@approvalsSubtitleCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "approvalsLoading": "Loading requests",
+  "approvalsLoadError": "Couldn't load requests",
+  "approvalsEmptyTitle": "No pending requests",
+  "approvalsEmptyBody": "Everyone who asked to join has been reviewed.",
+  "approvalsRequested": "Requested {when}",
+  "@approvalsRequested": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "approvalsNoId": "This request has no member ID and cannot be actioned here.",
+  "approvalsReject": "Reject",
+  "approvalsApprove": "Approve",
+  "auditFilterAll": "All",
+  "auditFilterPayment": "Payment",
+  "auditFilterMember": "Member",
+  "auditFilterAlerts": "Alerts",
+  "auditFilterSystem": "System",
+  "auditDateRangeHelp": "Show entries between",
+  "auditSubtitleLoading": "Loading the log…",
+  "auditSubtitleUnavailable": "Log unavailable",
+  "auditSubtitleShowing": "Showing {shown} of {total} actions",
+  "@auditSubtitleShowing": {
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "auditSubtitleMatchesLoaded": "{count} matches in {loaded} of {total} loaded",
+  "@auditSubtitleMatchesLoaded": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "loaded": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "auditSubtitleMatching": "{count} matching actions",
+  "@auditSubtitleMatching": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "auditTitle": "Audit log",
+  "auditEyebrow": "Committee",
+  "auditFilterByDate": "Filter by date",
+  "auditClearDateFilter": "Clear date filter",
+  "auditSearchHint": "Search action, actor, details or ID…",
+  "auditLoadError": "Couldn't load the audit log",
+  "auditLoadOlderError": "Couldn't load older entries",
+  "auditTryAgain": "Try again",
+  "auditEndOfRange": "End of the selected dates",
+  "auditStartOfLog": "Start of the log",
+  "auditSystemAction": "System action",
+  "auditLogEntry": "Log entry",
+  "auditDetailAction": "Action",
+  "auditDetailBy": "By",
+  "auditDetailRecord": "Record",
+  "auditRecordIdCopied": "Record ID copied",
+  "auditDetailIp": "IP address",
+  "auditDetailsHeading": "DETAILS",
+  "auditBy": "By {actor}",
+  "@auditBy": {
+    "placeholders": {
+      "actor": {
+        "type": "String"
+      }
+    }
+  },
+  "auditEmptyTitle": "No entries yet",
+  "auditEmptyDesc": "Actions by the committee and the system appear here.",
+  "auditNoMatchTitle": "No matching entries",
+  "auditNoMatchQuery": "Nothing matches '{query}'.",
+  "@auditNoMatchQuery": {
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "auditNoMatchFilters": "Nothing matches these filters.",
+  "auditClearFilters": "Clear filters",
+  "auditLoadingSemantics": "Loading the audit log",
+  "reportsFilterAll": "All",
+  "reportsFilterDues": "Dues",
+  "reportsFilterContribution": "Contribution",
+  "reportsAllTime": "All time",
+  "reportsAllTypes": "All types",
+  "reportsTitle": "Reports",
+  "reportsEyebrow": "Finance",
+  "reportsShareSubject": "{mahal} statement — {period}",
+  "@reportsShareSubject": {
+    "placeholders": {
+      "mahal": {
+        "type": "String"
+      },
+      "period": {
+        "type": "String"
+      }
+    }
+  },
+  "reportsExportError": "Couldn't create the statement. {error}",
+  "@reportsExportError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "reportsLoadError": "Couldn't load reports",
+  "reportsPeriod": "Period",
+  "reportsPreparing": "Preparing statement…",
+  "reportsExport": "Export statement (PDF)",
+  "reportsMonthByMonth": "Month by month",
+  "reportsTransactions": "Transactions",
+  "reportsTotalCollected": "TOTAL COLLECTED",
+  "reportsAllTimeAllTypes": "All time · all types",
+  "reportsTotalsError": "Couldn't load totals",
+  "reportsTryAgain": "Try again",
+  "reportsLoadingTotals": "Loading totals",
+  "reportsDues": "Dues",
+  "reportsContributions": "Contributions",
+  "reportsPendingDues": "Pending dues",
+  "reportsTransactionsError": "Couldn't load transactions",
+  "reportsLoadingPeriod": "Loading period totals",
+  "reportsSuccessfulPayments": "{count, plural, =1{1 successful payment} other{{count} successful payments}}",
+  "@reportsSuccessfulPayments": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "reportsBasedOnRecent": "Based on the {count} most recent transactions.",
+  "@reportsBasedOnRecent": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "reportsLoadingBreakdown": "Loading breakdown",
+  "reportsNoPayments": "No payments",
+  "reportsNoPaymentsDesc": "No successful payments match this period and type.",
+  "reportsShowingOf": "Showing {shown} of {total}. The PDF statement lists all of them.",
+  "@reportsShowingOf": {
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "reportsPaymentsRecorded": "{count, plural, =1{1 payment recorded} other{{count} payments recorded}}",
+  "@reportsPaymentsRecorded": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "importStepChoose": "Choose",
+  "importStepValidate": "Validate",
+  "importStepReview": "Review",
+  "importStepDone": "Done",
+  "importErrorExtension": "Choose an .xlsx, .xls or .csv file.",
+  "importErrorEmpty": "That file is empty.",
+  "importErrorPicker": "Couldn't open the file picker. {error}",
+  "@importErrorPicker": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "importTemplateSubject": "MahalFlow member import template",
+  "importTemplateError": "Couldn't create the template. {error}",
+  "@importTemplateError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "importTitle": "Import members",
+  "importStepOf": "Step {step} of {total}",
+  "@importStepOf": {
+    "placeholders": {
+      "step": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "importSubtitle": "Bring a whole directory in from a spreadsheet.",
+  "importUploadProgress": "Upload progress",
+  "importValidating": "Validating on the server…",
+  "importUploading": "Uploading {percent}%",
+  "@importUploading": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "importFileError": "Couldn't use this file",
+  "importGetTemplate": "Get the template",
+  "importTemplateDesc": "A CSV with name, phone, house_name and monthly_dues columns. Save or send it from the share sheet.",
+  "importNothingSaved": "Nothing is saved yet",
+  "importNothingSavedDesc": "The server checks the file first. You review its results before anything is written to the directory.",
+  "importUploadValidate": "Upload & validate",
+  "importSelectedFileSemantics": "Selected file {name}. Tap to choose a different file.",
+  "@importSelectedFileSemantics": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "importChooseSpreadsheet": "Choose a spreadsheet",
+  "importAccepts": "Accepts .xlsx, .xls and .csv files",
+  "importTapToChange": "Tap to choose a different file",
+  "importConfirmTitle": "{count, plural, =1{Import 1 member?} other{Import {count} members?}}",
+  "@importConfirmTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "importConfirmMessage": "They are added to the directory straight away. Rows with problems are skipped.",
+  "importConfirm": "Import",
+  "importServerStatus": "The server reported \"{status}\" — nothing was confirmed as imported.",
+  "@importServerStatus": {
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "importCheckRows": "Check the rows",
+  "importEyebrow": "Import",
+  "importNothingToReview": "Nothing to review",
+  "importNothingToReviewDesc": "Upload a spreadsheet first to see its rows here.",
+  "importChooseFile": "Choose a file",
+  "importOnlyValid": "Only valid rows will be imported.",
+  "importStatTotal": "Total",
+  "importStatValid": "Valid",
+  "importStatInvalid": "Invalid",
+  "importStatDuplicate": "Duplicate",
+  "importStatImported": "Imported",
+  "importStatSkipped": "Skipped",
+  "importStatUnknown": "unknown",
+  "importStatSemantics": "{label} {value}",
+  "@importStatSemantics": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "importRowsSkipped": "{count, plural, =1{1 row will be skipped} other{{count} rows will be skipped}}",
+  "@importRowsSkipped": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "importFixRows": "Fix them in the spreadsheet and import again to add them.",
+  "importNotCompleted": "Import not completed",
+  "importRowsInFile": "Rows in your file",
+  "importSample": "Sample: {shown} of {total} rows",
+  "@importSample": {
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "importNoPreview": "No row preview",
+  "importNoPreviewDesc": "The server did not return any rows to preview.",
+  "importNoValidRows": "No valid rows to import",
+  "importButton": "{count, plural, =1{Import 1 member} other{Import {count} members}}",
+  "@importButton": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "importChooseAnother": "Choose another file",
+  "importNoPhone": "No phone",
+  "importDuesPerMonth": "₹{amount}/mo",
+  "@importDuesPerMonth": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "importFinished": "Import finished",
+  "importServerConfirmed": "The server confirmed the import.",
+  "importDetailFile": "File",
+  "importDetailStatus": "Status",
+  "importDetailBatch": "Batch",
+  "importGoToMembers": "Go to members",
+  "gatewayKeyNotShown": "Not shown in the app",
+  "gatewayTitle": "Gateways",
+  "gatewayEyebrow": "Payments",
+  "gatewaySubtitle": "Where member payments are processed.",
+  "gatewayManagedTitle": "Managed from web admin",
+  "gatewayManagedDesc": "Gateway keys, webhook secrets and routing are set up in the MahalFlow web admin. This screen is read-only and never shows secrets.",
+  "gatewayConfigured": "Configured gateways",
+  "gatewayLoading": "Loading gateways",
+  "gatewayLoadError": "Couldn't load gateways",
+  "gatewayEmptyTitle": "No gateways configured",
+  "gatewayEmptyDesc": "Set one up in the web admin to accept online payments.",
+  "gatewayPrimaryHeading": "PRIMARY GATEWAY",
+  "gatewayActiveCount": "{active} of {total} active",
+  "@gatewayActiveCount": {
+    "placeholders": {
+      "active": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "gatewayLoadingShort": "Loading…",
+  "gatewayNoneSet": "None set",
+  "gatewayRoutedHere": "Member payments are routed here first.",
+  "gatewayPrimaryRoute": "Primary route",
+  "gatewayFallbackRoute": "Fallback route",
+  "gatewayKeyId": "Key ID",
+  "gatewayId": "Gateway ID",
+  "broadcastTitle": "Broadcast a notice",
+  "broadcastSubtitle": "Goes to member phones as an in-app notice",
+  "broadcastAudienceAll": "All members",
+  "broadcastAudienceOverdue": "Pending dues",
+  "broadcastAudienceFamilyHeads": "Family heads",
+  "broadcastReminderTitle": "Monthly dues reminder",
+  "broadcastReminderBody": "Respected member, our records show pending dues for your household. You can pay in the MahalFlow app.",
+  "broadcastRecipientsOverdueAll": "every household with pending dues",
+  "broadcastRecipientsOverdueCount": "{count, plural, =1{1 household with pending dues} other{{count} households with pending dues}}",
+  "@broadcastRecipientsOverdueCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "broadcastRecipientsFamilyHeads": "every family head",
+  "broadcastRecipientsAll": "every member",
+  "broadcastRecipientsAllCount": "{count, plural, =1{all 1 household} other{all {count} households}}",
+  "@broadcastRecipientsAllCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "broadcastSendsTo": "Sends to {recipients}.",
+  "@broadcastSendsTo": {
+    "placeholders": {
+      "recipients": {
+        "type": "String"
+      }
+    }
+  },
+  "broadcastTitleRequired": "Add a title",
+  "broadcastMessageRequired": "Write the message",
+  "broadcastConfirmTitle": "Send this notice?",
+  "broadcastConfirmMessage": "\"{title}\" goes to {recipients} as an in-app notice and a push notification. It cannot be unsent.",
+  "@broadcastConfirmMessage": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "recipients": {
+        "type": "String"
+      }
+    }
+  },
+  "broadcastSendNotice": "Send notice",
+  "broadcastWhoHeading": "WHO SHOULD GET THIS",
+  "broadcastNoticeTitle": "Notice title",
+  "broadcastTitleHint": "e.g. Friday prayer timing change",
+  "broadcastMessage": "Message",
+  "broadcastMessageHint": "Write the full announcement…",
+  "broadcastPriority": "Priority",
+  "broadcastPriorityInfo": "Informational",
+  "broadcastPriorityReminder": "Dues reminder",
+  "broadcastPriorityCritical": "Critical",
+  "broadcastNotSent": "Notice not sent",
+  "broadcastReviewSend": "Review & send",
+  "recordPayTitle": "Record a cash payment",
+  "recordPaySubtitle": "Issues a signed receipt in the member's name",
+  "recordPayThisMember": "this member",
+  "recordPayConfirmTitle": "Record {amount}?",
+  "@recordPayConfirmTitle": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "recordPayConfirmMessage": "{amount} in cash from {name} for {period} ({months}). A signed receipt is issued and cannot be edited afterwards.",
+  "@recordPayConfirmMessage": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      },
+      "period": {
+        "type": "String"
+      },
+      "months": {
+        "type": "String"
+      }
+    }
+  },
+  "recordPayConfirm": "Record payment",
+  "recordPayLoadingMembers": "Loading members",
+  "recordPayMembersError": "Couldn't load members",
+  "recordPayTryAgain": "Try again",
+  "recordPayNoMembers": "No members in the directory yet.",
+  "recordPayNoMatch": "No member matches \"{query}\".",
+  "@recordPayNoMatch": {
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "recordPayShowing": "Showing {shown} of {total}. Search to narrow down.",
+  "@recordPayShowing": {
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "recordPayMemberHeading": "MEMBER",
+  "recordPaySearchHint": "Search name, phone or house…",
+  "recordPayNoId": "This member record has no ID, so a payment cannot be recorded.",
+  "recordPayNoDues": "No monthly dues amount is set for this member. Edit the member first.",
+  "recordPayNoAnchor": "This member has no last-paid month on record, so the next due month is unknown.",
+  "recordPayDuesNotSet": "Monthly dues not set",
+  "recordPayPerMonth": "{amount} a month",
+  "@recordPayPerMonth": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "recordPayChange": "Change",
+  "recordPayCantRecord": "Can't record yet",
+  "recordPayMonthsHeading": "HOW MANY MONTHS",
+  "recordPayCovers": "Covers {period} — dues are paid in order, starting after the last paid month.",
+  "@recordPayCovers": {
+    "placeholders": {
+      "period": {
+        "type": "String"
+      }
+    }
+  },
+  "recordPayMethodHeading": "PAYMENT METHOD",
+  "recordPayMethodDesc": "Cash collected by the committee. Online payments are recorded automatically when members pay in the app.",
+  "recordPayTotal": "Total to record",
+  "recordPayNotRecorded": "Payment not recorded",
+  "recordPayReview": "Review & record",
+  "receiptSheetTitle": "Receipt",
+  "receiptSheetSubtitle": "Signed entry in the Mahal ledger",
+  "receiptSheetLoading": "Loading receipt",
+  "receiptSheetLoadError": "Couldn't load this receipt",
+  "receiptSheetTryAgain": "Try again",
+  "receiptSheetNumber": "Receipt number",
+  "receiptSheetPayer": "Payer",
+  "receiptSheetAmount": "Amount",
+  "receiptSheetType": "Type",
+  "receiptSheetMonths": "Months",
+  "receiptSheetDate": "Date",
+  "receiptSheetHash": "Ledger hash",
+  "receiptSheetVerify": "Verify on ledger",
+  "receiptSheetVerifyAgain": "Verify again",
+  "receiptSheetValid": "Signature valid",
+  "receiptSheetValidDesc": "The recomputed hash matches — this receipt has not been altered.",
+  "receiptSheetMismatch": "Signature mismatch",
+  "receiptSheetMismatchDesc": "The stored hash does not match the receipt contents. Report this to the committee before relying on it.",
+  "receiptSheetVerifyFailed": "Couldn't verify",
+  "receiptSheetTryAgainDot": "Try again.",
+  "authMobileNumber": "Mobile number",
+  "authFullName": "Full name",
+  "authSignOut": "Sign out",
+  "authServerUnreachable": "Couldn't reach the server. Check your connection and try again.",
+  "authSignedInServerUnreachable": "Signed in, but could not reach the server. Try again.",
+  "authInvalidPhone": "Enter a valid mobile number",
+  "authTooManyRequests": "Too many attempts. Wait a few minutes and try again.",
+  "authQuotaExceeded": "Too many codes were sent. Try again later.",
+  "authNetworkFailed": "No internet connection. Check your connection and try again.",
+  "authSessionExpired": "This code has expired. Tap “Resend code” for a new one.",
+  "authInvalidCode": "That code is incorrect. Try again.",
+  "authAppNotVerified": "This app could not be verified for sign-in. Update the app or try again later.",
+  "splashTagline": "Dues, contributions and receipts\nfor your Mahal",
+  "splashFooter": "Secure payments · Verified receipts",
+  "onboardingSlide1Title": "Know exactly what you owe",
+  "onboardingSlide1Body": "Your monthly dues, pending months and advance credit — all on one screen, updated the moment a payment clears.",
+  "onboardingSlide1Point1": "Outstanding balance at a glance",
+  "onboardingSlide1Point2": "Month-by-month breakdown",
+  "onboardingSlide2Title": "Give in a few taps",
+  "onboardingSlide2Body": "Pay dues or contribute to the Mahal fund with UPI, cards or net banking. AutoPay can handle the monthly dues for you.",
+  "onboardingSlide2Point1": "UPI, card and net banking",
+  "onboardingSlide2Point2": "Optional AutoPay mandate",
+  "onboardingSlide3Title": "Every payment has a receipt",
+  "onboardingSlide3Body": "Each transaction produces a receipt you can verify, download and share — so the committee and you always see the same record.",
+  "onboardingSlide3Point1": "Each receipt can be verified by the committee",
+  "onboardingSlide3Point2": "Download as PDF anytime",
+  "onboardingSkipSemantics": "Skip introduction",
+  "onboardingGetStarted": "Get Started",
+  "onboardingPageOf": "Page {current} of {total}",
+  "@onboardingPageOf": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "loginTitle": "Welcome back",
+  "loginSubtitle": "Sign in to see your dues, pay them and keep your receipts.",
+  "loginPhoneRequired": "Enter your registered mobile number",
+  "loginPhoneInvalid": "Enter a valid 10-digit mobile number",
+  "loginSendTimeout": "Sending the code is taking too long. Check your connection and try again.",
+  "loginSendFailed": "Could not send the code. Try again.",
+  "loginDemoServerError": "Could not reach the server. Check the connection and retry.",
+  "loginLinkOpenFailed": "Could not open the page.",
+  "loginSignIn": "Sign in",
+  "loginPhoneHelper": "We’ll send a 6-digit code to this number.",
+  "loginDemoTitle": "Demo access · debug build",
+  "loginDemoBody": "Skip OTP and open a dashboard with local seed data. Hidden in release builds.",
+  "loginDemoCommittee": "Committee",
+  "loginTermsPrefix": "By continuing you agree to our ",
+  "loginTermsLink": "Terms of Service",
+  "loginTermsAnd": " and ",
+  "loginPrivacyLink": "Privacy Policy",
+  "loginTermsSuffix": ".",
+  "loginLinkSemantics": "{label}, link",
+  "@loginLinkSemantics": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "otpTitle": "Verify your number",
+  "otpSubtitle": "Enter the 6-digit code sent to {phone}.",
+  "@otpSubtitle": {
+    "placeholders": {
+      "phone": {
+        "type": "String"
+      }
+    }
+  },
+  "otpSectionLabel": "One-time password",
+  "otpCodeLabel": "6-digit code",
+  "otpCodeRequired": "Enter the 6-digit code",
+  "otpVerificationFailed": "Verification failed. Try again.",
+  "otpNewCodeSent": "A new code has been sent.",
+  "otpResendFailed": "Could not resend the code. Try again.",
+  "otpSending": "Sending…",
+  "otpResendIn": "Resend code in {seconds}s",
+  "@otpResendIn": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "otpResend": "Resend code",
+  "otpVerifying": "Verifying…",
+  "otpVerifyContinue": "Verify & continue",
+  "otpChangeNumber": "Change number",
+  "pendingApprovalStillWaiting": "Still awaiting approval. We’ll let you in as soon as the committee approves.",
+  "pendingApprovalTitle": "Waiting for approval",
+  "pendingApprovalRequestSent": "Your request has been sent.",
+  "pendingApprovalThanks": "Thanks, {name}.",
+  "@pendingApprovalThanks": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pendingApprovalBody": "The Mahal committee needs to approve your account before you can view dues and pay.",
+  "pendingApprovalNoticeTitle": "Almost there",
+  "pendingApprovalNoticeBody": "You’ll get access as soon as the committee approves you. Tap “Check again” or pull down to refresh, or come back later.",
+  "pendingApprovalChecking": "Checking…",
+  "pendingApprovalCheckAgain": "Check again",
+  "registerNameRequired": "Enter your full name",
+  "registerMahalIdRequired": "Enter your Mahal ID",
+  "registerTitle": "Confirm your identity",
+  "registerSubtitle": "This number isn’t registered yet. Tell us who you are and the committee will approve you.",
+  "registerDetailsLabel": "Your details",
+  "registerNameHint": "As known to the committee",
+  "registerMahalIdLabel": "Mahal ID",
+  "registerMahalIdHint": "e.g. MH_001_CALICUT",
+  "registerMahalIdHelper": "Your Mahal committee can give you this ID if you don’t have it.",
+  "registerVerifiedByOtp": "Verified by OTP.",
+  "registerNotSent": "Not sent",
+  "registerNextTitle": "What happens next",
+  "registerNextBody": "Your request goes to the Mahal committee. Once they approve you, sign in again with this number to see your dues and receipts.",
+  "registerSubmitting": "Submitting…",
+  "registerRequestJoin": "Request to join",
+  "registerDifferentNumber": "Use a different number",
+  "profileRefreshFailed": "Couldn't refresh. {message}",
+  "@profileRefreshFailed": {
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "profileUpdated": "Your details were updated.",
+  "profileLogoutTitle": "Log out?",
+  "profileLogoutMessage": "You will need your mobile number to sign in again.",
+  "profileLogout": "Log Out",
+  "profileEyebrow": "Your account",
+  "profileEditTooltip": "Edit your details",
+  "profileLoading": "Loading your profile",
+  "profileLoadError": "Couldn't load your profile",
+  "profileLoadErrorFallback": "Try again in a moment.",
+  "profileSectionPayments": "Payments",
+  "profileAutopay": "AutoPay",
+  "profileAutopaySubtitle": "UPI mandate for your monthly dues",
+  "profileReceipts": "Receipts",
+  "profileReceiptsSubtitle": "Every payment you have made",
+  "profilePayDues": "Pay dues",
+  "profilePayDuesSubtitle": "Clear pending months",
+  "profileSectionApp": "App",
+  "profileNotices": "Notices",
+  "profileNoticesSubtitle": "Announcements from the committee",
+  "profileHelpSubtitle": "Contact your Mahal committee office",
+  "profileReplayWelcome": "Replay welcome",
+  "profileReplayWelcomeSubtitle": "Show the introduction again",
+  "profileVersion": "MahalFlow · v{version}",
+  "@profileVersion": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "profileMembership": "Membership",
+  "profileMemberId": "Member ID",
+  "profileMahal": "Mahal",
+  "profileEmail": "Email",
+  "profileAddress": "Address",
+  "profileEditDetails": "Edit details",
+  "editProfileNameRequired": "Your name cannot be empty",
+  "editProfileEmailInvalid": "That does not look like an email address",
+  "editProfilePincodeInvalid": "A PIN code has 6 digits",
+  "editProfileSaveFailed": "Couldn't save your details. Check your connection and try again.",
+  "editProfileDiscardTitle": "Discard changes?",
+  "editProfileDiscardMessage": "Your edits have not been saved.",
+  "editProfileDiscard": "Discard",
+  "editProfileKeepEditing": "Keep Editing",
+  "editProfileTitle": "Edit details",
+  "editProfileSubtitle": "Keep your contact details current so receipts reach you.",
+  "editProfileManagedNote": "Your mobile number and member ID are managed by the committee.",
+  "editProfilePersonal": "Personal",
+  "editProfileEmail": "Email",
+  "editProfileEmailHint": "you@example.com",
+  "editProfileMobileNote": "Contact the Mahal office to change this.",
+  "editProfileAddress": "Address",
+  "editProfileHouse": "House name or number",
+  "editProfileStreet": "Street or landmark (optional)",
+  "editProfileCity": "City",
+  "editProfileState": "State",
+  "editProfilePincode": "PIN code",
+  "editProfileOfficeKeepsTitle": "What the office keeps",
+  "editProfileOfficeKeepsBody": "Your name and house name are saved to your membership record. Email, street, city and PIN code are not kept by the office yet.",
+  "editProfileSaving": "Saving…",
+  "editProfileSave": "Save Changes",
+  "helpOpenFailed": "Couldn't open that app.",
+  "helpTitle": "Help & support",
+  "helpContactNamed": "For questions about your dues, receipts or AutoPay, contact the {mahalName} office.",
+  "@helpContactNamed": {
+    "placeholders": {
+      "mahalName": {
+        "type": "String"
+      }
+    }
+  },
+  "helpContactGeneric": "For questions about your dues, receipts or AutoPay, contact your Mahal committee office.",
+  "helpContactNamedNoPhone": "For questions about your dues, receipts or AutoPay, contact the {mahalName} office in person or at their usual number.",
+  "@helpContactNamedNoPhone": {
+    "placeholders": {
+      "mahalName": {
+        "type": "String"
+      }
+    }
+  },
+  "helpContactGenericNoPhone": "For questions about your dues, receipts or AutoPay, contact your Mahal committee office in person or at their usual number.",
+  "helpTipPending": "A payment that shows \"Pending\" usually clears in a few minutes. Do not pay again while it is pending.",
+  "helpTipReceipts": "Every confirmed payment has a receipt under Receipts.",
+  "helpTipOffice": "Your mobile number and member ID can only be changed by the office.",
+  "helpWhatsApp": "WhatsApp",
+  "helpCall": "Call",
+  "appName": "MahalFlow",
+  "commonCancel": "Cancel",
+  "commonConfirm": "Confirm",
+  "commonClose": "Close",
+  "commonBack": "Back",
+  "commonTryAgain": "Try Again",
+  "commonSave": "Save",
+  "commonContinue": "Continue",
+  "commonDone": "Done",
+  "commonOk": "OK",
+  "commonYes": "Yes",
+  "commonNo": "No",
+  "commonEdit": "Edit",
+  "commonDelete": "Delete",
+  "commonRemove": "Remove",
+  "commonView": "View",
+  "commonSeeAll": "See all",
+  "commonSearch": "Search",
+  "commonClearSearch": "Clear search",
+  "commonLoading": "Loading",
+  "commonUnavailable": "Unavailable",
+  "commonSomethingWentWrong": "Something went wrong",
+  "commonGoBack": "Go back",
+  "commonUndo": "Undo",
+  "commonShare": "Share",
+  "commonDownload": "Download",
+  "commonSubmit": "Submit",
+  "commonNext": "Next",
+  "commonSkip": "Skip",
+  "commonProfile": "Profile",
+  "commonMember": "Member",
+  "commonCopyLabel": "Copy {label}",
+  "@commonCopyLabel": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "commonCopiedLabel": "{label} copied",
+  "@commonCopiedLabel": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "commonShowLabel": "Show {label}",
+  "@commonShowLabel": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "commonHideLabel": "Hide {label}",
+  "@commonHideLabel": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "commonStatusLabel": "Status: {label}",
+  "@commonStatusLabel": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "commonUnreadCount": "{label}, {count} unread",
+  "@commonUnreadCount": {
+    "description": "Screen-reader label for a badge.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonNewBadge": "{label}, new",
+  "@commonNewBadge": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "navHome": "Home",
+  "navPay": "Pay",
+  "navReceipts": "Receipts",
+  "navNotices": "Notices",
+  "navProfile": "Profile",
+  "settingsTitle": "Settings",
+  "settingsAppearance": "Appearance",
+  "settingsTheme": "Theme",
+  "themeSystem": "System default",
+  "themeLight": "Light",
+  "themeDark": "Dark",
+  "settingsLanguage": "Language",
+  "languageSystem": "System default",
+  "languageEnglish": "English",
+  "languageMalayalam": "മലയാളം",
+  "settingsLanguageTooltip": "Change language",
+  "errorNetwork": "Couldn't reach the server. Check your connection and try again.",
+  "errorSessionExpired": "Your session has expired. Sign in again to continue.",
+  "errorForbidden": "You don't have access to this.",
+  "errorNotFound": "We couldn't find that record.",
+  "errorBadRequest": "That request could not be completed.",
+  "errorServer": "The server had a problem. Try again in a moment.",
+  "errorBadResponse": "The server sent an unexpected response. Try again.",
+  "dateJustNow": "Just now",
+  "dateMinutesAgo": "{count} min ago",
+  "@dateMinutesAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dateHoursAgo": "{count} h ago",
+  "@dateHoursAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dateYesterday": "Yesterday",
+  "dateDaysAgo": "{count} days ago",
+  "@dateDaysAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "inrSpokenRupees": "{amount} rupees",
+  "@inrSpokenRupees": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "inrSpokenRupeesPaise": "{rupees} rupees {paise} paise",
+  "@inrSpokenRupeesPaise": {
+    "placeholders": {
+      "rupees": {
+        "type": "String"
+      },
+      "paise": {
+        "type": "int"
+      }
+    }
+  },
+  "duesPendingMonths": "{count, plural, =1{1 pending month} other{{count} pending months}}",
+  "@duesPendingMonths": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "statusPaid": "Paid",
+  "statusActive": "Active",
+  "statusCompleted": "Completed",
+  "statusApproved": "Approved",
+  "statusVerified": "Verified",
+  "statusSuccess": "Success",
+  "statusPending": "Pending",
+  "statusProcessing": "Processing",
+  "statusInitiated": "Initiated",
+  "statusPartial": "Partial",
+  "statusDue": "Due",
+  "statusFailed": "Failed",
+  "statusOverdue": "Overdue",
+  "statusInactive": "Inactive",
+  "statusCancelled": "Cancelled",
+  "statusRejected": "Rejected",
+  "statusInfo": "Info",
+  "statusDraft": "Draft",
+  "statusScheduled": "Scheduled",
+  "statusUnknown": "Unknown",
+  "notifChannelName": "Notices & payments",
+  "notifChannelDescription": "Committee notices, dues reminders and payment updates",
+  "notifNoticeTitle": "Notice",
+  "routeNotFoundTitle": "Page not found",
+  "routeNotFoundHeading": "This page isn’t available",
+  "routeNotFoundBody": "The link you followed may be out of date. Head back and try again.",
+  "settingsRowTitle": "Appearance & language",
+  "errorNoFileSelected": "No file was selected.",
+  "homeYourMahal": "Your Mahal",
+  "homeLoadingMahal": "Loading your Mahal…",
+  "dashboardRefreshFailed": "Couldn't refresh. {message}",
+  "@dashboardRefreshFailed": {
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "homeLoadErrorTitle": "Couldn't load your dues",
+  "homeLoadErrorBody": "Check your connection and try again.",
+  "homeContribute": "Contribute",
+  "homeContributeCaption": "Zakat and general fund",
+  "homeReceipts": "Receipts",
+  "homeReceiptsCaption": "All past payments",
+  "homeNotices": "Notices",
+  "homeNoticesCaption": "From the committee",
+  "homeProfile": "Profile",
+  "homeProfileCaption": "Details and settings",
+  "homeOpenProfile": "Open your profile",
+  "homeHelp": "Help",
+  "homeGreeting": "Assalamu Alaikum",
+  "homeMonthlyDuesLabel": "MONTHLY DUES",
+  "homeOutstandingDuesLabel": "OUTSTANDING DUES",
+  "homeUpToDate": "Up to Date",
+  "homeActionRequired": "Action Required",
+  "homeNoOutstandingSemantics": "No outstanding dues",
+  "homeOutstandingSemantics": "Outstanding dues {amount}",
+  "@homeOutstandingSemantics": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "homeAdvanceCredit": "Advance credit {amount}",
+  "@homeAdvanceCredit": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "homeAllDuesPaid": "All monthly dues paid in full.",
+  "homeAllDuesPaidUpTo": "All dues paid up to {month}.",
+  "@homeAllDuesPaidUpTo": {
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "homePendingDues": "Pending monthly dues.",
+  "homeMonthOverdueSemantics": "{month}, overdue",
+  "@homeMonthOverdueSemantics": {
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "homeMonthDueNowSemantics": "{month}, due now",
+  "@homeMonthDueNowSemantics": {
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "homePayAmount": "Pay {amount}",
+  "@homePayAmount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "homeMakeContribution": "Make a Contribution",
+  "homeTileSemantics": "{label}. {caption}",
+  "@homeTileSemantics": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "caption": {
+        "type": "String"
+      }
+    }
+  },
+  "homeLatestPayment": "LATEST PAYMENT",
+  "homeNoPaymentsYet": "No payments yet",
+  "homeNoPaymentsBody": "Your receipts will appear here once you pay.",
+  "homePayDuesNow": "Pay Dues Now",
+  "homeMonthsDues": "{months} Dues",
+  "@homeMonthsDues": {
+    "placeholders": {
+      "months": {
+        "type": "String"
+      }
+    }
+  },
+  "homeLastPaymentUnavailable": "Last payment amount not available",
+  "homeLastPaymentSemantics": "Last payment {amount}",
+  "@homeLastPaymentSemantics": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "homePaidOn": "Paid on {date}",
+  "@homePaidOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "homeAutoPayOff": "AutoPay is off",
+  "homeAutoPayBody": "Never miss a month. Pay dues automatically.",
+  "homeAutoPaySetUp": "Set up",
+  "alertsFilterAll": "All",
+  "alertsFilterUnread": "Unread",
+  "alertsFilterPayment": "Payment",
+  "alertsFilterSystem": "System",
+  "alertsUnreadSemantics": "Unread",
+  "alertsAlreadyRead": "Everything is already read",
+  "alertsMarkedAllRead": "All notices marked as read",
+  "alertsMarkReadFailed": "Couldn't mark notices as read. Try again.",
+  "alertsClearTitle": "Clear all notices?",
+  "alertsClearMessage": "This removes every notice from your inbox. It cannot be undone.",
+  "alertsClearConfirm": "Clear All",
+  "alertsCleared": "All notices cleared",
+  "alertsClearFailed": "Couldn't clear notices. Try again.",
+  "alertsClearedOne": "Cleared: {title}",
+  "@alertsClearedOne": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "alertsRemoveFailed": "Couldn't remove that notice.",
+  "alertsLoadError": "Couldn't load notices",
+  "alertsTitle": "Notices",
+  "alertsEyebrow": "From the committee",
+  "alertsLoadingSubtitle": "Loading your notices…",
+  "alertsErrorSubtitle": "Notices could not be loaded.",
+  "alertsCaughtUp": "You are all caught up.",
+  "alertsUnreadCount": "{count} unread",
+  "@alertsUnreadCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "alertsMarkAllRead": "Mark all as read",
+  "alertsClearAllTooltip": "Clear all notices",
+  "alertsEmptyTitle": "No notices",
+  "alertsEmptyFilteredTitle": "Nothing here",
+  "alertsEmptyBody": "Announcements and dues reminders from the committee appear here.",
+  "alertsEmptyFilteredBody": "Try another filter, or pull down to refresh.",
+  "alertsLoadingSemantics": "Loading notices",
+  "alertNotice": "Notice",
+  "alertTypePayment": "Payment",
+  "alertTypeDuesReminder": "Dues reminder",
+  "alertTypeConfirmed": "Confirmed",
+  "alertTypeImportant": "Important",
+  "alertTypeAnnouncement": "Announcement",
+  "alertTypeNotice": "Notice",
+  "alertNoDetails": "No further details were provided.",
+  "alertWhyTitle": "Why you got this",
+  "alertWhyBody": "Your account shows dues that are not yet cleared.",
+  "receiptsFilterAll": "All",
+  "receiptsFilterMonthly": "Monthly",
+  "receiptsFilterContribution": "Contribution",
+  "receiptsLoadError": "Couldn't load receipts",
+  "receiptsTitle": "Receipts",
+  "receiptsEyebrow": "History",
+  "receiptsSubtitle": "Every payment you have made, with a receipt for each.",
+  "receiptsEmptyTitle": "No receipts yet",
+  "receiptsEmptyMonthlyTitle": "No Monthly receipts",
+  "receiptsEmptyContributionTitle": "No Contribution receipts",
+  "receiptsEmptyBody": "Once you pay your dues or contribute, every receipt lands here.",
+  "receiptsEmptyFilteredBody": "Try a different filter, or pull down to refresh.",
+  "receiptsPayDues": "Pay Dues",
+  "receiptsLoadingSemantics": "Loading receipts",
+  "receiptMonthlyDues": "Monthly Dues",
+  "receiptMahalContribution": "Mahal Contribution",
+  "receiptMonthlyDuesLower": "Monthly dues",
+  "receiptContribution": "Contribution",
+  "receiptMethodOnline": "Online ({gateway})",
+  "@receiptMethodOnline": {
+    "placeholders": {
+      "gateway": {
+        "type": "String"
+      }
+    }
+  },
+  "receiptMethodCash": "Cash",
+  "receiptStatusRefunded": "Refunded",
+  "receiptTitle": "Receipt",
+  "receiptPdfSavedNoViewer": "Receipt saved. No PDF viewer found — use Share to send it.",
+  "receiptPdfFailed": "Couldn't create the receipt PDF. Try again.",
+  "receiptShareHeading": "MahalFlow payment receipt",
+  "receiptShareNumber": "Receipt no: {number}",
+  "@receiptShareNumber": {
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
+  "receiptShareMember": "Member: {name}",
+  "@receiptShareMember": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "receiptShareAmount": "Amount: {amount}",
+  "@receiptShareAmount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "receiptShareFor": "For: {title} ({subtitle})",
+  "@receiptShareFor": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "subtitle": {
+        "type": "String"
+      }
+    }
+  },
+  "receiptShareDate": "Date: {date}",
+  "@receiptShareDate": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "receiptSharePaidVia": "Paid via: {method}",
+  "@receiptSharePaidVia": {
+    "placeholders": {
+      "method": {
+        "type": "String"
+      }
+    }
+  },
+  "receiptShareStatus": "Status: {status}",
+  "@receiptShareStatus": {
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "receiptShareSubject": "Receipt {number}",
+  "@receiptShareSubject": {
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
+  "receiptShareFailed": "Couldn't open the share sheet. Try again.",
+  "receiptDetailsCopied": "Receipt details copied",
+  "receiptVerifiedTitle": "Verified record",
+  "receiptVerifiedBody": "Issued by your Mahal through MahalFlow. Safe to share.",
+  "receiptPaymentStatus": "Payment {status}",
+  "@receiptPaymentStatus": {
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "receiptNotConfirmedBody": "This record is not a confirmed payment receipt.",
+  "receiptCopyAsText": "Copy details as text",
+  "receiptDownloadPdf": "Download PDF",
+  "receiptPreparing": "Preparing…",
+  "receiptShareReceipt": "Share Receipt",
+  "receiptPaymentSuccessful": "Payment successful",
+  "receiptNumberLabel": "Receipt number",
+  "receiptNumberCopied": "Receipt number copied",
+  "receiptMemberLabel": "Member",
+  "receiptPaymentTypeLabel": "Payment type",
+  "receiptCoversLabel": "Covers",
+  "receiptFundLabel": "Fund",
+  "receiptPaidViaLabel": "Paid via",
+  "receiptFooter": "Computer-generated receipt. No signature required.",
+  "autopayRefreshFailed": "Couldn't refresh AutoPay. {message}",
+  "@autopayRefreshFailed": {
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "autopayFrequencyMonthly": "Monthly",
+  "autopayFrequencyWeekly": "Weekly",
+  "autopayFrequencyDaily": "Daily",
+  "autopayFrequencyHourly": "Hourly",
+  "autopayFrequencyMinutely": "Minutely",
+  "autopayScheduleMinutely": "every minute (test)",
+  "autopayScheduleHourly": "every hour (test)",
+  "autopayScheduleDaily": "every day (test)",
+  "autopayScheduleWeekly": "every week",
+  "autopayScheduleMonthly": "on the {day} of every month",
+  "@autopayScheduleMonthly": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "autopayConfirmTitle": "Confirm AutoPay",
+  "autopayConfirmSubtitle": "Review before your bank asks you to approve",
+  "autopayAmountPerDebit": "Amount per debit",
+  "autopayMaxPerDebit": "Maximum per debit",
+  "autopayWhen": "When",
+  "autopayValidUntil": "Valid until",
+  "autopayAuthChargeNote": "To register the mandate your bank makes a small one-time authorisation charge (shown on the next screen). Future debits never exceed the maximum above, and you can cancel any time.",
+  "autopaySignInAgain": "Sign in again to set up AutoPay.",
+  "autopayStartFailed": "Couldn't start AutoPay setup. Nothing was charged — try again.",
+  "autopayOpenMandateFailed": "Couldn't open the mandate screen. Nothing was charged — try again.",
+  "autopayCancelSetupTitle": "Cancel AutoPay setup?",
+  "autopayTurnOffTitle": "Turn off AutoPay?",
+  "autopayCancelSetupMessage": "The mandate that is waiting for your bank will be cancelled. You can set up AutoPay again later.",
+  "autopayTurnOffMessage": "No further dues will be debited automatically. You will need to pay each month yourself.",
+  "autopayCancelSetupAction": "Cancel Setup",
+  "autopayTurnOffAction": "Turn Off",
+  "autopayKeep": "Keep",
+  "autopaySetupCancelled": "AutoPay setup cancelled.",
+  "autopayTurnedOff": "AutoPay turned off. No further debits.",
+  "autopayCancelFailed": "Couldn't cancel AutoPay. Try again.",
+  "autopayBankApprovedPending": "Your bank approved the mandate. Activation is pending.",
+  "autopaySetupFailedReason": "Mandate setup failed: {reason}",
+  "@autopaySetupFailedReason": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "autopaySetupCancelledNoCharge": "Mandate setup was cancelled. Nothing was charged.",
+  "autopayErrorReason": "AutoPay error: {reason}",
+  "@autopayErrorReason": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "autopayOnTitle": "AutoPay is on",
+  "autopayOnSubtitle": "Your dues will be paid automatically",
+  "autopayOnMessage": "Your mandate is registered. {amount} will be debited {schedule}, and a receipt is issued every time it runs.",
+  "@autopayOnMessage": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "schedule": {
+        "type": "String"
+      }
+    }
+  },
+  "autopayYourDues": "Your dues",
+  "autopayFirstDebit": "First debit",
+  "autopayMandateId": "Mandate ID",
+  "autopayTitle": "AutoPay",
+  "autopayEyebrow": "Payments",
+  "autopaySubtitle": "Never miss a month. Cancel any time from your profile.",
+  "autopayLoadingSemantics": "Loading AutoPay status",
+  "autopayLoadFailedTitle": "Couldn't load AutoPay",
+  "autopayLoadFailedFallback": "Try again in a moment.",
+  "autopayWaitingBankTitle": "Waiting for your bank",
+  "autopayWaitingBankMessage": "Your bank has not confirmed the mandate yet. Pull down or tap Check Status to refresh. Do not set it up again.",
+  "autopayDuesNotSetTitle": "Dues amount not set",
+  "autopayDuesNotSetMessage": "Your monthly dues amount is not recorded yet, so AutoPay cannot be set up. Contact the Mahal office.",
+  "autopayHowItWorksTitle": "How it works",
+  "autopayHowItWorksMessage": "Your bank asks you to approve the mandate once. After that each debit runs on its own and issues a receipt.",
+  "autopayStatePendingActivation": "Pending activation",
+  "autopayStateOff": "Off",
+  "autopayDebitTestCadence": "DEBIT (TEST CADENCE)",
+  "autopayMonthlyDebit": "MONTHLY DEBIT",
+  "autopayDebitedBy": "Debited {schedule} by UPI e-Mandate.",
+  "@autopayDebitedBy": {
+    "placeholders": {
+      "schedule": {
+        "type": "String"
+      }
+    }
+  },
+  "autopayMandateDetails": "Mandate details",
+  "autopayPaymentMethod": "Payment method",
+  "autopayFrequency": "Frequency",
+  "autopayNextDebit": "Next debit",
+  "autopayLastDebit": "Last debit",
+  "autopayAuthorisation": "Authorisation",
+  "autopaySmallOneTimeCharge": "Small one-time charge",
+  "autopayTestFrequency": "Test frequency (debug build only)",
+  "autopayFrequencySemantics": "{frequency} frequency",
+  "@autopayFrequencySemantics": {
+    "placeholders": {
+      "frequency": {
+        "type": "String"
+      }
+    }
+  },
+  "autopayTurningOff": "Turning off…",
+  "autopayTurnOffButton": "Turn Off AutoPay",
+  "autopayCheckStatus": "Check Status",
+  "autopaySettingUp": "Setting up…",
+  "autopayNotNow": "Not now",
+  "duesPayRefreshFailed": "Couldn't refresh. {message}",
+  "@duesPayRefreshFailed": {
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "duesPaySignInAgain": "Sign in again to pay your dues.",
+  "duesPayHelpNote": "Your dues are {amount} per month. Months are paid in order, oldest first.",
+  "@duesPayHelpNote": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "duesPayTitle": "Monthly Dues",
+  "duesPayEyebrow": "Payments",
+  "duesPaySubtitle": "Choose the months you want to clear.",
+  "duesPayHelp": "Help",
+  "duesPayLoadFailedTitle": "Couldn't load your dues",
+  "duesPayLoadFailedFallback": "Check your connection and try again.",
+  "duesPayPeriodNotSetTitle": "Dues period not set up",
+  "duesPayPeriodNotSetMessage": "Your Mahal has not recorded which months you have paid, so dues cannot be paid in the app yet. Contact the office to set this up.",
+  "duesPayGetHelp": "Get Help",
+  "duesPayUpToDateTitle": "You are up to date",
+  "duesPayUpToDateMessage": "No months are due. You can pay ahead below.",
+  "duesPayDueNowHeader": "DUE NOW",
+  "duesPayPayAheadHeader": "PAY AHEAD",
+  "duesPayContributeTitle": "Make a contribution",
+  "duesPayContributeMessage": "Zakat, Masjid or the general fund.",
+  "duesPayOpen": "Open",
+  "duesPayMonthsSelected": "{count, plural, =1{1 month selected} other{{count} months selected}}",
+  "@duesPayMonthsSelected": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "duesPayNoFee": "No processing fee",
+  "duesPayProcessing": "Processing…",
+  "duesPayContinueToPay": "Continue to Pay",
+  "duesPayPayAmount": "Pay {amount}",
+  "@duesPayPayAmount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "duesPayTotalSelected": "TOTAL SELECTED",
+  "duesPayMonthCount": "{count, plural, =1{1 month} other{{count} months}}",
+  "@duesPayMonthCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "duesPayTotalUnavailableSemantics": "Total not available",
+  "duesPayTotalSemantics": "Total {amount}",
+  "@duesPayTotalSemantics": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "duesPaySelectAtLeastOne": "Select at least one month below to continue.",
+  "duesPayPerMonth": "{amount} per month",
+  "@duesPayPerMonth": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "duesPayExactAmountNote": "The exact amount is shown on the payment screen.",
+  "duesPaySelectAll": "Select all",
+  "duesPaySelectAllSemantics": "Select all due months",
+  "duesPayStatusDueNow": "Due now",
+  "duesPayStatusUpcoming": "Upcoming",
+  "duesPayLoadingSemantics": "Loading your dues",
+  "payuStartFailed": "Couldn't start the payment. No money was taken — try again.",
+  "payuOpenFailed": "Couldn't open the payment screen. No money was taken — try again.",
+  "payuCouldNotComplete": "The payment could not be completed.",
+  "contributionFundZakat": "Zakat Fund",
+  "contributionFundZakatBlurb": "Obligatory charity, distributed by the committee",
+  "contributionFundGeneral": "General Fund",
+  "contributionFundGeneralBlurb": "Day-to-day running of the Mahal",
+  "contributionFundMasjid": "Masjid Renovation",
+  "contributionFundMasjidBlurb": "Building works and maintenance",
+  "contributionFundEducation": "Education Help",
+  "contributionFundEducationBlurb": "Madrasa and student support",
+  "contributionFundMedical": "Medical Aid",
+  "contributionFundMedicalBlurb": "Emergency help for families in need",
+  "contributionMinError": "The minimum contribution is {amount}",
+  "@contributionMinError": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "contributionMaxError": "The maximum in the app is {amount}. Contact the office for larger amounts.",
+  "@contributionMaxError": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "contributionSignInAgain": "Sign in again to contribute.",
+  "contributionConfirmTitle": "Give {amount}?",
+  "@contributionConfirmTitle": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "contributionConfirmMessage": "You are about to contribute {amount} to {fund}. Please check the amount before you continue.",
+  "@contributionConfirmMessage": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "fund": {
+        "type": "String"
+      }
+    }
+  },
+  "contributionTitle": "Contribute",
+  "contributionEyebrow": "Give",
+  "contributionSubtitle": "Support the Mahal beyond your monthly dues.",
+  "contributionWhereTitle": "Where should it go?",
+  "contributionNoteLabel": "Note (optional)",
+  "contributionNoteHint": "e.g. In memory of family, Eid charity",
+  "contributionGiveAmount": "Give {amount}",
+  "@contributionGiveAmount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "contributionEnterAmount": "Enter an amount",
+  "contributionAmountLabel": "Contribution amount",
+  "contributionAmountSemantics": "Contribution amount in rupees",
+  "contributionRange": "Between {min} and {max}",
+  "@contributionRange": {
+    "placeholders": {
+      "min": {
+        "type": "String"
+      },
+      "max": {
+        "type": "String"
+      }
+    }
+  },
+  "payResultAmountLabel": "AMOUNT",
+  "payResultCancelledTitle": "Payment cancelled",
+  "payResultFailedTitle": "Payment failed",
+  "payResultCancelledMessage": "You left the payment screen before paying. No money was taken.",
+  "payResultFailedMessage": "The payment did not go through. If your bank shows a debit, it is reversed automatically. You can try again.",
+  "payResultBackHome": "Back to Home",
+  "payResultReason": "Reason",
+  "payResultFor": "For",
+  "payResultFund": "Fund",
+  "payResultAttempted": "Attempted",
+  "payResultAmountDebited": "Amount debited",
+  "payResultNone": "None",
+  "payResultPendingTitle": "Payment pending",
+  "payResultPendingMessageDues": "Your bank is still confirming this. Do not pay again — we will update your dues as soon as it clears.",
+  "payResultPendingMessageContribution": "Your bank is still confirming this. Do not pay again — we will update your receipts as soon as it clears.",
+  "payResultCheckAgain": "Check Again",
+  "payResultViewReceipts": "View Receipts",
+  "payResultCovers": "Covers",
+  "payResultStarted": "Started",
+  "payResultLastChecked": "Last checked",
+  "payResultChecking": "Checking…",
+  "payResultCheckFailedTitle": "Couldn't check the status",
+  "payResultNextTitle": "What happens next",
+  "payResultNextMessage": "Most payments clear within a few minutes. If money left your account and this does not clear, your bank reverses it or the office can confirm it from the receipt list.",
+  "payResultSuccessTitle": "Payment successful",
+  "payResultThankYou": "Thank you",
+  "payResultDuesClearedMessage": "Your dues are cleared. A receipt has been issued in your name.",
+  "payResultContributionReceivedMessage": "Your contribution was received. A receipt has been issued in your name.",
+  "payResultViewReceipt": "View Receipt",
+  "payResultPaidOn": "Paid on",
+  "payResultReceiptNumber": "Receipt number"
+}

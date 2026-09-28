@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_tokens.dart';
+import '../../../core/utils/app_date.dart';
 import '../../../core/utils/currency_format.dart';
 import '../../../core/utils/dues_period.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/shimmer_loading.dart';
+import '../../../l10n/l10n.dart';
 
 /// -------------------------------------------------------------------------
 /// Hero header content. The gradient itself is painted by the screen so it
@@ -27,8 +29,8 @@ class DashboardHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const onHero = Colors.white;
-    final onHeroMuted = Colors.white.withValues(alpha: 0.72);
+    const onHero = AppBrand.onBrand;
+    final onHeroMuted = AppBrand.onBrand.withValues(alpha: 0.72);
     final initial = firstName.isNotEmpty ? firstName[0].toUpperCase() : 'M';
 
     return Padding(
@@ -45,7 +47,7 @@ class DashboardHero extends StatelessWidget {
             children: [
               Semantics(
                 button: true,
-                label: 'Open your profile',
+                label: context.l10n.homeOpenProfile,
                 child: InkWell(
                   onTap: onAvatarTap,
                   customBorder: const CircleBorder(),
@@ -54,40 +56,42 @@ class DashboardHero extends StatelessWidget {
                     height: 44,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.16),
+                      color: AppBrand.onBrand.withValues(alpha: 0.16),
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.28),
+                        color: AppBrand.onBrand.withValues(alpha: 0.28),
                       ),
                     ),
-                    child: Text(
-                      initial,
-                      style: AppTextStyles.cardTitle.copyWith(color: onHero),
+                    child: ExcludeSemantics(
+                      child: Text(
+                        initial,
+                        style: context.text.cardTitle.copyWith(color: onHero),
+                      ),
                     ),
                   ),
                 ),
               ),
               Expanded(
                 child: Text(
-                  'MahalFlow',
+                  context.l10n.appName,
                   textAlign: TextAlign.center,
-                  style: AppTextStyles.pageTitle.copyWith(
+                  style: context.text.sectionTitle.copyWith(
                     color: onHero,
-                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
               IconButton(
                 onPressed: onHelpTap,
-                tooltip: 'Help',
+                tooltip: context.l10n.homeHelp,
                 icon: Icon(Icons.help_outline_rounded, color: onHeroMuted),
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
           Text(
-            'Assalamu Alaikum',
-            style: AppTextStyles.small.copyWith(
+            context.l10n.homeGreeting,
+            style: context.text.small.copyWith(
               color: onHeroMuted,
               fontWeight: FontWeight.w500,
             ),
@@ -97,7 +101,7 @@ class DashboardHero extends StatelessWidget {
             header: true,
             child: Text(
               firstName,
-              style: AppTextStyles.display.copyWith(color: onHero),
+              style: context.text.display.copyWith(color: onHero),
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -110,7 +114,7 @@ class DashboardHero extends StatelessWidget {
                   mahalName,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.small.copyWith(color: onHeroMuted),
+                  style: context.text.small.copyWith(color: onHeroMuted),
                 ),
               ),
             ],
@@ -153,10 +157,10 @@ class BalanceCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.lg - 2),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(AppRadius.hero),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppShadows.floating,
+        border: Border.all(color: context.colors.border),
+        boxShadow: context.colors.floatingShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -165,24 +169,33 @@ class BalanceCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  _isUpToDate ? 'MONTHLY DUES' : 'OUTSTANDING DUES',
-                  style: AppTextStyles.label,
+                  _isUpToDate
+                      ? context.l10n.homeMonthlyDuesLabel
+                      : context.l10n.homeOutstandingDuesLabel,
+                  style: context.text.label,
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              _isUpToDate
-                  ? const StatusPill(
-                      label: 'Up to Date',
-                      foreground: AppColors.success,
-                      background: AppColors.successBg,
-                      icon: Icons.check_circle_rounded,
-                    )
-                  : const StatusPill(
-                      label: 'Action Required',
-                      foreground: AppColors.warning,
-                      background: AppColors.warningBg,
-                      icon: Icons.error_outline_rounded,
-                    ),
+              // Longer translations shrink the pill instead of overflowing.
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: _isUpToDate
+                      ? StatusPill(
+                          label: context.l10n.homeUpToDate,
+                          foreground: context.colors.success,
+                          background: context.colors.successBg,
+                          icon: Icons.check_circle_rounded,
+                        )
+                      : StatusPill(
+                          label: context.l10n.homeActionRequired,
+                          foreground: context.colors.warning,
+                          background: context.colors.warningBg,
+                          icon: Icons.error_outline_rounded,
+                        ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.ms),
@@ -196,18 +209,19 @@ class BalanceCard extends StatelessWidget {
                   child: Text(
                     Inr.format(_isUpToDate ? 0 : outstanding),
                     semanticsLabel: _isUpToDate
-                        ? 'No outstanding dues'
-                        : 'Outstanding dues ${Inr.spoken(outstanding)}',
-                    style: AppTextStyles.amount.copyWith(
-                      color: _isUpToDate ? AppColors.success : AppColors.error,
+                        ? context.l10n.homeNoOutstandingSemantics
+                        : context.l10n
+                            .homeOutstandingSemantics(Inr.spoken(outstanding)),
+                    style: context.text.amount.copyWith(
+                      color: _isUpToDate ? context.colors.success : context.colors.error,
                     ),
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  _subtitle,
-                  style: AppTextStyles.body.copyWith(
-                    color: AppColors.textSecondary,
+                  _subtitle(context),
+                  style: context.text.body.copyWith(
+                    color: context.colors.textSecondary,
                   ),
                 ),
               ],
@@ -218,38 +232,39 @@ class BalanceCard extends StatelessWidget {
             Wrap(
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.sm,
-              children: months.map(_monthChip).toList(),
+              children: [for (final m in months) _monthChip(context, m)],
             ),
           ],
           if (advanceCredit > 0) ...[
             const SizedBox(height: AppSpacing.ms),
             StatusPill(
-              label: 'Advance credit ${Inr.format(advanceCredit)}',
-              foreground: AppColors.info,
-              background: AppColors.infoBg,
+              label: context.l10n.homeAdvanceCredit(Inr.format(advanceCredit)),
+              foreground: context.colors.info,
+              background: context.colors.infoBg,
               icon: Icons.savings_outlined,
             ),
           ],
           const SizedBox(height: AppSpacing.lg),
-          _isUpToDate ? _secondaryCta() : _primaryCta(),
+          _isUpToDate ? _secondaryCta(context) : _primaryCta(context),
         ],
       ),
     );
   }
 
-  String get _subtitle {
+  String _subtitle(BuildContext context) {
+    final l10n = context.l10n;
     if (_isUpToDate) {
       return paidUpToLabel == null
-          ? 'All monthly dues paid in full.'
-          : 'All dues paid up to $paidUpToLabel.';
+          ? l10n.homeAllDuesPaid
+          : l10n.homeAllDuesPaidUpTo(paidUpToLabel!);
     }
-    return pendingSummary ?? 'Pending monthly dues.';
+    return pendingSummary ?? l10n.homePendingDues;
   }
 
-  Widget _monthChip(DueMonth month) {
+  Widget _monthChip(BuildContext context, DueMonth month) {
     final isOverdue = month.status == DueMonthStatus.overdue;
-    final foreground = isOverdue ? AppColors.error : AppColors.warning;
-    final background = isOverdue ? AppColors.errorBg : AppColors.warningBg;
+    final foreground = isOverdue ? context.colors.error : context.colors.warning;
+    final background = isOverdue ? context.colors.errorBg : context.colors.warningBg;
 
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -262,9 +277,10 @@ class BalanceCard extends StatelessWidget {
       ),
       child: Text(
         month.shortLabel,
-        semanticsLabel:
-            '${month.longLabel}, ${isOverdue ? 'overdue' : 'due now'}',
-        style: AppTextStyles.small.copyWith(
+        semanticsLabel: isOverdue
+            ? context.l10n.homeMonthOverdueSemantics(month.longLabel)
+            : context.l10n.homeMonthDueNowSemantics(month.longLabel),
+        style: context.text.small.copyWith(
           fontWeight: FontWeight.w600,
           color: foreground,
         ),
@@ -272,15 +288,15 @@ class BalanceCard extends StatelessWidget {
     );
   }
 
-  Widget _primaryCta() {
+  Widget _primaryCta(BuildContext context) {
     return SizedBox(
       width: double.infinity,
       height: 52,
       child: ElevatedButton(
         onPressed: onPayDues,
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
+          backgroundColor: context.colors.primary,
+          foregroundColor: context.colors.onPrimary,
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.button),
@@ -294,9 +310,10 @@ class BalanceCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'Pay ${Inr.format(outstanding)}',
+                context.l10n.homePayAmount(Inr.format(outstanding)),
                 maxLines: 1,
-                style: AppTextStyles.button.copyWith(color: Colors.white),
+                style: context.text.button
+                    .copyWith(color: context.colors.onPrimary),
               ),
               const SizedBox(width: AppSpacing.sm),
               const Icon(Icons.arrow_forward_rounded, size: 19),
@@ -307,23 +324,27 @@ class BalanceCard extends StatelessWidget {
     );
   }
 
-  Widget _secondaryCta() {
+  Widget _secondaryCta(BuildContext context) {
     return SizedBox(
       width: double.infinity,
       height: 52,
       child: OutlinedButton(
         onPressed: onContribute,
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.primary,
-          backgroundColor: AppColors.surface,
-          side: const BorderSide(color: AppColors.border),
+          foregroundColor: context.colors.primary,
+          backgroundColor: context.colors.surface,
+          side: BorderSide(color: context.colors.border),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.button),
           ),
         ),
-        child: Text(
-          'Make a Contribution',
-          style: AppTextStyles.button.copyWith(color: AppColors.primary),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            context.l10n.homeMakeContribution,
+            maxLines: 1,
+            style: context.text.button.copyWith(color: context.colors.primary),
+          ),
         ),
       ),
     );
@@ -355,71 +376,80 @@ class QuickActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        child: Container(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(AppRadius.card),
-            border: Border.all(color: AppColors.border),
-            boxShadow: AppShadows.card,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: iconBackground,
-                      borderRadius: BorderRadius.circular(AppRadius.button),
+    final l10n = context.l10n;
+    final head =
+        badgeCount > 0 ? l10n.commonUnreadCount(label, badgeCount) : label;
+    // One node per tile: "Notices, 3 unread. From the committee".
+    return Semantics(
+      button: true,
+      label: l10n.homeTileSemantics(head, caption),
+      excludeSemantics: true,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          child: Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: context.colors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.card),
+              border: Border.all(color: context.colors.border),
+              boxShadow: context.colors.cardShadow,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: iconBackground,
+                        borderRadius: BorderRadius.circular(AppRadius.button),
+                      ),
+                      child: Icon(icon, size: 21, color: iconColor),
                     ),
-                    child: Icon(icon, size: 21, color: iconColor),
-                  ),
-                  if (badgeCount > 0)
-                    Positioned(
-                      top: -3,
-                      right: -5,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5),
-                        constraints: const BoxConstraints(minWidth: 18),
-                        height: 18,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: AppColors.error,
-                          borderRadius: BorderRadius.circular(AppRadius.pill),
-                          border: Border.all(color: AppColors.surface, width: 2),
-                        ),
-                        child: Text(
-                          badgeCount > 9 ? '9+' : '$badgeCount',
-                          style: AppTextStyles.label.copyWith(
-                            color: Colors.white,
-                            fontSize: 10,
-                            letterSpacing: 0,
+                    if (badgeCount > 0)
+                      Positioned(
+                        top: -3,
+                        right: -5,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5),
+                          constraints: const BoxConstraints(minWidth: 18),
+                          height: 18,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: context.colors.error,
+                            borderRadius: BorderRadius.circular(AppRadius.pill),
+                            border:
+                                Border.all(color: context.colors.surface, width: 2),
+                          ),
+                          child: Text(
+                            badgeCount > 9 ? '9+' : '$badgeCount',
+                            style: context.text.label.copyWith(
+                              color: context.colors.onPrimary,
+                              letterSpacing: 0,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.ms),
-              Text(label, style: AppTextStyles.cardTitle.copyWith(fontSize: 15)),
-              const SizedBox(height: 2),
-              Text(
-                caption,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.small.copyWith(fontSize: 11.5),
-              ),
-            ],
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.ms),
+                Text(label, style: context.text.listTitle),
+                const SizedBox(height: 2),
+                Text(
+                  caption,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.text.caption,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -451,20 +481,20 @@ class LatestPaymentCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.lg - 2),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppShadows.card,
+        border: Border.all(color: context.colors.border),
+        boxShadow: context.colors.cardShadow,
       ),
-      child: receipt == null ? _empty() : _content(),
+      child: receipt == null ? _empty(context) : _content(context),
     );
   }
 
-  Widget _empty() {
+  Widget _empty(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('LATEST PAYMENT', style: AppTextStyles.label),
+        Text(context.l10n.homeLatestPayment, style: context.text.label),
         const SizedBox(height: AppSpacing.md),
         Row(
           children: [
@@ -473,13 +503,13 @@ class LatestPaymentCard extends StatelessWidget {
               height: 42,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: AppColors.neutralBg,
+                color: context.colors.neutralBg,
                 borderRadius: BorderRadius.circular(AppRadius.button),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.receipt_long_outlined,
                 size: 20,
-                color: AppColors.textMuted,
+                color: context.colors.textMuted,
               ),
             ),
             const SizedBox(width: AppSpacing.ms),
@@ -488,13 +518,13 @@ class LatestPaymentCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'No payments yet',
-                    style: AppTextStyles.cardTitle.copyWith(fontSize: 15),
+                    context.l10n.homeNoPaymentsYet,
+                    style: context.text.listTitle,
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Your receipts will appear here once you pay.',
-                    style: AppTextStyles.small,
+                    context.l10n.homeNoPaymentsBody,
+                    style: context.text.small,
                   ),
                 ],
               ),
@@ -507,17 +537,22 @@ class LatestPaymentCard extends StatelessWidget {
           child: OutlinedButton(
             onPressed: onPrimaryAction,
             style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.primary,
-              side: const BorderSide(color: AppColors.border),
+              foregroundColor: context.colors.primary,
+              side: BorderSide(color: context.colors.border),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppRadius.button),
               ),
             ),
-            child: Text(
-              isUpToDate ? 'Make a Contribution' : 'Pay Dues Now',
-              style: AppTextStyles.button.copyWith(
-                fontSize: 14,
-                color: AppColors.primary,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                isUpToDate
+                    ? context.l10n.homeMakeContribution
+                    : context.l10n.homePayDuesNow,
+                maxLines: 1,
+                style: context.text.buttonMedium.copyWith(
+                  color: context.colors.primary,
+                ),
               ),
             ),
           ),
@@ -526,32 +561,51 @@ class LatestPaymentCard extends StatelessWidget {
     );
   }
 
-  Widget _content() {
+  Widget _content(BuildContext context) {
     final data = receipt!;
-    final amount = (data['amount'] as num?)?.toDouble() ?? 0;
+    final rawAmount = data['amount'];
+    final amount =
+        rawAmount is num ? rawAmount : num.tryParse('${rawAmount ?? ''}');
+    // Receipts are only issued for committed payments, so the API sends no
+    // status; one it does send (e.g. REFUNDED) wins.
+    final status = (data['status']?.toString() ?? 'SUCCESS').toUpperCase();
+    final isPaid = status == 'SUCCESS' || status == 'PAID';
     final isDues = data['payment_type']?.toString() == 'MONTHLY_DUES';
-    final paidMonths = (data['paid_months'] as List?)
-            ?.map((m) => m.toString())
-            .toList() ??
-        const <String>[];
+    final paidMonths =
+        (data['paid_months'] as List?)?.map((m) => m.toString()).toList() ??
+            <String>[];
 
     // Invariant 3 (AGENTS.md): never label a dues receipt a contribution.
     final monthsLabel = DuesPeriod.paidMonthsLabel(paidMonths);
+    final l10n = context.l10n;
     final description = isDues
-        ? (monthsLabel.isEmpty ? 'Monthly Dues' : '$monthsLabel Dues')
-        : 'Mahal Contribution';
+        ? (monthsLabel.isEmpty
+            ? l10n.receiptMonthlyDues
+            : l10n.homeMonthsDues(monthsLabel))
+        : l10n.receiptMahalContribution;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Expanded(child: Text('LATEST PAYMENT', style: AppTextStyles.label)),
-            const StatusPill(
-              label: 'Paid',
-              foreground: AppColors.success,
-              background: AppColors.successBg,
-              icon: Icons.check_circle_rounded,
+            Expanded(
+              child: Text(l10n.homeLatestPayment, style: context.text.label),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: isPaid
+                    ? StatusPill(
+                        label: l10n.statusPaid,
+                        foreground: context.colors.success,
+                        background: context.colors.successBg,
+                        icon: Icons.check_circle_rounded,
+                      )
+                    : StatusPill.forStatus(context, status),
+              ),
             ),
           ],
         ),
@@ -560,36 +614,38 @@ class LatestPaymentCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                Inr.format(amount),
-                semanticsLabel: 'Last payment ${Inr.spoken(amount)}',
-                style: AppTextStyles.sectionTitle.copyWith(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.5,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  Inr.formatAny(amount),
+                  semanticsLabel: amount == null
+                      ? l10n.homeLastPaymentUnavailable
+                      : l10n.homeLastPaymentSemantics(Inr.spoken(amount)),
+                  style: context.text.statValue,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 description,
-                style: AppTextStyles.body.copyWith(
-                  color: AppColors.textSecondary,
+                style: context.text.body.copyWith(
+                  color: context.colors.textSecondary,
                 ),
               ),
             ],
           ),
         ),
         const SizedBox(height: AppSpacing.md),
-        const Divider(height: 1, color: AppColors.border),
+        Divider(height: 1, color: context.colors.border),
         Padding(
           padding: const EdgeInsets.only(top: AppSpacing.sm),
           child: Row(
             children: [
               Expanded(
                 child: Text(
-                  _paidOnLabel(data['created_at']?.toString()),
-                  style: AppTextStyles.small.copyWith(
-                    color: AppColors.textMuted,
+                  _paidOnLabel(context, data['created_at'], isPaid: isPaid),
+                  style: context.text.small.copyWith(
+                    color: context.colors.textMuted,
                   ),
                 ),
               ),
@@ -604,17 +660,16 @@ class LatestPaymentCard extends StatelessWidget {
                   child: Row(
                     children: [
                       Text(
-                        'Receipt',
-                        style: AppTextStyles.button.copyWith(
-                          fontSize: 14,
-                          color: AppColors.primary,
+                        l10n.receiptTitle,
+                        style: context.text.buttonMedium.copyWith(
+                          color: context.colors.primary,
                         ),
                       ),
                       const SizedBox(width: AppSpacing.xs + 2),
-                      const Icon(
+                      Icon(
                         Icons.receipt_long_rounded,
                         size: 16,
-                        color: AppColors.primary,
+                        color: context.colors.primary,
                       ),
                     ],
                   ),
@@ -627,19 +682,16 @@ class LatestPaymentCard extends StatelessWidget {
     );
   }
 
-  static String _paidOnLabel(String? raw) {
-    final parsed = raw == null ? null : DateTime.tryParse(raw);
-    if (parsed == null) return 'Recently paid';
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return 'Paid on ${months[parsed.month - 1]} ${parsed.day}, ${parsed.year}';
+  static String _paidOnLabel(BuildContext context, dynamic raw,
+      {bool isPaid = true}) {
+    final date = AppDate.formatDate(raw, fallback: '');
+    if (date.isEmpty) return isPaid ? context.l10n.statusPaid : '—';
+    return isPaid ? context.l10n.homePaidOn(date) : date;
   }
 }
 
 /// -------------------------------------------------------------------------
-/// AutoPay nudge. Shown only while the local flag says setup is incomplete.
+/// AutoPay nudge. Shown only when the server says no mandate exists.
 /// -------------------------------------------------------------------------
 class AutoPayNudgeCard extends StatelessWidget {
   final VoidCallback onSetUp;
@@ -652,9 +704,9 @@ class AutoPayNudgeCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md + 2),
       decoration: BoxDecoration(
-        color: AppColors.primaryLight,
+        color: context.colors.primaryLight,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.14)),
+        border: Border.all(color: context.colors.primary.withValues(alpha: 0.14)),
       ),
       child: Row(
         children: [
@@ -663,13 +715,13 @@ class AutoPayNudgeCard extends StatelessWidget {
             height: 42,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: context.colors.surface,
               borderRadius: BorderRadius.circular(AppRadius.button),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.sync_rounded,
               size: 21,
-              color: AppColors.primary,
+              color: context.colors.primary,
             ),
           ),
           const SizedBox(width: AppSpacing.ms),
@@ -678,13 +730,13 @@ class AutoPayNudgeCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'AutoPay is off',
-                  style: AppTextStyles.cardTitle.copyWith(fontSize: 15),
+                  context.l10n.homeAutoPayOff,
+                  style: context.text.listTitle,
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Never miss a month. Pay dues automatically.',
-                  style: AppTextStyles.small,
+                  context.l10n.homeAutoPayBody,
+                  style: context.text.small,
                 ),
               ],
             ),
@@ -693,15 +745,14 @@ class AutoPayNudgeCard extends StatelessWidget {
           TextButton(
             onPressed: onSetUp,
             style: TextButton.styleFrom(
-              foregroundColor: AppColors.primary,
+              foregroundColor: context.colors.primary,
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.ms),
               minimumSize: const Size(0, 44),
             ),
             child: Text(
-              'Set up',
-              style: AppTextStyles.button.copyWith(
-                fontSize: 14,
-                color: AppColors.primary,
+              context.l10n.homeAutoPaySetUp,
+              style: context.text.buttonMedium.copyWith(
+                color: context.colors.primary,
               ),
             ),
           ),
@@ -724,34 +775,34 @@ class MemberDashboardSkeleton extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _block(196),
+          _block(context, 196),
           const SizedBox(height: AppSpacing.md),
           Row(
             children: [
-              Expanded(child: _block(132)),
+              Expanded(child: _block(context, 132)),
               const SizedBox(width: AppSpacing.ms),
-              Expanded(child: _block(132)),
+              Expanded(child: _block(context, 132)),
             ],
           ),
           const SizedBox(height: AppSpacing.ms),
           Row(
             children: [
-              Expanded(child: _block(132)),
+              Expanded(child: _block(context, 132)),
               const SizedBox(width: AppSpacing.ms),
-              Expanded(child: _block(132)),
+              Expanded(child: _block(context, 132)),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          _block(156),
+          _block(context, 156),
         ],
       ),
     );
   }
 
-  Widget _block(double height) => Container(
+  Widget _block(BuildContext context, double height) => Container(
         height: height,
         decoration: BoxDecoration(
-          color: AppColors.border.withValues(alpha: 0.6),
+          color: context.colors.border.withValues(alpha: 0.6),
           borderRadius: BorderRadius.circular(AppRadius.card),
         ),
       );

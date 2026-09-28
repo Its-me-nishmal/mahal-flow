@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
+import '../../l10n/l10n.dart';
 
 /// -------------------------------------------------------------------------
 /// Card family. One surface, one border, one hairline shadow — the same
@@ -15,6 +16,7 @@ class AppCard extends StatelessWidget {
   final Color? borderColor;
   final double radius;
   final List<BoxShadow>? shadow;
+  final bool _floating;
 
   const AppCard({
     super.key,
@@ -25,7 +27,7 @@ class AppCard extends StatelessWidget {
     this.borderColor,
     this.radius = AppRadius.card,
     this.shadow,
-  });
+  }) : _floating = false;
 
   /// Elevated variant for the card that floats over the gradient header.
   const AppCard.floating({
@@ -36,7 +38,8 @@ class AppCard extends StatelessWidget {
     this.color,
     this.borderColor,
     this.radius = AppRadius.hero,
-  }) : shadow = AppShadows.floating;
+  })  : shadow = null,
+        _floating = true;
 
   @override
   Widget build(BuildContext context) {
@@ -44,10 +47,13 @@ class AppCard extends StatelessWidget {
       width: double.infinity,
       padding: padding,
       decoration: BoxDecoration(
-        color: color ?? AppColors.surface,
+        color: color ?? context.colors.surface,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: borderColor ?? AppColors.border),
-        boxShadow: shadow ?? AppShadows.card,
+        border: Border.all(color: borderColor ?? context.colors.border),
+        boxShadow: shadow ??
+            (_floating
+                ? context.colors.floatingShadow
+                : context.colors.cardShadow),
       ),
       child: child,
     );
@@ -74,7 +80,7 @@ class AppSectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = Text(text.toUpperCase(), style: AppTextStyles.label);
+    final label = Text(text.toUpperCase(), style: context.text.label);
     if (trailing == null) return label;
     return Row(
       children: [
@@ -110,7 +116,7 @@ class AppSectionHeader extends StatelessWidget {
               header: true,
               child: Text(
                 title,
-                style: AppTextStyles.sectionTitle.copyWith(fontSize: 16),
+                style: context.text.cardTitle,
               ),
             ),
           ),
@@ -118,16 +124,14 @@ class AppSectionHeader extends StatelessWidget {
             TextButton(
               onPressed: onAction,
               style: TextButton.styleFrom(
-                foregroundColor: AppColors.primary,
-                minimumSize: const Size(0, 36),
+                foregroundColor: context.colors.primary,
+                minimumSize: const Size(AppSizes.minTouch, AppSizes.minTouch),
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
               child: Text(
                 actionLabel!,
-                style: AppTextStyles.button.copyWith(
-                  fontSize: 13,
-                  color: AppColors.primary,
+                style: context.text.buttonSmall.copyWith(
+                  color: context.colors.primary,
                 ),
               ),
             ),
@@ -153,35 +157,37 @@ class StatusPill extends StatelessWidget {
   });
 
   /// Maps a backend status string onto the semantic palette.
-  factory StatusPill.forStatus(String status, {IconData? icon}) {
+  factory StatusPill.forStatus(BuildContext context, String status,
+      {IconData? icon}) {
     final normalized = status.trim().toUpperCase();
-    Color fg = AppColors.textSecondary;
-    Color bg = AppColors.neutralBg;
+    Color fg = context.colors.textSecondary;
+    Color bg = context.colors.neutralBg;
     IconData? glyph = icon;
 
     if (['SUCCESS', 'PAID', 'ACTIVE', 'COMPLETED', 'APPROVED', 'VERIFIED']
         .contains(normalized)) {
-      fg = AppColors.success;
-      bg = AppColors.successBg;
+      fg = context.colors.success;
+      bg = context.colors.successBg;
       glyph ??= Icons.check_circle_rounded;
     } else if (['PENDING', 'PROCESSING', 'INITIATED', 'PARTIAL', 'DUE']
         .contains(normalized)) {
-      fg = AppColors.warning;
-      bg = AppColors.warningBg;
+      fg = context.colors.warning;
+      bg = context.colors.warningBg;
       glyph ??= Icons.schedule_rounded;
     } else if (['FAILED', 'OVERDUE', 'INACTIVE', 'CANCELLED', 'REJECTED']
         .contains(normalized)) {
-      fg = AppColors.error;
-      bg = AppColors.errorBg;
+      fg = context.colors.error;
+      bg = context.colors.errorBg;
       glyph ??= Icons.error_outline_rounded;
     } else if (['INFO', 'DRAFT', 'SCHEDULED'].contains(normalized)) {
-      fg = AppColors.info;
-      bg = AppColors.infoBg;
+      fg = context.colors.info;
+      bg = context.colors.infoBg;
     }
 
     final pretty = normalized.isEmpty
         ? '—'
-        : normalized[0] + normalized.substring(1).toLowerCase();
+        : statusLabel(context, normalized) ??
+            normalized[0] + normalized.substring(1).toLowerCase();
 
     return StatusPill(
       label: pretty,
@@ -194,7 +200,7 @@ class StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: 'Status: $label',
+      label: context.l10n.commonStatusLabel(label),
       child: ExcludeSemantics(
         child: Container(
           padding: const EdgeInsets.symmetric(
@@ -214,7 +220,7 @@ class StatusPill extends StatelessWidget {
               ],
               Text(
                 label,
-                style: AppTextStyles.small.copyWith(
+                style: context.text.small.copyWith(
                   fontWeight: FontWeight.w600,
                   color: foreground,
                 ),
@@ -305,7 +311,7 @@ class AppListRow extends StatelessWidget {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.cardTitle.copyWith(fontSize: 15),
+                  style: context.text.listTitle,
                 ),
                 if (caption != null) ...[
                   const SizedBox(height: 2),
@@ -313,7 +319,7 @@ class AppListRow extends StatelessWidget {
                     caption!,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.small,
+                    style: context.text.small,
                   ),
                 ],
               ],
@@ -327,11 +333,11 @@ class AppListRow extends StatelessWidget {
                 if (trailingText != null)
                   Text(
                     trailingText!,
-                    style: AppTextStyles.cardTitle.copyWith(fontSize: 15),
+                    style: context.text.listTitle,
                   ),
                 if (trailingCaption != null) ...[
                   const SizedBox(height: 2),
-                  Text(trailingCaption!, style: AppTextStyles.small),
+                  Text(trailingCaption!, style: context.text.small),
                 ],
               ],
             ),
@@ -342,10 +348,10 @@ class AppListRow extends StatelessWidget {
           ],
           if (showChevron) ...[
             const SizedBox(width: AppSpacing.xs),
-            const Icon(
+            Icon(
               Icons.chevron_right_rounded,
               size: 20,
-              color: AppColors.textMuted,
+              color: context.colors.textMuted,
             ),
           ],
         ],
@@ -375,50 +381,59 @@ class AppDetailRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final showCopy = copyable && onCopy != null;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-      child: MergeSemantics(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              flex: 4,
-              child: Text(
-                label,
-                style: AppTextStyles.body.copyWith(
-                  color: AppColors.textSecondary,
-                ),
+      padding: EdgeInsets.symmetric(
+        // The 48dp copy button supplies its own vertical room.
+        vertical: showCopy ? 0 : AppSpacing.sm,
+      ),
+      child: Row(
+        crossAxisAlignment:
+            showCopy ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: MergeSemantics(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    flex: 4,
+                    child: Text(
+                      label,
+                      style: context.text.body.copyWith(
+                        color: context.colors.textSecondary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.ms),
+                  Expanded(
+                    flex: 5,
+                    child: valueWidget ??
+                        Text(
+                          value,
+                          textAlign: TextAlign.right,
+                          style: emphasize
+                              ? context.text.listTitle
+                              : context.text.body.copyWith(
+                                  fontWeight: FontWeight.w500,
+                                ),
+                        ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(width: AppSpacing.ms),
-            Expanded(
-              flex: 5,
-              child: valueWidget ??
-                  Text(
-                    value,
-                    textAlign: TextAlign.right,
-                    style: emphasize
-                        ? AppTextStyles.cardTitle.copyWith(fontSize: 15)
-                        : AppTextStyles.body.copyWith(
-                            fontWeight: FontWeight.w500,
-                          ),
-                  ),
-            ),
-            if (copyable && onCopy != null)
-              InkWell(
-                onTap: onCopy,
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-                child: const Padding(
-                  padding: EdgeInsets.all(AppSpacing.xs + 2),
-                  child: Icon(
-                    Icons.copy_rounded,
-                    size: 15,
-                    color: AppColors.textMuted,
-                  ),
-                ),
+          ),
+          if (showCopy)
+            IconButton(
+              onPressed: onCopy,
+              tooltip: context.l10n.commonCopyLabel(label),
+              icon: Icon(
+                Icons.copy_rounded,
+                size: 16,
+                color: context.colors.textMuted,
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
@@ -434,7 +449,7 @@ class AppCardDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.symmetric(vertical: spacing),
-      child: const Divider(height: 1, color: AppColors.border),
+      child: Divider(height: 1, color: context.colors.border),
     );
   }
 }
@@ -485,11 +500,7 @@ class AppStatTile extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: Text(
               value,
-              style: AppTextStyles.sectionTitle.copyWith(
-                fontSize: 21,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.5,
-              ),
+              style: context.text.statValue,
             ),
           ),
           const SizedBox(height: 2),
@@ -497,7 +508,7 @@ class AppStatTile extends StatelessWidget {
             label,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.small.copyWith(fontSize: 11.5),
+            style: context.text.caption,
           ),
           if (caption != null) ...[
             const SizedBox(height: 2),
@@ -505,90 +516,12 @@ class AppStatTile extends StatelessWidget {
               caption!,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.small.copyWith(
+              style: context.text.small.copyWith(
                 fontSize: 11,
-                color: AppColors.textMuted,
+                color: context.colors.textMuted,
               ),
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-/// Square action tile — the 2x2 grid on the member home.
-class AppActionTile extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final Color iconBackground;
-  final String label;
-  final String caption;
-  final VoidCallback onTap;
-  final int badgeCount;
-
-  const AppActionTile({
-    super.key,
-    required this.icon,
-    required this.iconColor,
-    required this.iconBackground,
-    required this.label,
-    required this.caption,
-    required this.onTap,
-    this.badgeCount = 0,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      onTap: onTap,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              AppIconChip(
-                icon: icon,
-                color: iconColor,
-                background: iconBackground,
-              ),
-              if (badgeCount > 0)
-                Positioned(
-                  top: -3,
-                  right: -5,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5),
-                    constraints: const BoxConstraints(minWidth: 18),
-                    height: 18,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: AppColors.error,
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                      border: Border.all(color: AppColors.surface, width: 2),
-                    ),
-                    child: Text(
-                      badgeCount > 9 ? '9+' : '$badgeCount',
-                      style: AppTextStyles.label.copyWith(
-                        color: Colors.white,
-                        fontSize: 10,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.ms),
-          Text(label, style: AppTextStyles.cardTitle.copyWith(fontSize: 15)),
-          const SizedBox(height: 2),
-          Text(
-            caption,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.small.copyWith(fontSize: 11.5),
-          ),
         ],
       ),
     );
@@ -600,8 +533,8 @@ class AppNoticeCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String message;
-  final Color color;
-  final Color background;
+  final Color? color;
+  final Color? background;
   final String? actionLabel;
   final VoidCallback? onAction;
 
@@ -610,14 +543,16 @@ class AppNoticeCard extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.message,
-    this.color = AppColors.primary,
-    this.background = AppColors.primaryLight,
+    this.color,
+    this.background,
     this.actionLabel,
     this.onAction,
   });
 
   @override
   Widget build(BuildContext context) {
+    final color = this.color ?? context.colors.primary;
+    final background = this.background ?? context.colors.primaryLight;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md - 2),
@@ -633,7 +568,7 @@ class AppNoticeCard extends StatelessWidget {
             height: 40,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: context.colors.surface,
               borderRadius: BorderRadius.circular(AppRadius.button),
             ),
             child: Icon(icon, size: 20, color: color),
@@ -645,10 +580,10 @@ class AppNoticeCard extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: AppTextStyles.cardTitle.copyWith(fontSize: 15),
+                  style: context.text.listTitle,
                 ),
                 const SizedBox(height: 2),
-                Text(message, style: AppTextStyles.small),
+                Text(message, style: context.text.small),
               ],
             ),
           ),
@@ -663,7 +598,7 @@ class AppNoticeCard extends StatelessWidget {
               ),
               child: Text(
                 actionLabel!,
-                style: AppTextStyles.button.copyWith(fontSize: 14, color: color),
+                style: context.text.buttonMedium.copyWith(color: color),
               ),
             ),
           ],
@@ -699,18 +634,18 @@ class AppStepIndicator extends StatelessWidget {
                 child: Container(
                   height: 2,
                   color: i <= currentIndex
-                      ? AppColors.primary
-                      : AppColors.border,
+                      ? context.colors.primary
+                      : context.colors.border,
                 ),
               ),
             ),
-          _step(i),
+          _step(context, i),
         ],
       ],
     );
   }
 
-  Widget _step(int index) {
+  Widget _step(BuildContext context, int index) {
     final isDone = index < currentIndex;
     final isCurrent = index == currentIndex;
     final filled = isDone || isCurrent;
@@ -724,19 +659,22 @@ class AppStepIndicator extends StatelessWidget {
             height: 32,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: filled ? AppColors.primary : AppColors.surface,
+              color: filled ? context.colors.primary : context.colors.surface,
               shape: BoxShape.circle,
               border: Border.all(
-                color: filled ? AppColors.primary : AppColors.border,
+                color: filled ? context.colors.primary : context.colors.border,
               ),
             ),
             child: isDone
-                ? const Icon(Icons.check_rounded, size: 16, color: Colors.white)
+                ? Icon(Icons.check_rounded,
+                    size: 16, color: context.colors.onPrimary)
                 : Text(
                     '${index + 1}',
-                    style: AppTextStyles.small.copyWith(
+                    style: context.text.small.copyWith(
                       fontWeight: FontWeight.w700,
-                      color: filled ? Colors.white : AppColors.textMuted,
+                      color: filled
+                          ? context.colors.onPrimary
+                          : context.colors.textMuted,
                     ),
                   ),
           ),
@@ -746,14 +684,43 @@ class AppStepIndicator extends StatelessWidget {
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.small.copyWith(
+            style: context.text.small.copyWith(
               fontSize: 11,
               fontWeight: isCurrent ? FontWeight.w600 : FontWeight.w500,
-              color: filled ? AppColors.primary : AppColors.textMuted,
+              color: filled ? context.colors.primary : context.colors.textMuted,
             ),
           ),
         ],
       ),
     );
   }
+}
+
+/// Localized label for a backend status string (upper-cased), or null when
+/// the status is not one the app knows.
+String? statusLabel(BuildContext context, String normalized) {
+  final l = context.l10n;
+  return switch (normalized) {
+    'PAID' => l.statusPaid,
+    'ACTIVE' => l.statusActive,
+    'COMPLETED' => l.statusCompleted,
+    'APPROVED' => l.statusApproved,
+    'VERIFIED' => l.statusVerified,
+    'SUCCESS' => l.statusSuccess,
+    'PENDING' => l.statusPending,
+    'PROCESSING' => l.statusProcessing,
+    'INITIATED' => l.statusInitiated,
+    'PARTIAL' => l.statusPartial,
+    'DUE' => l.statusDue,
+    'FAILED' => l.statusFailed,
+    'OVERDUE' => l.statusOverdue,
+    'INACTIVE' => l.statusInactive,
+    'CANCELLED' => l.statusCancelled,
+    'REJECTED' => l.statusRejected,
+    'INFO' => l.statusInfo,
+    'DRAFT' => l.statusDraft,
+    'SCHEDULED' => l.statusScheduled,
+    'UNKNOWN' => l.statusUnknown,
+    _ => null,
+  };
 }

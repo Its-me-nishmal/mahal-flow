@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
+import '../../l10n/l10n.dart';
 
 /// -------------------------------------------------------------------------
 /// The one page shell every screen in the app uses.
@@ -14,6 +15,7 @@ import '../theme/app_tokens.dart';
 /// -------------------------------------------------------------------------
 
 /// Circular translucent icon button used inside the gradient header.
+/// Draws a [AppSizes.headerIcon] circle inside a [AppSizes.minTouch] hit area.
 class AppHeaderIconButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
@@ -30,55 +32,137 @@ class AppHeaderIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: Semantics(
-        button: true,
-        label: tooltip,
-        child: InkWell(
+    final semanticLabel =
+        badgeCount > 0
+            ? context.l10n.commonUnreadCount(tooltip, badgeCount)
+            : tooltip;
+
+    // One semantics node: the Tooltip is visual only, so the label is not
+    // announced twice.
+    return Semantics(
+      button: true,
+      enabled: onTap != null,
+      label: semanticLabel,
+      excludeSemantics: true,
+      child: Tooltip(
+        message: tooltip,
+        excludeFromSemantics: true,
+        child: InkResponse(
           onTap: onTap,
-          customBorder: const CircleBorder(),
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.16),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.24),
-                  ),
-                ),
-                child: Icon(icon, size: 20, color: Colors.white),
-              ),
-              if (badgeCount > 0)
-                Positioned(
-                  top: -1,
-                  right: -1,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5),
-                    constraints: const BoxConstraints(minWidth: 18),
-                    height: 18,
+          radius: AppSizes.minTouch / 2,
+          child: SizedBox(
+            width: AppSizes.minTouch,
+            height: AppSizes.minTouch,
+            child: Center(
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: AppSizes.headerIcon,
+                    height: AppSizes.headerIcon,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: AppColors.error,
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                      border: Border.all(color: AppColors.primaryDark, width: 2),
-                    ),
-                    child: Text(
-                      badgeCount > 9 ? '9+' : '$badgeCount',
-                      style: AppTextStyles.label.copyWith(
-                        color: Colors.white,
-                        fontSize: 10,
-                        letterSpacing: 0,
+                      color: Colors.white.withValues(alpha: 0.16),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.24),
                       ),
                     ),
+                    child: Icon(icon, size: 20, color: Colors.white),
+                  ),
+                  if (badgeCount > 0)
+                    Positioned(
+                      top: -1,
+                      right: -1,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                        constraints: const BoxConstraints(minWidth: 18),
+                        height: 18,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: context.colors.error,
+                          borderRadius: BorderRadius.circular(AppRadius.pill),
+                          border: Border.all(
+                              color: context.colors.primaryDark, width: 2),
+                        ),
+                        child: Text(
+                          badgeCount > 9 ? '9+' : '$badgeCount',
+                          style: context.text.label.copyWith(
+                            color: context.colors.onPrimary,
+                            fontSize: 10,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Translucent pill with an icon and a short label, for the gradient header
+/// (the language toggle on the sign-in screens). Same visual language as
+/// [AppHeaderIconButton]; hit area is at least [AppSizes.minTouch] tall.
+class AppHeaderPillButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String tooltip;
+  final VoidCallback? onTap;
+
+  const AppHeaderPillButton({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      enabled: onTap != null,
+      label: '$tooltip, $label',
+      excludeSemantics: true,
+      child: Tooltip(
+        message: tooltip,
+        excludeFromSemantics: true,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: AppSizes.minTouch),
+            child: Center(
+              widthFactor: 1,
+              child: Container(
+                height: 36,
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.ms),
+                decoration: BoxDecoration(
+                  color: AppBrand.onBrand.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  border: Border.all(
+                    color: AppBrand.onBrand.withValues(alpha: 0.24),
                   ),
                 ),
-            ],
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, size: 16, color: AppBrand.onBrand),
+                    const SizedBox(width: AppSpacing.xs + 2),
+                    Text(
+                      label,
+                      style: context.text.buttonSmall
+                          .copyWith(color: AppBrand.onBrand),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -128,7 +212,7 @@ class AppGradientHeader extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      decoration: const BoxDecoration(gradient: AppGradients.hero),
+      decoration: BoxDecoration(gradient: context.colors.heroGradient),
       padding: EdgeInsets.only(
         left: AppSpacing.screenH,
         right: AppSpacing.screenH,
@@ -144,12 +228,17 @@ class AppGradientHeader extends StatelessWidget {
                 leading!,
                 const SizedBox(width: AppSpacing.ms),
               ] else if (showBack && (canPop || onBack != null)) ...[
-                AppHeaderIconButton(
-                  icon: Icons.arrow_back_rounded,
-                  tooltip: 'Back',
-                  onTap: onBack ?? () => Navigator.of(context).maybePop(),
+                // The 48dp hit area overhangs the 42dp circle by 3dp, so
+                // pull it left to keep the circle on the screen margin.
+                Transform.translate(
+                  offset: const Offset(-3, 0),
+                  child: AppHeaderIconButton(
+                    icon: Icons.arrow_back_rounded,
+                    tooltip: context.l10n.commonBack,
+                    onTap: onBack ?? () => Navigator.of(context).maybePop(),
+                  ),
                 ),
-                const SizedBox(width: AppSpacing.ms),
+                const SizedBox(width: AppSpacing.ms - 3),
               ],
               Expanded(
                 child: Column(
@@ -158,7 +247,7 @@ class AppGradientHeader extends StatelessWidget {
                     if (eyebrow != null) ...[
                       Text(
                         eyebrow!.toUpperCase(),
-                        style: AppTextStyles.label.copyWith(
+                        style: context.text.label.copyWith(
                           color: Colors.white.withValues(alpha: 0.66),
                         ),
                       ),
@@ -170,7 +259,7 @@ class AppGradientHeader extends StatelessWidget {
                         title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.pageTitle.copyWith(
+                        style: context.text.pageTitle.copyWith(
                           color: Colors.white,
                         ),
                       ),
@@ -178,8 +267,10 @@ class AppGradientHeader extends StatelessWidget {
                   ],
                 ),
               ),
+              // Header buttons carry 3dp of hit-area slack per side, so a
+              // 2dp gap reads as the 8dp spacing between the circles.
               for (final action in actions) ...[
-                const SizedBox(width: AppSpacing.sm),
+                const SizedBox(width: AppSpacing.sm - 6),
                 action,
               ],
             ],
@@ -188,7 +279,7 @@ class AppGradientHeader extends StatelessWidget {
             const SizedBox(height: AppSpacing.sm),
             Text(
               subtitle!,
-              style: AppTextStyles.body.copyWith(color: onHeroMuted),
+              style: context.text.body.copyWith(color: onHeroMuted),
             ),
           ],
           if (child != null) ...[
@@ -226,7 +317,12 @@ class AppPageScaffold extends StatelessWidget {
   final Widget? expandedChild;
 
   final Future<void> Function()? onRefresh;
+
+  /// Sticky footer (usually [AppBottomActionBar]). It rides above the
+  /// keyboard, so a form's primary action stays reachable while typing.
   final Widget? bottomBar;
+
+  /// Tab bar. Unlike [bottomBar] it stays behind the keyboard.
   final Widget? bottomNavigationBar;
   final Widget? floatingActionButton;
   final bool padded;
@@ -312,8 +408,8 @@ class AppPageScaffold extends StatelessWidget {
       if (onRefresh != null) {
         body = RefreshIndicator(
           onRefresh: onRefresh!,
-          color: AppColors.primary,
-          backgroundColor: AppColors.surface,
+          color: context.colors.primary,
+          backgroundColor: context.colors.surface,
           edgeOffset: MediaQuery.paddingOf(context).top + 64,
           child: body,
         );
@@ -321,15 +417,34 @@ class AppPageScaffold extends StatelessWidget {
     }
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: AppOverlayStyles.gradientHeader,
+      value: context.colors.gradientHeaderOverlay,
       child: Scaffold(
         key: scaffoldKey,
         drawer: drawer,
-        backgroundColor: AppColors.background,
+        backgroundColor: context.colors.background,
         body: body,
-        bottomNavigationBar: bottomBar ?? bottomNavigationBar,
+        bottomNavigationBar: bottomBar != null
+            ? _KeyboardLift(child: bottomBar!)
+            : bottomNavigationBar,
         floatingActionButton: floatingActionButton,
       ),
+    );
+  }
+}
+
+/// Pads its child by the keyboard height. Scaffold keeps
+/// `bottomNavigationBar` pinned to the screen bottom (under the keyboard);
+/// lifting it here also shrinks the body by the same amount, so nothing is
+/// covered.
+class _KeyboardLift extends StatelessWidget {
+  final Widget child;
+  const _KeyboardLift({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: child,
     );
   }
 }
@@ -369,9 +484,9 @@ class AppBottomActionBar extends StatelessWidget {
     );
 
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border)),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        border: Border(top: BorderSide(color: context.colors.border)),
       ),
       child: applySafeArea ? SafeArea(top: false, child: body) : body,
     );
@@ -434,19 +549,18 @@ class AppHeroFilterChips extends StatelessWidget {
                   children: [
                     Text(
                       option,
-                      style: AppTextStyles.button.copyWith(
-                        fontSize: 13,
-                        color: isActive ? AppColors.primaryDark : Colors.white,
+                      style: context.text.buttonSmall.copyWith(
+                        color: isActive ? context.colors.primaryDark : Colors.white,
                       ),
                     ),
                     if (count != null) ...[
                       const SizedBox(width: AppSpacing.xs + 2),
                       Text(
                         '$count',
-                        style: AppTextStyles.small.copyWith(
+                        style: context.text.small.copyWith(
                           fontWeight: FontWeight.w700,
                           color: isActive
-                              ? AppColors.primary
+                              ? context.colors.primary
                               : Colors.white.withValues(alpha: 0.7),
                         ),
                       ),
