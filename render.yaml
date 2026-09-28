@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: mahalflow-api
+    runtime: go
+    rootDir: backend-go
+    buildCommand: go build -tags netgo -ldflags '-s -w' -o server ./cmd/api
+    startCommand: ./server
+    healthCheckPath: /health
+    plan: free
+    envVars:
+      - key: ENV
+        value: production
+      - key: DB_NAME
+        value: mahalflow
+      - key: MONGO_URI
+        sync: false # Set your MongoDB Atlas SRV URI in Render Dashboard
+      - key: JWT_SECRET
+        generateValue: true
+      - key: PAYMENT_TEST_MODE
+        value: "ON"
+      - key: WHATSAPP_DRY_RUN
+        value: "true"
+      - key: FCM_DRY_RUN
+        value: "true"
