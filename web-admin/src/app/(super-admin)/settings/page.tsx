@@ -1,169 +1,159 @@
-import { PageHeader } from "@/components/ui/PageHeader";
+"use client";
 
-export default function SystemSettingsPage() {
-  const admins = [
-    { name: "System Admin", role: "Owner", lastLogin: "Today, 10:42 AM" },
-    { name: "John Doe", role: "Support", lastLogin: "Yesterday, 3:15 PM" },
-  ];
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { ErrorState, LoadingBlock } from "@/components/ui/States";
+import { FormField, inputClass, fieldBorder } from "@/components/ui/FormField";
+import { useToast } from "@/components/ui/Toast";
+import { ApiClient, type CurrentUser } from "@/lib/api-client";
+import { cn } from "@/lib/cn";
+import { errorMessage, formatPhone, humanize, initials } from "@/lib/format";
+
+const MIN_PASSWORD = 10; // server MinPasswordLength
+
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex justify-between gap-4 py-2 border-b border-border-base last:border-0">
+      <span className="font-body text-body text-text-secondary">{label}</span>
+      <span className="font-body text-body text-text-primary font-medium text-right break-all">{value}</span>
+    </div>
+  );
+}
+
+function ChangePasswordCard() {
+  const toast = useToast();
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [show, setShow] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState<{ current?: string; next?: string; confirm?: string }>({});
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const errs: typeof errors = {};
+    if (!current) errs.current = "Enter your current password.";
+    if (next.length < MIN_PASSWORD) errs.next = `At least ${MIN_PASSWORD} characters.`;
+    else if (next.length > 72) errs.next = "At most 72 characters.";
+    else if (next === current) errs.next = "Must differ from the current password.";
+    if (confirm !== next) errs.confirm = "Passwords do not match.";
+    setErrors(errs);
+    if (Object.keys(errs).length) return;
+
+    setSaving(true);
+    try {
+      await ApiClient.changePassword(current, next);
+      toast.success("Password changed. Use the new password next time you sign in.");
+      setCurrent("");
+      setNext("");
+      setConfirm("");
+    } catch (err) {
+      const msg = errorMessage(err, "Could not change the password.");
+      if (/current password/i.test(msg)) setErrors({ current: msg });
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const type = show ? "text" : "password";
+  return (
+    <form onSubmit={submit} noValidate className="bg-surface border border-border-base rounded-xl p-lg shadow-sm flex flex-col gap-lg">
+      <h3 className="font-section-title text-section-title text-text-primary">Change Password</h3>
+      <FormField label="Current password" htmlFor="pw-current" error={errors.current}>
+        <input id="pw-current" type={type} autoComplete="current-password" className={cn(inputClass, fieldBorder(errors.current))} value={current} disabled={saving} onChange={(e) => setCurrent(e.target.value)} />
+      </FormField>
+      <FormField label="New password" htmlFor="pw-new" error={errors.next} hint={`At least ${MIN_PASSWORD} characters.`}>
+        <input id="pw-new" type={type} autoComplete="new-password" className={cn(inputClass, fieldBorder(errors.next))} value={next} disabled={saving} onChange={(e) => setNext(e.target.value)} />
+      </FormField>
+      <FormField label="Confirm new password" htmlFor="pw-confirm" error={errors.confirm}>
+        <input id="pw-confirm" type={type} autoComplete="new-password" className={cn(inputClass, fieldBorder(errors.confirm))} value={confirm} disabled={saving} onChange={(e) => setConfirm(e.target.value)} />
+      </FormField>
+      <label className="flex items-center gap-2 text-sm text-text-secondary">
+        <input type="checkbox" checked={show} onChange={(e) => setShow(e.target.checked)} className="accent-[#146c5b]" />
+        Show passwords
+      </label>
+      <div>
+        <button
+          type="submit"
+          disabled={saving}
+          className="h-11 px-6 bg-primary-container text-on-primary font-button text-button rounded-lg hover:bg-primary transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {saving ? <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <span className="material-symbols-outlined text-[18px]">lock_reset</span>}
+          {saving ? "Updating..." : "Update Password"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+export default function SettingsPage() {
+  const [me, setMe] = useState<CurrentUser | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    setError(null);
+    setMe(null);
+    ApiClient.getMe()
+      .then(setMe)
+      .catch((err) => setError(errorMessage(err, "Could not load your profile.")));
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const mahalId = me?.home_mahal_id || me?.mahal_id || "";
 
   return (
     <>
-      <PageHeader
-        title="System Settings"
-        description="Configure platform-wide defaults and manage super admin access."
-        actions={
-          <button className="px-4 py-2 bg-primary-container text-on-primary font-button text-button rounded-lg hover:bg-primary transition-colors flex items-center gap-2 h-[44px]">
-            <span className="material-symbols-outlined text-[18px]">save</span>
-            Save Changes
-          </button>
-        }
-      />
+      <PageHeader title="Settings" description="Your admin account and Mahal configuration." />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-lg">
-        <div className="bg-surface border border-border-base rounded-xl p-lg shadow-sm lg:col-span-2">
-          <h3 className="font-section-title text-section-title text-text-primary mb-lg">
-            Global Payment Gateways
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="border border-border-base rounded-xl p-lg">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center">
-                    <span className="material-symbols-outlined text-on-primary-container text-[20px]">
-                      account_balance_wallet
-                    </span>
-                  </div>
-                  <p className="font-card-title text-card-title text-text-primary">Razorpay</p>
-                </div>
-                <div className="w-11 h-6 bg-success rounded-full relative cursor-pointer">
-                  <div className="absolute right-0.5 top-0.5 w-5 h-5 bg-surface rounded-full shadow transition-transform" />
-                </div>
-              </div>
-              <div className="space-y-3">
-                <div>
-                  <label className="font-small text-small text-text-secondary">API Key ID</label>
-                  <input className="w-full h-10 px-3 mt-1 rounded-lg border border-border-base bg-surface-container-low text-text-primary font-body text-body" defaultValue="rzp_live_••••••••K7xQ" readOnly type="password" />
-                </div>
-                <div>
-                  <label className="font-small text-small text-text-secondary">Secret Key</label>
-                  <input className="w-full h-10 px-3 mt-1 rounded-lg border border-border-base bg-surface-container-low text-text-primary font-body text-body" defaultValue="••••••••••••" readOnly type="password" />
-                </div>
-                <button className="text-primary font-button text-small hover:underline">Edit Credentials</button>
-              </div>
-            </div>
-            <div className="border border-border-base rounded-xl p-lg">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center border border-border-base">
-                    <span className="material-symbols-outlined text-text-secondary text-[20px]">
-                      account_balance_wallet
-                    </span>
-                  </div>
-                  <p className="font-card-title text-card-title text-text-primary">Stripe</p>
-                </div>
-                <div className="w-11 h-6 bg-surface-container-high rounded-full relative cursor-pointer">
-                  <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-surface rounded-full shadow transition-transform" />
-                </div>
-              </div>
-              <div className="space-y-3">
-                <div>
-                  <label className="font-small text-small text-text-secondary">Publishable Key</label>
-                  <input className="w-full h-10 px-3 mt-1 rounded-lg border border-border-base bg-surface-container-low text-text-primary font-body text-body" placeholder="pk_live_..." type="password" />
-                </div>
-                <div>
-                  <label className="font-small text-small text-text-secondary">Secret Key</label>
-                  <input className="w-full h-10 px-3 mt-1 rounded-lg border border-border-base bg-surface-container-low text-text-primary font-body text-body" placeholder="sk_live_..." type="password" />
-                </div>
-                <button className="text-primary font-button text-small hover:underline">Configure</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-lg items-start">
         <div className="bg-surface border border-border-base rounded-xl p-lg shadow-sm">
-          <h3 className="font-section-title text-section-title text-text-primary mb-lg">
-            Platform Branding
-          </h3>
-          <div className="space-y-lg">
-            <div className="flex flex-col gap-sm">
-              <label className="font-card-title text-card-title text-text-primary">Platform Name</label>
-              <input className="h-12 px-4 rounded-lg border border-border-base bg-surface-container-lowest text-text-primary font-body text-body focus:outline-none focus:ring-2 focus:ring-primary-container" defaultValue="MahalFlow Admin" type="text" />
-            </div>
-            <div className="flex flex-col gap-sm">
-              <label className="font-card-title text-card-title text-text-primary">Global Logo</label>
-              <div className="border-2 border-dashed border-border-base rounded-xl p-lg text-center hover:bg-surface-container-low cursor-pointer transition-colors">
-                <span className="material-symbols-outlined text-[32px] text-text-muted mb-2 block">cloud_upload</span>
-                <p className="font-body text-body text-text-secondary">SVG or PNG, max 2MB</p>
-              </div>
-            </div>
-            <div className="flex flex-col gap-sm">
-              <label className="font-card-title text-card-title text-text-primary">Primary Color</label>
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-lg border border-border-base" style={{ backgroundColor: "#005244" }} />
-                <input className="h-12 px-4 rounded-lg border border-border-base bg-surface-container-lowest text-text-primary font-body text-body focus:outline-none focus:ring-2 focus:ring-primary-container w-32" defaultValue="#005244" type="text" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-surface border border-border-base rounded-xl p-lg shadow-sm">
-          <div className="flex items-center justify-between mb-lg">
-            <h3 className="font-section-title text-section-title text-text-primary">Super Admins</h3>
-            <button className="h-9 px-4 bg-primary-container text-on-primary rounded-lg font-button text-small hover:bg-primary transition-colors flex items-center gap-1">
-              <span className="material-symbols-outlined text-[14px]">add</span>
-              Add Admin
-            </button>
-          </div>
-          <div className="space-y-3">
-            {admins.map((admin, i) => (
-              <div key={i} className="flex items-center justify-between p-3 border border-border-base rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary font-button text-button">
-                    {admin.name.split(" ").map((n) => n[0]).join("")}
-                  </div>
-                  <div>
-                    <p className="font-button text-button text-text-primary">{admin.name}</p>
-                    <p className="font-small text-small text-text-muted">{admin.role} - Last login: {admin.lastLogin}</p>
-                  </div>
+          <h3 className="font-section-title text-section-title text-text-primary mb-lg">My Account</h3>
+          {error ? (
+            <ErrorState message={error} onRetry={load} />
+          ) : !me ? (
+            <LoadingBlock rows={4} />
+          ) : (
+            <>
+              <div className="flex items-center gap-3 mb-lg">
+                <div className="w-12 h-12 rounded-full bg-primary-container flex items-center justify-center text-on-primary font-button text-button">
+                  {initials(me.name)}
                 </div>
-                <button className="text-text-secondary hover:text-primary p-2 rounded-lg hover:bg-surface-container-low transition-colors">
-                  <span className="material-symbols-outlined">more_vert</span>
-                </button>
+                <div>
+                  <p className="font-card-title text-card-title text-text-primary">{me.name}</p>
+                  <p className="font-small text-small text-text-muted">{humanize(me.role)}</p>
+                </div>
               </div>
-            ))}
-          </div>
+              <Row label="Phone" value={formatPhone(me.phone)} />
+              <Row label="Admin ID" value={me.user_id} />
+              <Row label="Mahal" value={`${me.mahal_name} (${me.mahal_id})`} />
+              <div className="flex flex-wrap gap-2 mt-lg">
+                {mahalId && (
+                  <Link
+                    href={`/mahals/${encodeURIComponent(mahalId)}/edit`}
+                    className="h-10 px-4 bg-surface border border-primary text-primary font-button text-small rounded-lg hover:bg-surface-container-low transition-colors inline-flex items-center gap-2"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">tune</span>
+                    Mahal Settings (dues, dunning, AutoPay)
+                  </Link>
+                )}
+                <Link
+                  href="/gateways"
+                  className="h-10 px-4 bg-surface border border-border-base text-text-primary font-button text-small rounded-lg hover:bg-surface-container-low transition-colors inline-flex items-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-[18px]">account_balance_wallet</span>
+                  Payment Gateways
+                </Link>
+              </div>
+            </>
+          )}
         </div>
 
-        <div className="bg-surface border border-border-base rounded-xl p-lg shadow-sm lg:col-span-2">
-          <h3 className="font-section-title text-section-title text-text-primary mb-lg">
-            Audit Retention
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-lg">
-            <div className="flex flex-col gap-sm">
-              <label className="font-card-title text-card-title text-text-primary">Financial Transactions Log</label>
-              <select className="h-12 px-4 rounded-lg border border-border-base bg-surface-container-lowest text-text-primary font-body text-body focus:outline-none focus:ring-2 focus:ring-primary-container">
-                <option>7 Years (Recommended)</option>
-                <option>5 Years</option>
-                <option>10 Years</option>
-                <option>Indefinite</option>
-              </select>
-            </div>
-            <div className="flex flex-col gap-sm">
-              <label className="font-card-title text-card-title text-text-primary">User Activity Log</label>
-              <select className="h-12 px-4 rounded-lg border border-border-base bg-surface-container-lowest text-text-primary font-body text-body focus:outline-none focus:ring-2 focus:ring-primary-container">
-                <option>1 Year</option>
-                <option>2 Years</option>
-                <option>3 Years</option>
-              </select>
-            </div>
-          </div>
-          <div className="bg-warning-bg border border-warning/20 rounded-lg p-md mt-lg flex items-start gap-3">
-            <span className="material-symbols-outlined text-warning mt-0.5">warning</span>
-            <p className="font-small text-small text-text-secondary">
-              Reducing retention will permanently delete older logs during the next midnight maintenance window. This action cannot be undone.
-            </p>
-          </div>
-        </div>
+        <ChangePasswordCard />
       </div>
     </>
   );

@@ -80,7 +80,7 @@ export async function fetchApi<T>(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const res = await fetch(url, {
+  const res = await safeFetch(url, {
     ...options,
     headers,
     cache: "no-store",
@@ -93,12 +93,173 @@ export async function fetchApi<T>(
     }
   }
 
-  if (!res.ok) {
-    const errorBody = await res.text().catch(() => "");
-    throw new Error(`API Error ${res.status}: ${errorBody || res.statusText}`);
-  }
+  return parseResponse<T>(res);
+}
 
+/** Non-2xx API answer. `message` is the server's `error` text when it sent one. */
+export class ApiError extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+async function parseResponse<T>(res: Response): Promise<T> {
+  if (!res.ok) {
+    const raw = await res.text().catch(() => "");
+    let msg = "";
+    try {
+      const body = JSON.parse(raw);
+      msg = typeof body?.error === "string" ? body.error : typeof body?.message === "string" ? body.message : "";
+    } catch {
+      msg = raw.slice(0, 200);
+    }
+    if (!msg) {
+      msg =
+        res.status === 403
+          ? "You do not have permission to do this."
+          : res.status === 404
+          ? "Not found."
+          : res.status >= 500
+          ? "The server had a problem. Try again."
+          : `Request failed (${res.status}).`;
+    }
+    throw new ApiError(msg, res.status);
+  }
   return (await res.json()) as T;
+}
+
+/** Wraps network failures (server down, CORS, offline) in a readable error. */
+async function safeFetch(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch {
+    throw new ApiError("Cannot reach the MahalFlow server. Check your connection.", 0);
+  }
+}
+
+export type AdminRole = "MAHAL_ADMIN" | "SUPER_ADMIN";
+
+/** Role of the signed-in admin, from the login response. */
+export function getCurrentRole(): string {
+  const user = getStoredUser();
+  return typeof user?.role === "string" ? user.role : "";
+}
+
+export function isSuperAdmin(): boolean {
+  return getCurrentRole() === "SUPER_ADMIN";
+}
+
+export type SubscriptionStatus = "ACTIVE" | "GRACE_PERIOD" | "READ_ONLY" | "SUSPENDED";
+export const SUBSCRIPTION_STATUSES: SubscriptionStatus[] = ["ACTIVE", "GRACE_PERIOD", "READ_ONLY", "SUSPENDED"];
+
+export interface Mahal {
+  id: string;
+  name: string;
+  registration_number: string;
+  contact: { email: string; phone: string; whatsapp?: string; address: string };
+  settings: {
+    currency: string;
+    default_monthly_dues: number;
+    dunning_enabled: boolean;
+    preferred_languages: string[] | null;
+    autopay_allowed: boolean;
+  };
+  subscription: {
+    plan: string;
+    monthly_fee: number;
+    status: SubscriptionStatus | string;
+    grace_period_ends_at?: string;
+    next_billing_date: string;
+  };
+  created_at: string;
+  updated_at: string;
+}
+
+/** Body for create / update. Omitted fields are left unchanged (update) or defaulted (create). */
+export interface MahalInput {
+  id?: string;
+  name?: string;
+  registration_number?: string;
+  contact?: { email?: string; phone?: string; whatsapp?: string; address?: string };
+  settings?: { default_monthly_dues?: number; dunning_enabled?: boolean; autopay_allowed?: boolean };
+  /** SUPER_ADMIN only. */
+  subscription?: { status?: SubscriptionStatus; plan?: string; monthly_fee?: number };
+}
+
+export interface MahalRecentPayment {
+  id: string;
+  member_id: string;
+  member_name?: string;
+  type: string;
+  amount: number;
+  status: string;
+  gateway?: string;
+  payment_mode?: string;
+  receipt_id?: string;
+  created_at: string;
+  completed_at?: string | null;
+}
+
+export interface MahalStats {
+  mahal_id: string;
+  total_members: number;
+  paid_members: number;
+  pending_members: number;
+  total_pending_dues: number;
+  collected_mtd: number;
+  dues_collected_mtd: number;
+  donations_mtd: number;
+  transactions_mtd: number;
+  collected_all_time: number;
+  mtd_month: string;
+  timezone: string;
+  recent_payments: MahalRecentPayment[];
+}
+
+export interface ImportRow {
+  row: number;
+  name: string;
+  phone: string;
+  house_name: string;
+  monthly_dues: number;
+  family_head: boolean;
+  family_members_count: number;
+  email?: string;
+  code?: string;
+  status: "VALID" | "DUPLICATE" | "INVALID" | string;
+  errors: string[] | null;
+}
+
+export interface ImportPreview {
+  batch_id: string;
+  filename: string;
+  total_rows: number;
+  valid_rows: number;
+  duplicate_rows: number;
+  invalid_rows: number;
+  preview_rows: ImportRow[];
+  expires_at: string;
+  status: string;
+}
+
+export interface ImportCommitResult {
+  status: "COMPLETED" | "ALREADY_COMMITTED" | string;
+  batch_id: string;
+  imported: number;
+  skipped: number;
+}
+
+export interface CurrentUser {
+  user_id: string;
+  name: string;
+  role: string;
+  mahal_id: string;
+  mahal_name: string;
+  phone?: string;
+  home_mahal_id?: string;
 }
 
 export interface ReportPeriod {
@@ -186,6 +347,8 @@ export const ApiClient = {
   getToken: getStoredToken,
   getUser: getStoredUser,
   getTenant: getCurrentTenant,
+  getRole: getCurrentRole,
+  isSuperAdmin,
   isAuthenticated: () => !!getStoredToken(),
 
   // 1. Dashboard Statistics
@@ -211,14 +374,27 @@ export const ApiClient = {
   },
 
   getMahal: async (id: string) => {
-    return fetchApi<any>(`/admin/mahals/${id}`);
+    return fetchApi<Mahal>(`/admin/mahals/${encodeURIComponent(id)}`);
   },
 
-  createMahal: async (data: any) => {
-    return fetchApi<any>("/admin/mahals", undefined, {
+  /** SUPER_ADMIN only. 409 when the id is taken. */
+  createMahal: async (data: MahalInput) => {
+    return fetchApi<Mahal>("/admin/mahals", undefined, {
       method: "POST",
       body: JSON.stringify(data),
     });
+  },
+
+  /** SUPER_ADMIN: any Mahal. MAHAL_ADMIN: own Mahal, no subscription fields. */
+  updateMahal: async (id: string, data: MahalInput) => {
+    return fetchApi<Mahal>(`/admin/mahals/${encodeURIComponent(id)}`, undefined, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  getMahalStats: async (id: string, limit = 10) => {
+    return fetchApi<MahalStats>(`/admin/mahals/${encodeURIComponent(id)}/stats?limit=${limit}`);
   },
 
   // 3. Members Directory & Search
@@ -254,13 +430,59 @@ export const ApiClient = {
   },
 
   getMemberProfile: async (id: string, tenantId?: string) => {
-    return fetchApi<any>(`/members/profile/${id}`, tenantId);
+    return fetchApi<any>(`/members/profile/${encodeURIComponent(id)}`, tenantId);
   },
 
   updateMemberProfile: async (id: string, updates: any, tenantId?: string) => {
-    return fetchApi<any>(`/members/profile/${id}`, tenantId, {
+    return fetchApi<any>(`/members/profile/${encodeURIComponent(id)}`, tenantId, {
       method: "PUT",
       body: JSON.stringify(updates),
+    });
+  },
+
+  /** A member's receipts (admin view). */
+  getMemberReceipts: async (memberId: string, tenantId?: string) => {
+    return fetchApi<{ receipts: any[]; total: number }>(
+      `/member/receipts?member_id=${encodeURIComponent(memberId)}`,
+      tenantId
+    );
+  },
+
+  // Excel member import (same flow as the mobile app)
+  /** Parses and validates the sheet; nothing is written until commit. */
+  uploadExcelPreview: async (file: File, tenantId?: string) => {
+    const form = new FormData();
+    form.append("file", file);
+    const headers: Record<string, string> = { "X-Tenant-ID": tenantId || getCurrentTenant() };
+    const token = getStoredToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const res = await safeFetch(`${API_BASE_URL}/admin/excel/upload-preview`, {
+      method: "POST",
+      headers, // no Content-Type: the browser sets the multipart boundary
+      body: form,
+      cache: "no-store",
+    });
+    if (res.status === 401 && typeof window !== "undefined") {
+      clearSession();
+      window.location.href = "/login";
+    }
+    return parseResponse<ImportPreview>(res);
+  },
+
+  commitExcelImport: async (batchId: string, tenantId?: string) => {
+    return fetchApi<ImportCommitResult>("/admin/excel/commit-import", tenantId, {
+      method: "POST",
+      body: JSON.stringify({ batch_id: batchId }),
+    });
+  },
+
+  // Own account
+  getMe: async () => fetchApi<CurrentUser>("/auth/me"),
+
+  changePassword: async (currentPassword: string, newPassword: string) => {
+    return fetchApi<{ status: string }>("/auth/change-password", undefined, {
+      method: "POST",
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
     });
   },
 

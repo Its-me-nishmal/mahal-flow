@@ -1,24 +1,37 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { ErrorState } from "@/components/ui/States";
 import { ApiClient } from "@/lib/api-client";
+import { errorMessage, formatDateTime } from "@/lib/format";
 
 export default function AuditLogsPage() {
   const [logs, setLogs] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const PAGE = 50;
 
-  useEffect(() => {
-    ApiClient.getAuditLogs(undefined, 1, 50)
+  const load = useCallback((p: number) => {
+    setLoading(true);
+    setError(null);
+    ApiClient.getAuditLogs(undefined, p, PAGE)
       .then((res) => {
-        if (res && res.logs) {
-          setLogs(res.logs);
-        }
+        setLogs(res?.logs || []);
+        setTotal(res?.total || 0);
+        setPage(p);
       })
-      .catch((err) => console.error("Error loading audit logs:", err))
+      .catch((err) => setError(errorMessage(err, "Could not load audit logs.")))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    load(1);
+  }, [load]);
+  const pages = Math.max(1, Math.ceil(total / PAGE));
 
   const filteredLogs = logs.filter(
     (l) =>
@@ -31,8 +44,10 @@ export default function AuditLogsPage() {
     <>
       <PageHeader
         title="Audit Logs"
-        description="Immutable record of administrative actions and live financial events backed by MongoDB."
+        description="Record of administrative actions and financial events for this Mahal."
       />
+
+      {error && <ErrorState message={error} onRetry={() => load(page)} />}
 
       <div className="flex gap-2 mb-lg flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
@@ -64,10 +79,11 @@ export default function AuditLogsPage() {
                 </div>
                 <div>
                   <p className="font-button text-button text-text-primary">
-                    {log.actor || "System Admin"}
+                    {log.actor || "System"}
                   </p>
                   <p className="font-small text-small text-text-muted">
-                    {log.timestamp ? new Date(log.timestamp).toLocaleString() : "Recent"}
+                    {formatDateTime(log.timestamp)}
+                    {log.ip_address ? ` · ${log.ip_address}` : ""}
                   </p>
                 </div>
               </div>
@@ -76,7 +92,7 @@ export default function AuditLogsPage() {
               </span>
             </div>
             <p className="font-body text-body text-text-secondary ml-13">
-              {log.details || `Entity affected: ${log.entity_id || log.id}`}
+              {log.details || (log.entity_id ? `Entity: ${log.entity_id}` : "—")}
             </p>
             <div className="flex items-center gap-2 mt-3 ml-13">
               <span className="material-symbols-outlined text-[14px] text-text-muted">security</span>
@@ -87,7 +103,29 @@ export default function AuditLogsPage() {
 
         {filteredLogs.length === 0 && (
           <div className="bg-surface border border-border-base rounded-xl p-12 text-center text-text-muted">
-            {loading ? "Fetching audit trail from MongoDB..." : "No audit log records found."}
+            {loading ? "Loading audit trail..." : search ? "No entries on this page match your search." : "No audit log records yet."}
+          </div>
+        )}
+
+        {pages > 1 && (
+          <div className="flex items-center justify-between pt-2">
+            <button
+              onClick={() => load(page - 1)}
+              disabled={loading || page <= 1}
+              className="h-9 px-4 border border-border-base rounded-lg font-button text-small text-text-secondary disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <span className="text-xs text-text-muted">
+              Page {page} of {pages} · {total.toLocaleString("en-IN")} entries
+            </span>
+            <button
+              onClick={() => load(page + 1)}
+              disabled={loading || page >= pages}
+              className="h-9 px-4 border border-border-base rounded-lg font-button text-small text-text-secondary disabled:opacity-50"
+            >
+              Next
+            </button>
           </div>
         )}
       </div>

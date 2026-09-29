@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { ErrorState } from "@/components/ui/States";
+import { useToast } from "@/components/ui/Toast";
+import { errorMessage, formatDateTime } from "@/lib/format";
 import { ApiClient, ALERT_TYPES, type AlertAudience, type AlertType } from "@/lib/api-client";
 
 const TYPE_LABELS: Record<AlertType, string> = {
@@ -21,9 +24,13 @@ const AUDIENCE_LABELS: Record<AlertAudience, string> = {
 
 const MAX_MEMBER_IDS = 500;
 
+const notifyAlertsChanged = () => window.dispatchEvent(new Event("mahalflow:alerts-changed"));
+
 export default function AlertsPage() {
+  const toast = useToast();
   const [alerts, setAlerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -40,13 +47,10 @@ export default function AlertsPage() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const loadAlerts = () => {
+    setError(null);
     ApiClient.getAlerts()
-      .then((res) => {
-        if (res && res.alerts) {
-          setAlerts(res.alerts);
-        }
-      })
-      .catch((err) => console.error("Error loading alerts:", err))
+      .then((res) => setAlerts(res?.alerts || []))
+      .catch((err) => setError(errorMessage(err, "Could not load alerts.")))
       .finally(() => setLoading(false));
   };
 
@@ -58,8 +62,9 @@ export default function AlertsPage() {
     try {
       await ApiClient.acknowledgeAlert(id);
       loadAlerts();
+      notifyAlertsChanged();
     } catch (err) {
-      console.error("Failed to acknowledge alert:", err);
+      toast.error(errorMessage(err, "Could not dismiss the alert."));
     }
   };
 
@@ -69,7 +74,7 @@ export default function AlertsPage() {
       setMembersLoading(true);
       ApiClient.getMembers(undefined, 1, MAX_MEMBER_IDS)
         .then((res) => setMembers(res?.members || []))
-        .catch((err) => console.error("Error loading members:", err))
+        .catch((err) => toast.error(errorMessage(err, "Could not load members.")))
         .finally(() => setMembersLoading(false));
     }
   };
@@ -120,10 +125,11 @@ export default function AlertsPage() {
       setMemberIds([]);
       setMemberSearch("");
       setShowModal(false);
+      toast.success("Alert sent.");
       loadAlerts();
+      notifyAlertsChanged();
     } catch (err) {
-      console.error("Failed to create alert:", err);
-      setFormError(err instanceof Error ? err.message : "Failed to send alert.");
+      setFormError(errorMessage(err, "Failed to send alert."));
     } finally {
       setIsSubmitting(false);
     }
@@ -144,6 +150,8 @@ export default function AlertsPage() {
           Broadcast New Alert
         </button>
       </div>
+
+      {error && <ErrorState message={error} onRetry={loadAlerts} />}
 
       <div className="space-y-3">
         {alerts.map((alert) => (
@@ -188,7 +196,7 @@ export default function AlertsPage() {
                       </span>
                     )}
                     <span className="text-xs text-text-muted">
-                      {alert.created_at ? new Date(alert.created_at).toLocaleString() : "Live"}
+                      {formatDateTime(alert.created_at)}
                     </span>
                   </div>
                   <p className="font-card-title text-card-title text-text-primary mb-1">
@@ -209,7 +217,7 @@ export default function AlertsPage() {
           </div>
         ))}
 
-        {alerts.length === 0 && (
+        {alerts.length === 0 && !error && (
           <div className="flex flex-col items-center justify-center py-16 text-center bg-surface rounded-xl border border-border-base">
             <span className="material-symbols-outlined text-[48px] text-text-muted mb-4">
               notifications_off

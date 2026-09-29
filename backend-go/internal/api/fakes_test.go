@@ -80,8 +80,21 @@ func (f *fakeMembers) ListByMahal(_ contextT, mahalID string, _, _ int64) ([]dom
 	return out, int64(len(out)), nil
 }
 func (f *fakeMembers) ApplyPaidMonths(contextT, string, []string, float64) error { return nil }
-func (f *fakeMembers) GetMemberStats(contextT, string) (int64, int64, int64, float64, error) {
-	return 0, 0, 0, 0, nil
+func (f *fakeMembers) GetMemberStats(_ contextT, mahalID string) (int64, int64, int64, float64, error) {
+	var total, paid int64
+	var pendingAmt float64
+	for _, m := range f.rows {
+		if m.MahalID != mahalID {
+			continue
+		}
+		total++
+		if m.OutstandingBalance <= 0 {
+			paid++
+		} else {
+			pendingAmt += m.OutstandingBalance
+		}
+	}
+	return total, paid, total - paid, pendingAmt, nil
 }
 func (f *fakeMembers) UpdateProfile(_ contextT, mahalID, id string, u bson.M) error {
 	m, ok := f.rows[id]
@@ -289,8 +302,23 @@ func (f *fakeTxns) GetByID(_ contextT, id string) (*domain.Transaction, error) {
 	}
 	return &t, nil
 }
-func (f *fakeTxns) ListAll(contextT, string, int64, int64) ([]domain.Transaction, int64, error) {
-	return nil, 0, nil
+func (f *fakeTxns) ListAll(_ contextT, mahalID string, limit, skip int64) ([]domain.Transaction, int64, error) {
+	var out []domain.Transaction
+	for _, t := range f.rows {
+		if t.MahalID == mahalID {
+			out = append(out, t)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
+	total := int64(len(out))
+	if skip >= total {
+		return []domain.Transaction{}, total, nil
+	}
+	out = out[skip:]
+	if limit > 0 && int64(len(out)) > limit {
+		out = out[:limit]
+	}
+	return out, total, nil
 }
 func (f *fakeTxns) UpdateStatus(_ contextT, id string, st domain.PaymentStatus, receiptID string) error {
 	if t, ok := f.rows[id]; ok {
@@ -423,4 +451,61 @@ func (fakeVerifier) VerifyIDToken(_ contextT, tok string) (*firebaseauth.Token, 
 		return &firebaseauth.Token{UID: "uid-" + phone, PhoneNumber: phone}, nil
 	}
 	return nil, firebaseauth.ErrSignature
+}
+
+// Update applies a Mongo-style $set (dotted paths into sub-documents).
+func (f *fakeMahals) Update(_ contextT, id string, set bson.M) (bool, error) {
+	m, ok := f.rows[id]
+	if !ok {
+		return false, nil
+	}
+	raw, err := bson.Marshal(m)
+	if err != nil {
+		return false, err
+	}
+	var doc bson.M
+	if err := bson.Unmarshal(raw, &doc); err != nil {
+		return false, err
+	}
+	for k, v := range set {
+		parts := strings.Split(k, ".")
+		cur := doc
+		for _, p := range parts[:len(parts)-1] {
+			next, ok := cur[p].(bson.M)
+			if !ok {
+				if d, isD := cur[p].(bson.D); isD {
+					next = bson.M{}
+					for _, e := range d {
+						next[e.Key] = e.Value
+					}
+				} else {
+					next = bson.M{}
+				}
+				cur[p] = next
+			}
+			cur = next
+		}
+		cur[parts[len(parts)-1]] = v
+	}
+	doc["updated_at"] = time.Now().UTC()
+	raw, err = bson.Marshal(doc)
+	if err != nil {
+		return false, err
+	}
+	var out domain.Mahal
+	if err := bson.Unmarshal(raw, &out); err != nil {
+		return false, err
+	}
+	f.rows[id] = out
+	return true, nil
+}
+
+func (f *fakeMembers) GetNames(_ contextT, mahalID string, ids []string) (map[string]string, error) {
+	out := map[string]string{}
+	for _, id := range ids {
+		if m, ok := f.rows[id]; ok && m.MahalID == mahalID {
+			out[id] = m.Name
+		}
+	}
+	return out, nil
 }

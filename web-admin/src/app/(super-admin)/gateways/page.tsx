@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ApiClient, type Gateway } from "@/lib/api-client";
+import { ErrorState, LoadingBlock } from "@/components/ui/States";
+import { errorMessage } from "@/lib/format";
 
 function Field({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
   return (
@@ -18,17 +20,18 @@ export default function GatewayConfigurationPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setError(null);
     ApiClient.getGateways()
-      .then((res) => {
-        if (Array.isArray(res)) setGateways(res);
-      })
-      .catch((err) => {
-        console.error("Error loading gateways:", err);
-        setError("Could not load gateway configuration.");
-      })
+      .then((res) => setGateways(Array.isArray(res) ? res : []))
+      .catch((err) => setError(errorMessage(err, "Could not load gateway configuration.")))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   return (
     <>
@@ -48,8 +51,8 @@ export default function GatewayConfigurationPage() {
         </div>
       </div>
 
-      {error && <p className="font-body text-body text-error mb-4">{error}</p>}
-      {loading && <p className="font-body text-body text-text-muted">Loading gateways...</p>}
+      {error && <ErrorState message={error} onRetry={load} />}
+      {loading && <LoadingBlock rows={3} />}
       {!loading && !error && gateways.length === 0 && (
         <p className="font-body text-body text-text-muted">No gateways reported by the server.</p>
       )}

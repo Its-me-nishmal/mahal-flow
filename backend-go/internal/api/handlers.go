@@ -177,10 +177,15 @@ func (h *Handler) GetCurrentUser(c *fiber.Ctx) error {
 			name = m.Name
 		}
 	} else if phone, _ := c.Locals("user_phone").(string); phone != "" && h.adminRepo != nil {
-		if a, _ := h.adminRepo.GetByPhone(c.Context(), tenantID, phone); a != nil && a.ID == userID {
+		// The admin record lives in the Mahal the token was issued for, which
+		// differs from X-Tenant-ID when a SUPER_ADMIN works on another Mahal.
+		home, _ := c.Locals("user_mahal_id").(string)
+		if a, _ := h.adminRepo.GetByPhone(c.Context(), home, phone); a != nil && a.ID == userID {
 			name = a.Name
 		}
 	}
+	userPhone, _ := c.Locals("user_phone").(string)
+	homeMahal, _ := c.Locals("user_mahal_id").(string)
 
 	return c.JSON(fiber.Map{
 		"user_id":    userID,
@@ -188,7 +193,10 @@ func (h *Handler) GetCurrentUser(c *fiber.Ctx) error {
 		"role":       userRole,
 		"mahal_id":   tenantID,
 		"mahal_name": mahalName,
-		"status":     "ACTIVE",
+		"phone":      userPhone,
+		// home_mahal_id: the Mahal the session was issued for.
+		"home_mahal_id": homeMahal,
+		"status":        "ACTIVE",
 	})
 }
 
@@ -319,9 +327,27 @@ func (h *Handler) CreateMember(c *fiber.Ctx) error {
 	if e := strings.TrimSpace(req.Email); e != "" && !validEmail(e) {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Email is not valid"})
 	}
+	// Store the phone the way logins and imports look it up (+91XXXXXXXXXX).
+	phone, ok := parseIndianMobile(req.Phone)
+	if !ok {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Phone must be a 10-digit Indian mobile number"})
+	}
+	req.Phone = phone
+	if other, _ := h.memberRepo.GetByPhone(c.Context(), tenantID, phone); other != nil {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "A member of this Mahal already uses that phone"})
+	}
 
+	if req.MonthlyDuesCustomAmount > mahalMaxMonthlyDues {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Monthly dues amount is out of range"})
+	}
 	if req.MonthlyDuesCustomAmount <= 0 {
+		// The Mahal's configured default, else the historical ₹500.
 		req.MonthlyDuesCustomAmount = 500.0
+		if h.mahalRepo != nil {
+			if m, err := h.mahalRepo.GetByID(c.Context(), tenantID); err == nil && m != nil && m.Settings.DefaultMonthlyDues > 0 {
+				req.MonthlyDuesCustomAmount = m.Settings.DefaultMonthlyDues
+			}
+		}
 	}
 	if req.Status == "" {
 		req.Status = "ACTIVE"
@@ -403,6 +429,8 @@ type UpdateProfileRequest struct {
 	MonthlyDuesCustomAmount float64 `json:"monthly_dues_custom_amount"`
 	Status                  string  `json:"status"`
 	FamilyMembersCount      int     `json:"family_members_count"`
+	// FamilyHead is a committee field; nil = unchanged.
+	FamilyHead *bool `json:"family_head"`
 	// Optional personal details: absent = unchanged, "" = cleared.
 	Email    *string `json:"email"`
 	Address2 *string `json:"address2"`
@@ -410,6 +438,10 @@ type UpdateProfileRequest struct {
 	State    *string `json:"state"`
 	Pincode  *string `json:"pincode"`
 }
+
+// editableMemberStatuses are the statuses the committee sets from a member
+// edit form. PENDING_APPROVAL / REJECTED move only via the approval routes.
+var editableMemberStatuses = map[string]bool{"ACTIVE": true, "GRACE_PERIOD": true, "SUSPENDED": true, "INACTIVE": true}
 
 func (h *Handler) UpdateMemberProfile(c *fiber.Ctx) error {
 	tenantID, _ := c.Locals("tenant_id").(string)
@@ -426,7 +458,8 @@ func (h *Handler) UpdateMemberProfile(c *fiber.Ctx) error {
 	if h.memberRepo == nil {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Member service offline"})
 	}
-	if m, err := h.memberRepo.GetByID(c.Context(), tenantID, memberID); err != nil || m == nil {
+	current, err := h.memberRepo.GetByID(c.Context(), tenantID, memberID)
+	if err != nil || current == nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Member not found"})
 	}
 
@@ -445,19 +478,41 @@ func (h *Handler) UpdateMemberProfile(c *fiber.Ctx) error {
 		return aerr.send(c)
 	}
 	if isAdmin {
-		if req.Phone != "" {
-			updates["phone"] = normalizePhoneIN(req.Phone)
+		if req.Phone != "" && normalizePhoneIN(req.Phone) != current.Phone {
+			phone, ok := parseIndianMobile(req.Phone)
+			if !ok {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Phone must be a 10-digit Indian mobile number"})
+			}
+			if phone != current.Phone {
+				if other, _ := h.memberRepo.GetByPhone(c.Context(), tenantID, phone); other != nil && other.ID != memberID {
+					return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Another member of this Mahal already uses that phone"})
+				}
+			}
+			updates["phone"] = phone
+		}
+		if req.MonthlyDuesCustomAmount < 0 || req.MonthlyDuesCustomAmount > mahalMaxMonthlyDues {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Monthly dues amount is out of range"})
 		}
 		if req.MonthlyDuesCustomAmount > 0 {
 			updates["monthly_dues_custom_amount"] = req.MonthlyDuesCustomAmount
 		}
 		if req.Status != "" {
-			updates["status"] = req.Status
+			st := strings.ToUpper(strings.TrimSpace(req.Status))
+			if !editableMemberStatuses[st] {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Status must be ACTIVE, GRACE_PERIOD, SUSPENDED or INACTIVE"})
+			}
+			updates["status"] = st
+		}
+		if req.FamilyMembersCount < 0 || req.FamilyMembersCount > 100 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Family members count must be between 0 and 100"})
 		}
 		if req.FamilyMembersCount > 0 {
 			updates["family_members_count"] = req.FamilyMembersCount
 		}
-	} else if req.Phone != "" || req.MonthlyDuesCustomAmount > 0 || req.Status != "" || req.FamilyMembersCount > 0 {
+		if req.FamilyHead != nil {
+			updates["family_head"] = *req.FamilyHead
+		}
+	} else if req.Phone != "" || req.MonthlyDuesCustomAmount > 0 || req.Status != "" || req.FamilyMembersCount > 0 || req.FamilyHead != nil {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only the committee can change phone, dues, status or family size"})
 	}
 
@@ -1456,25 +1511,6 @@ func (h *Handler) GetMahalByID(c *fiber.Ctx) error {
 	return c.JSON(mahal)
 }
 
-func (h *Handler) CreateMahal(c *fiber.Ctx) error {
-	if h.mahalRepo == nil {
-		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Mahal service offline"})
-	}
-	var req domain.Mahal
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
-	}
-	if req.ID == "" {
-		req.ID = "MH_" + uuid.New().String()[:8]
-	}
-	req.CreatedAt = time.Now().UTC()
-	req.UpdatedAt = time.Now().UTC()
-	if err := h.mahalRepo.Create(c.Context(), &req); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-	}
-	return c.Status(fiber.StatusCreated).JSON(req)
-}
-
 func (h *Handler) GetPayments(c *fiber.Ctx) error {
 	tenantID, _ := c.Locals("tenant_id").(string)
 	limit, _ := strconv.ParseInt(c.Query("limit", "50"), 10, 64)
@@ -1495,8 +1531,18 @@ func (h *Handler) GetPayments(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
+	// Each payment carries its member's name so lists need no extra lookups.
+	names := h.memberNames(c, tenantID, txns)
+	type paymentRow struct {
+		domain.Transaction
+		MemberName string `json:"member_name"`
+	}
+	rows := make([]paymentRow, 0, len(txns))
+	for _, t := range txns {
+		rows = append(rows, paymentRow{Transaction: t, MemberName: names[t.MemberID]})
+	}
 	return c.JSON(fiber.Map{
-		"payments": txns,
+		"payments": rows,
 		"total":    total,
 		"page":     page,
 		"limit":    limit,

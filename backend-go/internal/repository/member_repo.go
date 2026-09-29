@@ -24,6 +24,8 @@ type MemberRepository interface {
 	GetOverdueMembers(ctx context.Context, mahalID string) ([]domain.Member, error)
 	// ListPhones returns every phone registered in the tenant (any status).
 	ListPhones(ctx context.Context, mahalID string) (map[string]bool, error)
+	// GetNames returns id -> name for the tenant's members among ids.
+	GetNames(ctx context.Context, mahalID string, ids []string) (map[string]string, error)
 }
 
 type mongoMemberRepo struct {
@@ -200,6 +202,29 @@ func (r *mongoMemberRepo) ListPhones(ctx context.Context, mahalID string) (map[s
 		}
 		if err := cursor.Decode(&row); err == nil && row.Phone != "" {
 			out[row.Phone] = true
+		}
+	}
+	return out, cursor.Err()
+}
+
+func (r *mongoMemberRepo) GetNames(ctx context.Context, mahalID string, ids []string) (map[string]string, error) {
+	out := map[string]string{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	opts := options.Find().SetProjection(bson.M{"name": 1})
+	cursor, err := r.coll.Find(ctx, bson.M{"mahal_id": mahalID, "_id": bson.M{"$in": ids}}, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	for cursor.Next(ctx) {
+		var row struct {
+			ID   string `bson:"_id"`
+			Name string `bson:"name"`
+		}
+		if cursor.Decode(&row) == nil {
+			out[row.ID] = row.Name
 		}
 	}
 	return out, cursor.Err()

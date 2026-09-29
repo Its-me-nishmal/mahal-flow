@@ -86,7 +86,7 @@ export default function LoginPage() {
                 <input
                   id="mobile"
                   className="w-full h-12 pl-[44px] pr-md rounded-lg border border-border-base bg-surface-container-lowest text-text-primary font-body text-body focus:outline-none focus:ring-2 focus:ring-primary-container focus:border-transparent transition-shadow placeholder:text-text-muted"
-                  placeholder="e.g. 9999999999"
+                  placeholder="10-digit mobile number"
                   type="tel"
                   value={phone}
                   autoComplete="username"

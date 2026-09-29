@@ -346,3 +346,68 @@ func (h *Handler) RegisterSelf(c *fiber.Ctx) error {
 		"status": "PENDING", "member_id": memberID, "name": name,
 	})
 }
+
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
+// MaxPasswordLength is bcrypt's input limit (longer input is truncated).
+const MaxPasswordLength = 72
+
+// ChangePassword lets a signed-in admin replace their own web-admin
+// password. The current password must verify against the stored bcrypt
+// hash; the admin record is the one the JWT was issued for (its subject,
+// phone and home Mahal), never anything from the request.
+func (h *Handler) ChangePassword(c *fiber.Ctx) error {
+	var req ChangePasswordRequest
+	if err := c.BodyParser(&req); err != nil {
+		return errBadRequest("Invalid request body").send(c)
+	}
+	if req.CurrentPassword == "" || req.NewPassword == "" {
+		return errBadRequest("current_password and new_password are required").send(c)
+	}
+	if len(req.NewPassword) < MinPasswordLength {
+		return errBadRequest("New password must be at least " + strconv.Itoa(MinPasswordLength) + " characters").send(c)
+	}
+	if len(req.NewPassword) > MaxPasswordLength {
+		return errBadRequest("New password must be at most " + strconv.Itoa(MaxPasswordLength) + " bytes").send(c)
+	}
+	if req.NewPassword == req.CurrentPassword {
+		return errBadRequest("New password must differ from the current one").send(c)
+	}
+	if h.adminRepo == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Authentication service offline"})
+	}
+
+	sub := sessionSubject(c)
+	phone, _ := c.Locals("user_phone").(string)
+	home, _ := c.Locals("user_mahal_id").(string)
+	admin, err := h.adminRepo.GetByPhone(c.Context(), home, phone)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Authentication service error"})
+	}
+	if admin == nil || admin.ID != sub || admin.PasswordHash == "" {
+		burnPasswordCheck(req.CurrentPassword)
+		return errForbidden("Password login is not set up for this account").send(c)
+	}
+	if bcrypt.CompareHashAndPassword([]byte(admin.PasswordHash), []byte(req.CurrentPassword)) != nil {
+		log.Warn().Str("admin_id", admin.ID).Str("ip", c.IP()).Msg("Password change rejected: wrong current password")
+		return errBadRequest("Current password is incorrect").send(c)
+	}
+	hash, err := HashPassword(req.NewPassword)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not update the password"})
+	}
+	ok, err := h.adminRepo.SetPasswordHash(c.Context(), admin.ID, hash)
+	if err != nil || !ok {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not update the password"})
+	}
+	if h.auditRepo != nil {
+		_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
+			MahalID: admin.MahalID, Action: "ADMIN_PASSWORD_CHANGED", Actor: admin.Name, EntityID: admin.ID,
+			Details: "Admin changed their own password", IPAddress: c.IP(),
+		})
+	}
+	return c.JSON(fiber.Map{"status": "PASSWORD_CHANGED"})
+}

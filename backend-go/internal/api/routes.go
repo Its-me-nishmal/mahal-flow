@@ -19,6 +19,7 @@ func RegisterTenantRoutes(r fiber.Router, h *Handler) {
 	r.Post("/auth/resolve", StrictAuthRateLimiterMiddleware(), h.ResolveLogin)
 	r.Post("/auth/register", StrictAuthRateLimiterMiddleware(), h.RegisterSelf)
 	r.Get("/auth/me", auth, h.GetCurrentUser)
+	r.Post("/auth/change-password", StrictAuthRateLimiterMiddleware(), auth, adminOnly, h.ChangePassword)
 	r.Get("/members/profile/:id", auth, h.GetMemberProfile)
 	r.Put("/members/profile/:id", auth, h.UpdateMemberProfile)
 
@@ -62,6 +63,8 @@ func RegisterTenantRoutes(r fiber.Router, h *Handler) {
 	admin.Get("/mahals", superOnly, h.GetMahals)
 	admin.Post("/mahals", superOnly, h.CreateMahal)
 	admin.Get("/mahals/:id", h.GetMahalByID)
+	admin.Put("/mahals/:id", h.UpdateMahal)
+	admin.Get("/mahals/:id/stats", h.GetMahalStats)
 	admin.Get("/members", h.GetAdminMembers)
 	admin.Post("/members", h.CreateMember)
 	admin.Delete("/members/:id", h.DeleteMember)

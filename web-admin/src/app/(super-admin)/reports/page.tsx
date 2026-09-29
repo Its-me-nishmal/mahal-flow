@@ -5,8 +5,11 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { ShimmerSkeleton } from "@/components/ui/ShimmerSkeleton";
 import { ApiClient, type FinancialReport, type ReportPeriod } from "@/lib/api-client";
+import { errorMessage, formatDateTime, formatINR, humanize } from "@/lib/format";
 
 type PeriodMode = "MONTH" | "CUSTOM" | "ALL_TIME";
+
+const LEDGER_LIMIT = 100;
 
 function currentMonthIST(): string {
   // en-CA formats as YYYY-MM-DD.
@@ -38,15 +41,12 @@ export default function FinancialReportsPage() {
   const loadReport = (period: ReportPeriod) => {
     setLoading(true);
     setError(null);
-    Promise.all([ApiClient.getFinancialReports(period), ApiClient.getPayments(undefined, 1, 50)])
+    Promise.all([ApiClient.getFinancialReports(period), ApiClient.getPayments(undefined, 1, LEDGER_LIMIT)])
       .then(([repRes, payRes]) => {
         if (repRes) setReport(repRes);
         if (payRes && payRes.payments) setPayments(payRes.payments);
       })
-      .catch((err) => {
-        console.error("Error loading financial report:", err);
-        setError("Could not load report for this period.");
-      })
+      .catch((err) => setError(errorMessage(err, "Could not load report for this period.")))
       .finally(() => setLoading(false));
   };
 
@@ -81,12 +81,13 @@ export default function FinancialReportsPage() {
       ? `${formatBound(report?.from)} – ${formatBound(report?.to)}`
       : period;
 
-  // The ledger below is the latest 50 transactions; narrow it to the report window when bounded.
+  // The ledger below is the latest LEDGER_LIMIT transactions; narrow it to the report window when bounded.
   const fromMs = report?.from ? new Date(report.from).getTime() : null;
   const toMs = report?.to ? new Date(report.to).getTime() : null;
   const ledger = payments.filter((p) => {
     if (fromMs === null && toMs === null) return true;
-    const t = p.created_at ? new Date(p.created_at).getTime() : NaN;
+    const at = p.completed_at || p.created_at;
+    const t = at ? new Date(at).getTime() : NaN;
     if (Number.isNaN(t)) return false;
     return (fromMs === null || t >= fromMs) && (toMs === null || t <= toMs);
   });
@@ -109,11 +110,12 @@ export default function FinancialReportsPage() {
               onClick={() => {
                 const csvContent =
                   "data:text/csv;charset=utf-8," +
-                  "Transaction ID,Member,Amount,Type,Gateway,Status,Date\n" +
+                  "Transaction ID,Member ID,Member,Amount,Type,Gateway,Status,Date\n" +
                   ledger
-                    .map(
-                      (p) =>
-                        `"${p.id}","${p.member_id}","${p.amount}","${p.type}","${p.gateway}","${p.status}","${p.created_at}"`
+                    .map((p) =>
+                      [p.id, p.member_id, p.member_name, p.amount, p.type, p.gateway, p.status, p.created_at]
+                        .map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`)
+                        .join(",")
                     )
                     .join("\n");
                 const encodedUri = encodeURI(csvContent);
@@ -201,16 +203,13 @@ export default function FinancialReportsPage() {
         <div className="bg-surface rounded-2xl border border-border-base p-5 shadow-sm">
           <div className="flex justify-between items-start mb-2">
             <p className="text-xs font-semibold text-text-muted">Total Collected ({periodLabel})</p>
-            <span className="flex items-center gap-1 text-success text-xs font-bold bg-success-bg px-2 py-0.5 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-success" />
-              Live
-            </span>
+
           </div>
           {loading ? (
             <ShimmerSkeleton height={32} width={120} className="mt-2" />
           ) : (
             <h3 className="font-amount-lg text-2xl font-bold text-success mt-1">
-              ₹{totalCollected.toLocaleString()}
+              {formatINR(totalCollected)}
             </h3>
           )}
         </div>
@@ -221,7 +220,7 @@ export default function FinancialReportsPage() {
             <ShimmerSkeleton height={32} width={100} className="mt-2" />
           ) : (
             <h3 className="font-amount-lg text-2xl font-bold text-text-primary mt-1">
-              ₹{duesCollected.toLocaleString()}
+              {formatINR(duesCollected)}
             </h3>
           )}
         </div>
@@ -232,7 +231,7 @@ export default function FinancialReportsPage() {
             <ShimmerSkeleton height={32} width={100} className="mt-2" />
           ) : (
             <h3 className="font-amount-lg text-2xl font-bold text-info mt-1">
-              ₹{donations.toLocaleString()}
+              {formatINR(donations)}
             </h3>
           )}
         </div>
@@ -243,7 +242,7 @@ export default function FinancialReportsPage() {
             <ShimmerSkeleton height={32} width={100} className="mt-2" />
           ) : (
             <h3 className="font-amount-lg text-2xl font-bold text-warning mt-1">
-              ₹{pendingDues.toLocaleString()}
+              {formatINR(pendingDues)}
             </h3>
           )}
         </div>
@@ -252,7 +251,8 @@ export default function FinancialReportsPage() {
       <div className="bg-surface border border-border-base rounded-2xl overflow-hidden shadow-sm">
         <div className="p-5 border-b border-border-base flex items-center justify-between">
           <h3 className="font-card-title text-base font-bold text-text-primary">
-            Recent Ledger Breakdown ({periodLabel})
+            Ledger ({periodLabel})
+            <span className="block text-xs font-normal text-text-muted">From the latest {LEDGER_LIMIT} transactions; totals above cover the whole period.</span>
           </h3>
           <span className="text-xs font-semibold text-text-muted bg-surface-container-low px-2.5 py-1 rounded-md">
             {ledger.length} Transactions
@@ -263,6 +263,8 @@ export default function FinancialReportsPage() {
             <thead>
               <tr className="bg-surface-container-low/70 border-b border-border-base">
                 <th className="text-xs font-bold text-text-secondary py-3 px-5">TRANSACTION ID</th>
+                <th className="text-xs font-bold text-text-secondary py-3 px-5">DATE</th>
+                <th className="text-xs font-bold text-text-secondary py-3 px-5">MEMBER</th>
                 <th className="text-xs font-bold text-text-secondary py-3 px-5">TYPE</th>
                 <th className="text-xs font-bold text-text-secondary py-3 px-5">AMOUNT</th>
                 <th className="text-xs font-bold text-text-secondary py-3 px-5">GATEWAY / CHANNEL</th>
@@ -273,14 +275,14 @@ export default function FinancialReportsPage() {
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i}>
-                    <td colSpan={5} className="py-4 px-5">
+                    <td colSpan={7} className="py-4 px-5">
                       <ShimmerSkeleton height={20} className="w-full" />
                     </td>
                   </tr>
                 ))
               ) : ledger.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-text-muted text-sm">
+                  <td colSpan={7} className="py-12 text-center text-text-muted text-sm">
                     No transactions recorded for this period
                   </td>
                 </tr>
@@ -290,14 +292,13 @@ export default function FinancialReportsPage() {
                     <td className="py-3.5 px-5 font-mono text-xs text-text-primary font-medium">
                       {p.id}
                     </td>
-                    <td className="py-3.5 px-5 text-sm text-text-primary">
-                      {p.type === "MONTHLY_DUES" ? "Monthly Dues" : p.type || "Payment"}
-                    </td>
-                    <td className="py-3.5 px-5 text-sm text-text-primary font-bold">
-                      ₹{p.amount}
-                    </td>
+                    <td className="py-3.5 px-5 text-xs text-text-secondary whitespace-nowrap">{formatDateTime(p.completed_at || p.created_at)}</td>
+                    <td className="py-3.5 px-5 text-sm text-text-primary">{p.member_name || p.member_id || "—"}</td>
+                    <td className="py-3.5 px-5 text-sm text-text-primary">{humanize(p.type)}</td>
+                    <td className="py-3.5 px-5 text-sm text-text-primary font-bold whitespace-nowrap">{formatINR(p.amount)}</td>
                     <td className="py-3.5 px-5 text-xs text-text-secondary font-medium">
-                      {p.gateway || "CASH"}
+                      {p.gateway || "—"}
+                      {p.payment_mode ? ` · ${p.payment_mode}` : ""}
                     </td>
                     <td className="py-3.5 px-5">
                       <StatusBadge status={p.status} />
