@@ -179,6 +179,10 @@ class StatusPill extends StatelessWidget {
       fg = context.colors.error;
       bg = context.colors.errorBg;
       glyph ??= Icons.error_outline_rounded;
+    } else if (normalized == 'REFUNDED') {
+      fg = context.colors.info;
+      bg = context.colors.infoBg;
+      glyph ??= Icons.undo_rounded;
     } else if (['INFO', 'DRAFT', 'SCHEDULED'].contains(normalized)) {
       fg = context.colors.info;
       bg = context.colors.infoBg;
@@ -218,11 +222,17 @@ class StatusPill extends StatelessWidget {
                 Icon(icon, size: 13, color: foreground),
                 const SizedBox(width: AppSpacing.xs),
               ],
-              Text(
-                label,
-                style: context.text.small.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: foreground,
+              // Loose flex: ellipsizes when the parent bounds the pill,
+              // sizes to the label when it does not.
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.text.small.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: foreground,
+                  ),
                 ),
               ),
             ],
@@ -721,6 +731,8 @@ String? statusLabel(BuildContext context, String normalized) {
     'DRAFT' => l.statusDraft,
     'SCHEDULED' => l.statusScheduled,
     'UNKNOWN' => l.statusUnknown,
+    'REFUNDED' => l.receiptStatusRefunded,
+    'NOT_CONFIGURED' => l.statusNotConfigured,
     _ => null,
   };
 }

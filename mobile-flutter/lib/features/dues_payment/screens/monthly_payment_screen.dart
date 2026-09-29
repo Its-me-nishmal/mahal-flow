@@ -71,6 +71,7 @@ class _MonthlyPaymentScreenState extends State<MonthlyPaymentScreen>
   Map<String, dynamic>? _dashboard;
 
   String? _activeTxnId;
+  String? _activeOrderId;
   List<String> _activeSelectedKeys = [];
   num? _activeAmount;
   DateTime? _activeStartedAt;
@@ -123,9 +124,20 @@ class _MonthlyPaymentScreenState extends State<MonthlyPaymentScreen>
     final outstanding =
         (dashboard['outstanding_balance'] as num?)?.toDouble() ?? 0;
 
-    final custom = (profile?['monthly_dues_custom_amount'] as num?)?.toDouble();
+    // The server's per-month rate (custom amount, else the Mahal default);
+    // older servers only send the custom amount.
+    double? positive(dynamic v) {
+      final d = v is num ? v.toDouble() : double.tryParse('${v ?? ''}');
+      return (d != null && d > 0) ? d : null;
+    }
+
+    final effective = positive(dashboard['effective_monthly_dues']) ??
+        positive(profile?['effective_monthly_dues']);
+    final custom = positive(profile?['monthly_dues_custom_amount']);
     double? rate;
-    if (custom != null && custom > 0) {
+    if (effective != null) {
+      rate = effective;
+    } else if (custom != null) {
       rate = custom;
     } else if (outstanding > 0 && due.isNotEmpty) {
       rate = outstanding / due.length;
@@ -252,6 +264,7 @@ class _MonthlyPaymentScreenState extends State<MonthlyPaymentScreen>
     // The server computes the amount; prefer it over our estimate.
     _activeAmount = (initRes!["amount"] as num?) ?? _totalAmount;
     final orderId = initRes["gateway_order_id"]?.toString() ?? "ORD$txnId";
+    _activeOrderId = orderId;
 
     final payUData = await _apiService.getPayUCheckoutData(orderId);
     if (!mounted) return;
@@ -310,6 +323,7 @@ class _MonthlyPaymentScreenState extends State<MonthlyPaymentScreen>
       checkoutPro: _checkoutPro,
       response: response,
       checkout: _activePayUData,
+      txnid: _activeOrderId,
     );
   }
 
@@ -386,6 +400,7 @@ class _MonthlyPaymentScreenState extends State<MonthlyPaymentScreen>
       context,
       mahalName: _dashboard?['mahal_name']?.toString(),
       officePhone: MemberHelpSheet.contactPhoneFrom(_dashboard),
+      whatsApp: MemberHelpSheet.contactWhatsAppFrom(_dashboard),
       extraNote: _rate == null
           ? null
           : context.l10n.duesPayHelpNote(Inr.format(_rate!)),

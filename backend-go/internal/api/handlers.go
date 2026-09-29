@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"html"
 	"os"
 	"strconv"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/mahalflow/backend-go/internal/domain"
+	"github.com/mahalflow/backend-go/internal/gateway/firebaseauth"
 	"github.com/mahalflow/backend-go/internal/gateway/pg"
 	"github.com/mahalflow/backend-go/internal/repository"
 	"github.com/mahalflow/backend-go/internal/service"
@@ -35,6 +37,16 @@ type Handler struct {
 	// not stored, and nothing is pushed.
 	deviceTokenRepo repository.DeviceTokenRepository
 	push            *service.PushService
+
+	// Firebase ID-token verification for /auth/resolve and /auth/register
+	// (see SetPhoneAuth). nil = not configured.
+	idVerifier    firebaseauth.Verifier
+	authDevBypass bool
+
+	// Excel member imports (SetImportBatches). nil = imports offline.
+	importRepo repository.ImportBatchRepository
+	// publicBaseURL is how browsers reach this API (SetPublicBaseURL).
+	publicBaseURL string
 }
 
 // SetPush wires device-token storage and FCM delivery. Kept out of NewHandler
@@ -89,47 +101,6 @@ func NewHandler(
 // 1. AUTHENTICATION & PROFILE
 // -------------------------------------------------------------
 
-type LoginRequest struct {
-	Phone    string `json:"phone"`
-	Password string `json:"password"`
-	MahalID  string `json:"mahal_id"`
-}
-
-func (h *Handler) Login(c *fiber.Ctx) error {
-	var req LoginRequest
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
-	}
-
-	if strings.TrimSpace(req.Phone) == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Phone number is required"})
-	}
-
-	mahalID := req.MahalID
-	if mahalID == "" {
-		mahalID = c.Get("X-Tenant-ID")
-	}
-	if mahalID == "" {
-		mahalID = "MH_001_CALICUT"
-	}
-
-	role := "MAHAL_ADMIN"
-	userID := "USR_ADMIN_" + uuid.New().String()[:8]
-
-	token, err := GenerateJWT(userID, req.Phone, role, mahalID, 24*time.Hour)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate authentication token"})
-	}
-
-	return c.JSON(fiber.Map{
-		"token":      token,
-		"role":       role,
-		"phone":      req.Phone,
-		"mahal_id":   mahalID,
-		"expires_in": 86400,
-	})
-}
-
 // MemberStatusPending marks a self-registered member awaiting admin approval.
 const MemberStatusPending = "PENDING_APPROVAL"
 
@@ -154,131 +125,6 @@ func normalizePhoneIN(raw string) string {
 	}
 }
 
-type ResolveRequest struct {
-	Phone string `json:"phone"`
-}
-
-// ResolveLogin maps an OTP-verified phone to an identity within the tenant:
-// admin, active member, pending member, or unregistered. Only admins/active
-// members receive a session token; pending/unregistered are told what to do.
-func (h *Handler) ResolveLogin(c *fiber.Ctx) error {
-	tenantID, _ := c.Locals("tenant_id").(string)
-	var req ResolveRequest
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
-	}
-	phone := normalizePhoneIN(req.Phone)
-	if phone == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Phone number is required"})
-	}
-
-	// 1. Admin phone?
-	if h.adminRepo != nil {
-		if a, _ := h.adminRepo.GetByPhone(c.Context(), tenantID, phone); a != nil {
-			token, _ := GenerateJWT(a.ID, phone, "MAHAL_ADMIN", tenantID, 24*time.Hour)
-			return c.JSON(fiber.Map{
-				"status": "ALLOWED", "role": "MAHAL_ADMIN",
-				"admin_id": a.ID, "name": a.Name, "mahal_id": tenantID, "token": token,
-			})
-		}
-	}
-
-	// 2. Member phone?
-	if h.memberRepo != nil {
-		if m, _ := h.memberRepo.GetByPhone(c.Context(), tenantID, phone); m != nil {
-			if m.Status == MemberStatusPending {
-				return c.JSON(fiber.Map{
-					"status": "PENDING", "role": "MEMBER",
-					"member_id": m.ID, "name": m.Name, "mahal_id": tenantID,
-				})
-			}
-			token, _ := GenerateJWT(m.ID, phone, "MEMBER", tenantID, 24*time.Hour)
-			return c.JSON(fiber.Map{
-				"status": "ALLOWED", "role": "MEMBER",
-				"member_id": m.ID, "name": m.Name, "mahal_id": tenantID, "token": token,
-			})
-		}
-	}
-
-	// 3. Unknown — the app should collect identity and register.
-	return c.JSON(fiber.Map{"status": "UNREGISTERED", "phone": phone})
-}
-
-type RegisterMemberRequest struct {
-	Phone   string `json:"phone"`
-	MahalID string `json:"mahal_id"`
-	Name    string `json:"name"`
-}
-
-// RegisterSelf creates a PENDING_APPROVAL member for an unregistered phone. The
-// member cannot transact until an admin approves them.
-func (h *Handler) RegisterSelf(c *fiber.Ctx) error {
-	tenantID, _ := c.Locals("tenant_id").(string)
-	if h.memberRepo == nil {
-		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Member service offline"})
-	}
-	var req RegisterMemberRequest
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
-	}
-	mahalID := req.MahalID
-	if mahalID == "" {
-		mahalID = tenantID
-	}
-	phone := normalizePhoneIN(req.Phone)
-	if phone == "" || strings.TrimSpace(req.Name) == "" || mahalID == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Name, phone and Mahal ID are required"})
-	}
-
-	// Confirm the Mahal exists (identity check the user does at registration).
-	if h.mahalRepo != nil {
-		if mh, mErr := h.mahalRepo.GetByID(c.Context(), mahalID); mErr != nil || mh == nil {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "No Mahal found for that ID"})
-		}
-	}
-
-	// Already known? Report current state rather than duplicating.
-	if existing, _ := h.memberRepo.GetByPhone(c.Context(), mahalID, phone); existing != nil {
-		status := "PENDING"
-		if existing.Status != MemberStatusPending {
-			status = "ALLOWED"
-		}
-		return c.JSON(fiber.Map{"status": status, "member_id": existing.ID, "name": existing.Name})
-	}
-
-	memberID := "MEM_" + uuid.New().String()[:8]
-	now := time.Now().UTC()
-	member := domain.Member{
-		ID:                      memberID,
-		MahalID:                 mahalID,
-		MemberCode:              "M-" + strconv.FormatInt(now.Unix()%100000, 10),
-		Name:                    req.Name,
-		Phone:                   phone,
-		MonthlyDuesCustomAmount: 500,
-		Status:                  MemberStatusPending,
-		LastPaidMonth:           now.AddDate(0, -1, 0).Format("2006-01"),
-		OutstandingBalance:      0,
-		Version:                 1,
-		CreatedAt:               now,
-		UpdatedAt:               now,
-	}
-	if err := h.memberRepo.Create(c.Context(), &member); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-	}
-	if h.auditRepo != nil {
-		_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
-			MahalID:  mahalID,
-			Action:   "MEMBER_REGISTRATION_REQUESTED",
-			Actor:    req.Name,
-			EntityID: memberID,
-			Details:  "Self-registration pending approval (" + phone + ")",
-		})
-	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"status": "PENDING", "member_id": memberID, "name": req.Name,
-	})
-}
-
 // GetPendingMembers lists members awaiting approval for the admin's tenant.
 func (h *Handler) GetPendingMembers(c *fiber.Ctx) error {
 	tenantID, _ := c.Locals("tenant_id").(string)
@@ -298,53 +144,24 @@ func (h *Handler) GetPendingMembers(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"pending": pending, "total": len(pending)})
 }
 
-// ApproveMember activates a pending member so they can transact.
+// ApproveMember activates a pending member so they can transact. The
+// decision can be undone for ApprovalRevertWindow (RevertMemberApproval).
 func (h *Handler) ApproveMember(c *fiber.Ctx) error {
-	tenantID, _ := c.Locals("tenant_id").(string)
-	memberID := c.Params("id")
-	if h.memberRepo == nil {
-		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Member service offline"})
-	}
-	if err := h.memberRepo.UpdateStatus(c.Context(), tenantID, memberID, "ACTIVE"); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-	}
-	if h.auditRepo != nil {
-		_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
-			MahalID: tenantID, Action: "MEMBER_APPROVED", Actor: "ADMIN",
-			EntityID: memberID, Details: "Member approved and activated",
-		})
-	}
-	return c.JSON(fiber.Map{"member_id": memberID, "status": "ACTIVE"})
+	return h.decideRegistration(c, "ACTIVE", "MEMBER_APPROVED", "Member approved and activated")
 }
 
-// RejectMember removes a pending registration.
+// RejectMember marks a pending registration REJECTED. The record is kept (not
+// deleted) so the decision can be reverted; a rejected phone cannot sign in.
 func (h *Handler) RejectMember(c *fiber.Ctx) error {
-	tenantID, _ := c.Locals("tenant_id").(string)
-	memberID := c.Params("id")
-	if h.memberRepo == nil {
-		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Member service offline"})
-	}
-	if err := h.memberRepo.Delete(c.Context(), tenantID, memberID); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-	}
-	if h.auditRepo != nil {
-		_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
-			MahalID: tenantID, Action: "MEMBER_REJECTED", Actor: "ADMIN",
-			EntityID: memberID, Details: "Member registration rejected/removed",
-		})
-	}
-	return c.JSON(fiber.Map{"member_id": memberID, "status": "REJECTED"})
+	return h.decideRegistration(c, MemberStatusRejected, "MEMBER_REJECTED", "Member registration rejected")
 }
 
 func (h *Handler) GetCurrentUser(c *fiber.Ctx) error {
 	tenantID, _ := c.Locals("tenant_id").(string)
-	userID, _ := c.Locals("user_id").(string)
-	userRole, _ := c.Locals("user_role").(string)
-	if userID == "" {
-		userID = "USR_ADMIN_01"
-	}
-	if userRole == "" {
-		userRole = "MAHAL_ADMIN"
+	userID := sessionSubject(c)
+	userRole := sessionRole(c)
+	if userID == "" || userRole == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized: authentication required"})
 	}
 
 	mahalName := "Mahal Administration"
@@ -354,9 +171,20 @@ func (h *Handler) GetCurrentUser(c *fiber.Ctx) error {
 		}
 	}
 
+	name := "Admin - " + mahalName
+	if userRole == domain.RoleMember && h.memberRepo != nil {
+		if m, err := h.memberRepo.GetByID(c.Context(), tenantID, userID); err == nil && m != nil {
+			name = m.Name
+		}
+	} else if phone, _ := c.Locals("user_phone").(string); phone != "" && h.adminRepo != nil {
+		if a, _ := h.adminRepo.GetByPhone(c.Context(), tenantID, phone); a != nil && a.ID == userID {
+			name = a.Name
+		}
+	}
+
 	return c.JSON(fiber.Map{
 		"user_id":    userID,
-		"name":       "Admin - " + mahalName,
+		"name":       name,
 		"role":       userRole,
 		"mahal_id":   tenantID,
 		"mahal_name": mahalName,
@@ -370,7 +198,10 @@ func (h *Handler) GetCurrentUser(c *fiber.Ctx) error {
 
 func (h *Handler) GetMemberDashboard(c *fiber.Ctx) error {
 	tenantID, _ := c.Locals("tenant_id").(string)
-	memberID := c.Query("member_id", "MEM_001_9910")
+	memberID, aerr := scopeMember(c, c.Query("member_id"))
+	if aerr != nil {
+		return aerr.send(c)
+	}
 
 	if h.memberRepo == nil {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Database service unavailable"})
@@ -382,15 +213,20 @@ func (h *Handler) GetMemberDashboard(c *fiber.Ctx) error {
 	}
 
 	mahalName := "Mahal Organization"
+	var mahal *domain.Mahal
 	if h.mahalRepo != nil {
-		if mahal, err := h.mahalRepo.GetByID(c.Context(), tenantID); err == nil && mahal != nil {
-			mahalName = mahal.Name
+		if m, err := h.mahalRepo.GetByID(c.Context(), tenantID); err == nil && m != nil {
+			mahal = m
+			mahalName = m.Name
 		}
 	}
 
 	var latestReceipt *domain.Receipt
 	if h.receiptRepo != nil {
-		latestReceipt, _ = h.receiptRepo.GetLatestReceipt(c.Context(), tenantID)
+		latestReceipt, _ = h.receiptRepo.GetLatestByMember(c.Context(), tenantID, member.ID)
+		if latestReceipt != nil {
+			h.decorateReceipt(c.Context(), latestReceipt)
+		}
 	}
 
 	outstanding := member.OutstandingBalance
@@ -399,21 +235,50 @@ func (h *Handler) GetMemberDashboard(c *fiber.Ctx) error {
 		advanceCredit = -outstanding
 		outstanding = 0
 	}
+	rate, source := effectiveMonthlyDues(member, mahal)
 
 	return c.JSON(fiber.Map{
-		"member_id":           member.ID,
-		"member_name":         member.Name,
-		"mahal_name":          mahalName,
-		"outstanding_balance": outstanding,
-		"advance_credit":      advanceCredit,
-		"last_paid_month":     member.LastPaidMonth,
-		"latest_payment":      latestReceipt,
+		"member_id":              member.ID,
+		"member_name":            member.Name,
+		"mahal_name":             mahalName,
+		"outstanding_balance":    outstanding,
+		"advance_credit":         advanceCredit,
+		"last_paid_month":        member.LastPaidMonth,
+		"latest_payment":         latestReceipt,
+		"effective_monthly_dues": rate,
+		"dues_rate_source":       source,
+		"mahal_contact":          mahalContactJSON(mahal),
 	})
+}
+
+// memberProfile is the member record plus what the app needs alongside it.
+type memberProfile struct {
+	domain.Member
+	EffectiveMonthlyDues float64   `json:"effective_monthly_dues"`
+	DuesRateSource       string    `json:"dues_rate_source"`
+	MahalName            string    `json:"mahal_name"`
+	MahalContact         fiber.Map `json:"mahal_contact"`
+}
+
+func (h *Handler) profileFor(ctx context.Context, m *domain.Member) memberProfile {
+	var mahal *domain.Mahal
+	if h.mahalRepo != nil {
+		mahal, _ = h.mahalRepo.GetByID(ctx, m.MahalID)
+	}
+	rate, source := effectiveMonthlyDues(m, mahal)
+	name := ""
+	if mahal != nil {
+		name = mahal.Name
+	}
+	return memberProfile{Member: *m, EffectiveMonthlyDues: rate, DuesRateSource: source, MahalName: name, MahalContact: mahalContactJSON(mahal)}
 }
 
 func (h *Handler) GetMemberProfile(c *fiber.Ctx) error {
 	tenantID, _ := c.Locals("tenant_id").(string)
-	memberID := c.Params("id", "MEM_001_9910")
+	memberID, aerr := scopeMember(c, c.Params("id"))
+	if aerr != nil {
+		return aerr.send(c)
+	}
 
 	if h.memberRepo == nil {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Database service unavailable"})
@@ -423,7 +288,7 @@ func (h *Handler) GetMemberProfile(c *fiber.Ctx) error {
 	if err != nil || member == nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Member not found"})
 	}
-	return c.JSON(member)
+	return c.JSON(h.profileFor(c.Context(), member))
 }
 
 type CreateMemberRequest struct {
@@ -451,6 +316,9 @@ func (h *Handler) CreateMember(c *fiber.Ctx) error {
 	if req.Name == "" || req.Phone == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Name and phone are required"})
 	}
+	if e := strings.TrimSpace(req.Email); e != "" && !validEmail(e) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Email is not valid"})
+	}
 
 	if req.MonthlyDuesCustomAmount <= 0 {
 		req.MonthlyDuesCustomAmount = 500.0
@@ -468,6 +336,7 @@ func (h *Handler) CreateMember(c *fiber.Ctx) error {
 		MemberCode:              memberCode,
 		Name:                    req.Name,
 		Phone:                   req.Phone,
+		Email:                   strings.TrimSpace(req.Email),
 		HouseName:               req.HouseName,
 		FamilyHead:              req.FamilyHead,
 		FamilyMembersCount:      req.FamilyMembersCount,
@@ -505,8 +374,12 @@ func (h *Handler) DeleteMember(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Member service offline"})
 	}
 
-	if err := h.memberRepo.Delete(c.Context(), tenantID, memberID); err != nil {
+	deleted, err := h.memberRepo.Delete(c.Context(), tenantID, memberID)
+	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	if !deleted {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Member not found"})
 	}
 
 	if h.auditRepo != nil {
@@ -525,73 +398,100 @@ func (h *Handler) DeleteMember(c *fiber.Ctx) error {
 type UpdateProfileRequest struct {
 	Name                    string  `json:"name"`
 	Phone                   string  `json:"phone"`
-	Email                   string  `json:"email"`
 	Address                 string  `json:"address"`
 	HouseName               string  `json:"house_name"`
 	MonthlyDuesCustomAmount float64 `json:"monthly_dues_custom_amount"`
 	Status                  string  `json:"status"`
 	FamilyMembersCount      int     `json:"family_members_count"`
-	City                    string  `json:"city"`
-	State                   string  `json:"state"`
-	Pincode                 string  `json:"pincode"`
+	// Optional personal details: absent = unchanged, "" = cleared.
+	Email    *string `json:"email"`
+	Address2 *string `json:"address2"`
+	City     *string `json:"city"`
+	State    *string `json:"state"`
+	Pincode  *string `json:"pincode"`
 }
 
 func (h *Handler) UpdateMemberProfile(c *fiber.Ctx) error {
 	tenantID, _ := c.Locals("tenant_id").(string)
-	memberID := c.Params("id")
-	if memberID == "" {
-		memberID = "MEM_001_9910"
+	memberID, aerr := scopeMember(c, c.Params("id"))
+	if aerr != nil {
+		return aerr.send(c)
 	}
+	isAdmin := isAdminSession(c)
 
 	var req UpdateProfileRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
+	if h.memberRepo == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Member service offline"})
+	}
+	if m, err := h.memberRepo.GetByID(c.Context(), tenantID, memberID); err != nil || m == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Member not found"})
+	}
 
+	// Members may edit their own personal details only. Phone (the login
+	// identity), dues amount, status and household size are committee fields.
 	updates := bson.M{}
 	if req.Name != "" {
 		updates["name"] = req.Name
-	}
-	if req.Phone != "" {
-		updates["phone"] = req.Phone
 	}
 	if req.HouseName != "" {
 		updates["house_name"] = req.HouseName
 	} else if req.Address != "" {
 		updates["house_name"] = req.Address
 	}
-	if req.MonthlyDuesCustomAmount > 0 {
-		updates["monthly_dues_custom_amount"] = req.MonthlyDuesCustomAmount
+	if aerr := applyPersonalDetails(updates, req); aerr != nil {
+		return aerr.send(c)
 	}
-	if req.Status != "" {
-		updates["status"] = req.Status
-	}
-	if req.FamilyMembersCount > 0 {
-		updates["family_members_count"] = req.FamilyMembersCount
+	if isAdmin {
+		if req.Phone != "" {
+			updates["phone"] = normalizePhoneIN(req.Phone)
+		}
+		if req.MonthlyDuesCustomAmount > 0 {
+			updates["monthly_dues_custom_amount"] = req.MonthlyDuesCustomAmount
+		}
+		if req.Status != "" {
+			updates["status"] = req.Status
+		}
+		if req.FamilyMembersCount > 0 {
+			updates["family_members_count"] = req.FamilyMembersCount
+		}
+	} else if req.Phone != "" || req.MonthlyDuesCustomAmount > 0 || req.Status != "" || req.FamilyMembersCount > 0 {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Only the committee can change phone, dues, status or family size"})
 	}
 
-	if h.memberRepo != nil && len(updates) > 0 {
+	if len(updates) > 0 {
 		if err := h.memberRepo.UpdateProfile(c.Context(), tenantID, memberID, updates); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
 	}
 
+	actor := "Member"
+	if isAdmin {
+		actor = "Mahal Administrator"
+	}
 	if h.auditRepo != nil {
 		_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
 			MahalID:  tenantID,
 			Action:   "MEMBER_UPDATED",
-			Actor:    "Mahal Administrator",
+			Actor:    actor,
 			EntityID: memberID,
 			Details:  "Updated profile for member ID: " + memberID,
 		})
 	}
 
-	return c.JSON(fiber.Map{
+	resp := fiber.Map{
 		"status":     "UPDATED",
 		"member_id":  memberID,
 		"name":       req.Name,
 		"updated_at": time.Now().UTC(),
-	})
+	}
+	if m, err := h.memberRepo.GetByID(c.Context(), tenantID, memberID); err == nil && m != nil {
+		resp["member"] = h.profileFor(c.Context(), m)
+		resp["name"] = m.Name
+	}
+	return c.JSON(resp)
 }
 
 // -------------------------------------------------------------
@@ -611,6 +511,16 @@ func (h *Handler) InitializeDuesPayment(c *fiber.Ctx) error {
 	var req InitDuesRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	memberID, aerr := scopeMember(c, req.MemberID)
+	if aerr != nil {
+		return aerr.send(c)
+	}
+	req.MemberID = memberID
+	// CASH commits a receipt immediately with no gateway involved: only the
+	// committee, who physically received the money, may record it.
+	if strings.EqualFold(req.Gateway, "CASH") && !isAdminSession(c) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cash payments can only be recorded by the committee"})
 	}
 
 	if h.paymentService == nil {
@@ -653,39 +563,11 @@ func (h *Handler) InitializeDuesPayment(c *fiber.Ctx) error {
 		}
 	}
 
-	orderID := "ORD" + txn.ID
+	orderID := orderIDForTxn(txn)
 	var paymentURL, upiIntentURL string
 	if h.pgClient != nil {
-		memberName := "Mahal Member"
-		memberEmail := "member@mahalflow.org"
-		memberPhone := "9900990099"
-		if h.memberRepo != nil {
-			if m, mErr := h.memberRepo.GetByID(c.Context(), tenantID, req.MemberID); mErr == nil && m != nil {
-				if m.Name != "" {
-					memberName = m.Name
-				}
-				if m.Phone != "" {
-					memberPhone = m.Phone
-				}
-			}
-		}
-
-		p := pg.PaymentRequestParams{
-			OrderID:     orderID,
-			Amount:      fmt.Sprintf("%.2f", txn.Amount),
-			Currency:    txn.Currency,
-			Description: fmt.Sprintf("Mahal Dues for %s (%d months)", memberName, len(txn.SelectedMonths)),
-			Name:        memberName,
-			Email:       memberEmail,
-			Phone:       memberPhone,
-			UDF1:        txn.ID,
-			UDF2:        tenantID,
-			UDF3:        req.MemberID,
-		}
-
-		if urlRes, uErr := h.pgClient.GetPaymentRequestURL(c.Context(), p); uErr == nil && urlRes != nil {
-			paymentURL = urlRes.URL
-		}
+		p := h.checkoutParamsForTxn(c.Context(), txn)
+		paymentURL = h.signedCheckoutURL(orderID)
 		if intentRes, iErr := h.pgClient.GetPaymentRequestIntentURL(c.Context(), p); iErr == nil && intentRes != nil {
 			upiIntentURL = intentRes.UPIIntentURL
 		}
@@ -716,34 +598,33 @@ func (h *Handler) ConfirmPayment(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
+	txn, aerr := h.loadOwnTransaction(c, txnIDFromOrderID(req.TransactionID))
+	if aerr != nil {
+		return aerr.send(c)
+	}
 	if h.paymentService == nil {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Payment engine offline"})
 	}
 
-	receipt, err := h.paymentService.CommitSuccessfulPayment(c.Context(), req.TransactionID)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	// The app's word that PayU succeeded is not proof of payment. With a live
+	// gateway, commit only once PayU itself reports the transaction successful
+	// (gatewayConfirmsSuccess also records PayU's mihpayid and payment mode).
+	if txn.Status != domain.TxnSuccess {
+		if ok, reason := h.gatewayConfirmsSuccess(c.Context(), txn); !ok {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+				"status": "PENDING",
+				"error":  "Payment not yet confirmed by the gateway: " + reason,
+			})
+		}
+		// Simulated gateway: nothing to ask, so keep the SDK's mihpayid.
+		if !h.pgClient.Live() && req.GatewayPaymentID != "" && h.txnRepo != nil {
+			_ = h.txnRepo.SetPaymentDetails(c.Context(), txn.ID, req.GatewayPaymentID, "")
+		}
 	}
 
-	// Persist PayU's mihpayid so a refund can be issued later. Prefer the value
-	// the mobile SDK reported; otherwise resolve it from the gateway. Best-effort
-	// — a lookup failure must not fail an already-committed payment.
-	if h.txnRepo != nil {
-		mihpayid := req.GatewayPaymentID
-		if mihpayid == "" && h.pgClient != nil {
-			if txn, tErr := h.txnRepo.GetByID(c.Context(), req.TransactionID); tErr == nil && txn != nil {
-				orderID := txn.GatewayOrderID
-				if orderID == "" {
-					orderID = "ORD" + txn.ID
-				}
-				if mp, _, vErr := h.pgClient.VerifyPayment(c.Context(), orderID); vErr == nil {
-					mihpayid = mp
-				}
-			}
-		}
-		if mihpayid != "" {
-			_ = h.txnRepo.SetGatewayPaymentID(c.Context(), req.TransactionID, mihpayid)
-		}
+	receipt, err := h.paymentService.CommitSuccessfulPayment(c.Context(), txn.ID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	if h.auditRepo != nil {
@@ -766,6 +647,7 @@ type InitContributionRequest struct {
 	MemberID       string  `json:"member_id"`
 	Amount         float64 `json:"amount"`
 	Purpose        string  `json:"purpose"`
+	Note           string  `json:"note"`
 	Gateway        string  `json:"gateway"`
 	IdempotencyKey string  `json:"idempotency_key"`
 }
@@ -776,6 +658,14 @@ func (h *Handler) InitializeContribution(c *fiber.Ctx) error {
 	var req InitContributionRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	memberID, aerr := scopeMember(c, req.MemberID)
+	if aerr != nil {
+		return aerr.send(c)
+	}
+	req.MemberID = memberID
+	if strings.EqualFold(req.Gateway, "CASH") && !isAdminSession(c) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cash payments can only be recorded by the committee"})
 	}
 
 	if h.paymentService == nil {
@@ -789,6 +679,7 @@ func (h *Handler) InitializeContribution(c *fiber.Ctx) error {
 		req.Amount,
 		req.Gateway,
 		req.IdempotencyKey,
+		service.ContributionDetails{Purpose: req.Purpose, Note: req.Note},
 	)
 	if err != nil {
 		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": err.Error()})
@@ -817,17 +708,26 @@ func (h *Handler) InitializeContribution(c *fiber.Ctx) error {
 		}
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"transaction_id": txn.ID,
-		"amount":         txn.Amount,
-		"currency":       txn.Currency,
-		"status":         txn.Status,
-	})
+	resp := fiber.Map{
+		"transaction_id":   txn.ID,
+		"amount":           txn.Amount,
+		"currency":         txn.Currency,
+		"status":           txn.Status,
+		"purpose":          txn.Purpose,
+		"gateway_order_id": orderIDForTxn(txn),
+	}
+	if h.pgClient != nil {
+		resp["payment_url"] = h.signedCheckoutURL(orderIDForTxn(txn))
+	}
+	return c.Status(fiber.StatusCreated).JSON(resp)
 }
 
 func (h *Handler) GetMemberReceipts(c *fiber.Ctx) error {
 	tenantID, _ := c.Locals("tenant_id").(string)
-	memberID := c.Query("member_id", "MEM_001_9910")
+	memberID, aerr := scopeMember(c, c.Query("member_id"))
+	if aerr != nil {
+		return aerr.send(c)
+	}
 
 	if h.receiptRepo == nil {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Receipt service offline"})
@@ -837,6 +737,7 @@ func (h *Handler) GetMemberReceipts(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
+	h.decorateReceipts(c.Context(), tenantID, receipts)
 	return c.JSON(fiber.Map{"receipts": receipts, "total": len(receipts)})
 }
 
@@ -845,12 +746,11 @@ func (h *Handler) GetReceipt(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Receipt service offline"})
 	}
 
-	receiptNumber := c.Params("number")
-	receipt, err := h.receiptRepo.GetByNumber(c.Context(), receiptNumber)
-	if err != nil || receipt == nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Receipt not found"})
+	receipt, aerr := h.loadOwnReceipt(c, c.Params("number"))
+	if aerr != nil {
+		return aerr.send(c)
 	}
-
+	h.decorateReceipt(c.Context(), receipt)
 	return c.JSON(receipt)
 }
 
@@ -859,10 +759,9 @@ func (h *Handler) VerifyReceiptIntegrity(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Receipt service offline"})
 	}
 
-	receiptNumber := c.Params("number")
-	receipt, err := h.receiptRepo.GetByNumber(c.Context(), receiptNumber)
-	if err != nil || receipt == nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Receipt not found"})
+	receipt, aerr := h.loadOwnReceipt(c, c.Params("number"))
+	if aerr != nil {
+		return aerr.send(c)
 	}
 
 	recomputed := domain.CalculateReceiptHash(
@@ -876,6 +775,7 @@ func (h *Handler) VerifyReceiptIntegrity(c *fiber.Ctx) error {
 	isValid := recomputed == receipt.ReceiptHash
 
 	return c.JSON(fiber.Map{
+		"hash_version":          1, // descriptive receipt fields are not hashed
 		"receipt_number":        receipt.ReceiptNumber,
 		"sequence_number":       receipt.SequenceNumber,
 		"stored_hash":           receipt.ReceiptHash,
@@ -942,6 +842,16 @@ func (h *Handler) CreateAutoPayMandate(c *fiber.Ctx) error {
 	tenantID, _ := c.Locals("tenant_id").(string)
 	var req CreateMandateRequest
 	_ = c.BodyParser(&req)
+	memberID, aerr := scopeMember(c, req.MemberID)
+	if aerr != nil {
+		return aerr.send(c)
+	}
+	req.MemberID = memberID
+	if h.memberRepo != nil {
+		if m, err := h.memberRepo.GetByID(c.Context(), tenantID, memberID); err != nil || m == nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Member not found"})
+		}
+	}
 
 	mandateID := "MND" + strings.ReplaceAll(uuid.New().String(), "-", "")[:16]
 	maxAmount := req.MaxAmount
@@ -966,65 +876,39 @@ func (h *Handler) CreateAutoPayMandate(c *fiber.Ctx) error {
 	siDetailsJSON := fmt.Sprintf(`{"billingAmount":"%.2f","billingCurrency":"INR","billingCycle":"%s","billingInterval":1,"paymentStartDate":"%s","paymentEndDate":"%s","billingRule":"MAX"}`,
 		maxAmount, billingCycle, startDate, endDate)
 
+	now := time.Now().UTC()
+	mode := req.Mode
+	if mode == "" {
+		mode = "UPI"
+	}
+	mandate := &domain.Mandate{
+		ID:           mandateID,
+		MahalID:      tenantID,
+		MemberID:     req.MemberID,
+		Status:       "PENDING_AUTHORIZATION",
+		MaxAmount:    maxAmount,
+		DebitAmount:  debitAmount,
+		Frequency:    frequency,
+		RecurringDay: 1,
+		Mode:         mode,
+		SIDetails:    siDetailsJSON,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+
 	var checkoutData *pg.PayUCheckoutFormData
-	mandateURL := fmt.Sprintf("http://localhost:8080/api/v1/payments/payu-checkout/%s", mandateID)
-
+	mandateURL := h.signedCheckoutURL(mandateID)
 	if h.pgClient != nil {
-		memberName := "Mahal Member"
-		memberEmail := "member@mahalflow.org"
-		memberPhone := "9900990099"
-		if h.memberRepo != nil && req.MemberID != "" {
-			if m, mErr := h.memberRepo.GetByID(c.Context(), tenantID, req.MemberID); mErr == nil && m != nil {
-				if m.Name != "" {
-					memberName = m.Name
-				}
-				if m.Phone != "" {
-					memberPhone = m.Phone
-				}
-			}
-		}
-
-		p := pg.PaymentRequestParams{
-			OrderID:     mandateID,
-			Amount:      "1.00", // Penny auth for mandate verification as per PayU AutoPay spec
-			Currency:    "INR",
-			Description: fmt.Sprintf("MahalFlow AutoPay Mandate for %s", memberName),
-			Name:        memberName,
-			Email:       memberEmail,
-			Phone:       memberPhone,
-			UDF1:        mandateID,
-			UDF2:        tenantID,
-			UDF3:        req.MemberID,
-			IsSI:        true,
-			SIDetails:   siDetailsJSON,
-		}
-
-		formData := h.pgClient.GeneratePayUCheckoutParams(p)
+		formData := h.pgClient.GeneratePayUCheckoutParams(h.checkoutParamsForMandate(c.Context(), mandate))
 		checkoutData = &formData
 	}
 
 	// Persist the mandate as PENDING_AUTHORIZATION. It becomes ACTIVE once the
 	// member approves the SI at the gateway (see ConfirmAutoPayMandate).
 	if h.mandateRepo != nil {
-		now := time.Now().UTC()
-		mode := req.Mode
-		if mode == "" {
-			mode = "UPI"
+		if err := h.mandateRepo.Create(c.Context(), mandate); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not create the mandate"})
 		}
-		_ = h.mandateRepo.Create(c.Context(), &domain.Mandate{
-			ID:           mandateID,
-			MahalID:      tenantID,
-			MemberID:     req.MemberID,
-			Status:       "PENDING_AUTHORIZATION",
-			MaxAmount:    maxAmount,
-			DebitAmount:  debitAmount,
-			Frequency:    frequency,
-			RecurringDay: 1,
-			Mode:         mode,
-			SIDetails:    siDetailsJSON,
-			CreatedAt:    now,
-			UpdatedAt:    now,
-		})
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
@@ -1049,8 +933,11 @@ type ConfirmMandateRequest struct {
 }
 
 // ConfirmAutoPayMandate activates a mandate after the member has approved the SI
-// at the gateway. It captures AuthPayUID (mihpayid of the consent transaction),
-// which every subsequent recurring debit is charged against.
+// at the gateway. With a live gateway the consent transaction is verified with
+// PayU (verify_payment on the mandate id) and PayU's own mihpayid becomes the
+// AuthPayUID every recurring debit is charged against; the app-reported id is
+// never trusted. With a simulated gateway (no credentials / PAYMENT_TEST_MODE)
+// there is nothing to ask, as for dues confirmation.
 func (h *Handler) ConfirmAutoPayMandate(c *fiber.Ctx) error {
 	if h.mandateRepo == nil {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "AutoPay service offline"})
@@ -1060,23 +947,49 @@ func (h *Handler) ConfirmAutoPayMandate(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 	mandate, err := h.mandateRepo.GetByID(c.Context(), req.MandateID)
-	if err != nil || mandate == nil {
+	if err != nil || mandate == nil || !canSeeMemberRecord(c, mandate.MahalID, mandate.MemberID) {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Mandate not found"})
 	}
-
-	// Resolve the consent transaction's mihpayid (authpayuid): prefer the value
-	// the app reported, else ask the gateway using the mandate id as the txnid.
-	authPayUID := req.GatewayPaymentID
-	if authPayUID == "" && h.pgClient != nil {
-		if mp, _, vErr := h.pgClient.VerifyPayment(c.Context(), mandate.ID); vErr == nil {
-			authPayUID = mp
+	switch mandate.Status {
+	case "ACTIVE":
+		resp := fiber.Map{"mandate_id": mandate.ID, "status": "ACTIVE"}
+		if mandate.NextDebit != nil {
+			resp["next_debit"] = mandate.NextDebit.Format("2006-01-02")
 		}
+		return c.JSON(resp)
+	case "PENDING_AUTHORIZATION":
+	default:
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Mandate is " + mandate.Status, "status": mandate.Status})
 	}
-	if authPayUID == "" {
-		return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
-			"error":  "Could not confirm mandate: gateway authorization id unavailable",
-			"status": "PENDING_AUTHORIZATION",
-		})
+
+	var authPayUID string
+	if h.pgClient.Live() {
+		d, vErr := h.pgClient.VerifyPaymentDetail(c.Context(), mandate.ID)
+		if vErr != nil {
+			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+				"error":  "Could not confirm the mandate with the gateway; try again shortly",
+				"status": "PENDING_AUTHORIZATION",
+			})
+		}
+		if !strings.EqualFold(d.Status, "success") || d.MihPayID == "" || d.MihPayID == "Not Found" {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+				"error":          "Mandate not yet authorised at the gateway (status " + d.Status + ")",
+				"status":         "PENDING_AUTHORIZATION",
+				"gateway_status": d.Status,
+			})
+		}
+		authPayUID = d.MihPayID
+		if req.GatewayPaymentID != "" && req.GatewayPaymentID != authPayUID && h.auditRepo != nil {
+			_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
+				MahalID: mandate.MahalID, Action: "AUTOPAY_MANDATE_ID_MISMATCH", Actor: sessionRole(c), EntityID: mandate.ID,
+				Details: "App-reported gateway id ignored; using PayU's verified mihpayid",
+			})
+		}
+	} else {
+		authPayUID = req.GatewayPaymentID
+		if authPayUID == "" {
+			authPayUID = "SIM_" + mandate.ID
+		}
 	}
 
 	// First debit: for real (monthly/weekly) mandates, align to the recurring
@@ -1087,11 +1000,13 @@ func (h *Handler) ConfirmAutoPayMandate(c *fiber.Ctx) error {
 	} else {
 		next = nextMonthlyDebit(mandate.RecurringDay)
 	}
-	_ = h.mandateRepo.Update(c.Context(), mandate.ID, bson.M{
+	if err := h.mandateRepo.Update(c.Context(), mandate.ID, bson.M{
 		"status":       "ACTIVE",
 		"auth_payu_id": authPayUID,
 		"next_debit":   next,
-	})
+	}); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not activate the mandate"})
+	}
 
 	if h.auditRepo != nil {
 		_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
@@ -1111,13 +1026,13 @@ func (h *Handler) ConfirmAutoPayMandate(c *fiber.Ctx) error {
 }
 
 func (h *Handler) GetAutoPayStatus(c *fiber.Ctx) error {
+	tenantID, _ := c.Locals("tenant_id").(string)
+	memberID, aerr := scopeMember(c, c.Query("member_id"))
+	if aerr != nil {
+		return aerr.send(c)
+	}
 	if h.mandateRepo == nil {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "AutoPay service offline"})
-	}
-	tenantID, _ := c.Locals("tenant_id").(string)
-	memberID := c.Query("member_id")
-	if memberID == "" {
-		memberID = "MEM_001_9910"
 	}
 
 	mandate, err := h.mandateRepo.GetActiveByMember(c.Context(), tenantID, memberID)
@@ -1161,9 +1076,11 @@ func (h *Handler) RegisterDeviceToken(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil || strings.TrimSpace(req.Token) == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "token is required"})
 	}
-	if strings.TrimSpace(req.MemberID) == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "member_id is required"})
+	memberID, aerr := scopeMember(c, req.MemberID)
+	if aerr != nil {
+		return aerr.send(c)
 	}
+	req.MemberID = memberID
 	platform := strings.ToLower(strings.TrimSpace(req.Platform))
 	if platform == "" {
 		platform = "android"
@@ -1222,13 +1139,13 @@ func (h *Handler) CancelAutoPayMandate(c *fiber.Ctx) error {
 	if req.MandateID != "" {
 		mandate, err = h.mandateRepo.GetByID(c.Context(), req.MandateID)
 	} else {
-		memberID := req.MemberID
-		if memberID == "" {
-			memberID = "MEM_001_9910"
+		memberID, aerr := scopeMember(c, req.MemberID)
+		if aerr != nil {
+			return aerr.send(c)
 		}
 		mandate, err = h.mandateRepo.GetActiveByMember(c.Context(), tenantID, memberID)
 	}
-	if err != nil || mandate == nil {
+	if err != nil || mandate == nil || !canSeeMemberRecord(c, mandate.MahalID, mandate.MemberID) {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Mandate not found"})
 	}
 
@@ -1240,7 +1157,7 @@ func (h *Handler) CancelAutoPayMandate(c *fiber.Ctx) error {
 		_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
 			MahalID:  mandate.MahalID,
 			Action:   "AUTOPAY_MANDATE_CANCELLED",
-			Actor:    "MEMBER",
+			Actor:    sessionRole(c),
 			EntityID: mandate.ID,
 			Details:  "AutoPay mandate cancelled. Reason: " + req.Reason,
 		})
@@ -1366,7 +1283,8 @@ func (h *Handler) runDueAutoPayDebits(ctx context.Context) fiber.Map {
 		}
 
 		// Create the installment transaction, then charge it at the gateway.
-		txn, iErr := h.paymentService.InitializeContribution(ctx, m.MahalID, m.MemberID, amount, "PAYU", "SI_"+m.ID+"_"+m.NextDebit.Format("20060102150405"))
+		txn, iErr := h.paymentService.InitializeContribution(ctx, m.MahalID, m.MemberID, amount, "PAYU", "SI_"+m.ID+"_"+m.NextDebit.Format("20060102150405"),
+			service.ContributionDetails{Purpose: "AUTOPAY_DUES"})
 		if iErr != nil || txn == nil {
 			failed++
 			continue
@@ -1387,9 +1305,7 @@ func (h *Handler) runDueAutoPayDebits(ctx context.Context) fiber.Map {
 			continue
 		}
 
-		if si.MihPayID != "" {
-			_ = h.txnRepo.SetGatewayPaymentID(ctx, txn.ID, si.MihPayID)
-		}
+		_ = h.txnRepo.SetPaymentDetails(ctx, txn.ID, si.MihPayID, domain.NormalizePaymentMode(m.Mode))
 		if _, cErr := h.paymentService.CommitSuccessfulPayment(ctx, txn.ID); cErr != nil {
 			failed++
 			continue
@@ -1436,37 +1352,6 @@ func (h *Handler) runDueAutoPayDebits(ctx context.Context) fiber.Map {
 // -------------------------------------------------------------
 // 5. ADMIN & GOVERNANCE
 // -------------------------------------------------------------
-
-func (h *Handler) GetAdminDashboard(c *fiber.Ctx) error {
-	tenantID, _ := c.Locals("tenant_id").(string)
-
-	var totalMembers, paidCount, pendingCount int64
-	var totalPendingAmount, totalCollectedMTD float64
-
-	if h.memberRepo != nil {
-		totalMembers, paidCount, pendingCount, totalPendingAmount, _ = h.memberRepo.GetMemberStats(c.Context(), tenantID)
-	}
-
-	if h.txnRepo != nil {
-		totalCollectedMTD, _, _, _ = h.txnRepo.GetFinancialSummary(c.Context(), tenantID)
-	}
-
-	subStatus := "ACTIVE"
-	if h.mahalRepo != nil && tenantID != "" {
-		if mahal, err := h.mahalRepo.GetByID(c.Context(), tenantID); err == nil && mahal != nil {
-			subStatus = string(mahal.Subscription.Status)
-		}
-	}
-
-	return c.JSON(fiber.Map{
-		"total_members":       totalMembers,
-		"paid_members":        paidCount,
-		"pending_members":     pendingCount,
-		"total_pending_dues":  totalPendingAmount,
-		"total_collected_mtd": totalCollectedMTD,
-		"subscription_status": subStatus,
-	})
-}
 
 func (h *Handler) GetAdminMembers(c *fiber.Ctx) error {
 	tenantID, _ := c.Locals("tenant_id").(string)
@@ -1560,6 +1445,10 @@ func (h *Handler) GetMahalByID(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Mahal service offline"})
 	}
 	id := c.Params("id")
+	// A Mahal admin may read only their own Mahal; SUPER_ADMIN reads any.
+	if tenantID, _ := c.Locals("tenant_id").(string); sessionRole(c) != domain.RoleSuperAdmin && id != tenantID {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Mahal not found"})
+	}
 	mahal, err := h.mahalRepo.GetByID(c.Context(), id)
 	if err != nil || mahal == nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Mahal not found"})
@@ -1673,9 +1562,20 @@ func (h *Handler) ProcessRefund(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
+	if req.Action != "APPROVE" && req.Action != "REJECT" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "action must be APPROVE or REJECT"})
+	}
+
 	if req.Action == "REJECT" {
-		if h.refundRepo != nil {
-			_ = h.refundRepo.UpdateStatus(c.Context(), refundID, "REJECTED")
+		if h.refundRepo == nil {
+			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Refund service offline"})
+		}
+		r, rErr := h.refundRepo.GetByID(c.Context(), refundID)
+		if rErr != nil || r == nil || r.MahalID != tenantID {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Refund request not found"})
+		}
+		if err := h.refundRepo.UpdateStatus(c.Context(), refundID, "REJECTED"); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
 		if h.auditRepo != nil {
 			_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
@@ -1700,6 +1600,9 @@ func (h *Handler) ProcessRefund(c *fiber.Ctx) error {
 
 	if h.refundRepo != nil {
 		if r, rErr := h.refundRepo.GetByID(c.Context(), refundID); rErr == nil && r != nil {
+			if r.MahalID != tenantID {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Refund request not found", "status": "FAILED"})
+			}
 			if r.TransactionID != "" {
 				txnID = r.TransactionID
 			}
@@ -1714,7 +1617,7 @@ func (h *Handler) ProcessRefund(c *fiber.Ctx) error {
 	if h.txnRepo != nil {
 		txn, _ = h.txnRepo.GetByID(c.Context(), txnID)
 	}
-	if txn == nil {
+	if txn == nil || txn.MahalID != tenantID {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error":  "Transaction not found for refund",
 			"status": "FAILED",
@@ -1869,61 +1772,6 @@ func (h *Handler) GenerateDynamicQR(c *fiber.Ctx) error {
 	return c.JSON(qrInfo)
 }
 
-func (h *Handler) GetFinancialReports(c *fiber.Ctx) error {
-	tenantID, _ := c.Locals("tenant_id").(string)
-
-	var totalCollected, duesCollected, donations float64
-	var pendingDues float64
-
-	if h.txnRepo != nil {
-		totalCollected, duesCollected, donations, _ = h.txnRepo.GetFinancialSummary(c.Context(), tenantID)
-	}
-	if h.memberRepo != nil {
-		_, _, _, pendingDues, _ = h.memberRepo.GetMemberStats(c.Context(), tenantID)
-	}
-
-	return c.JSON(fiber.Map{
-		"summary": fiber.Map{
-			"total_collected": totalCollected,
-			"dues_collected":  duesCollected,
-			"donations":       donations,
-			"pending_dues":    pendingDues,
-		},
-		"period": time.Now().Format("2006-01"),
-	})
-}
-
-func (h *Handler) QueryFinancialReports(c *fiber.Ctx) error {
-	tenantID, _ := c.Locals("tenant_id").(string)
-
-	var totalCollected, duesCollected, donations, pendingDues float64
-
-	if h.txnRepo != nil {
-		totalCollected, duesCollected, donations, _ = h.txnRepo.GetFinancialSummary(c.Context(), tenantID)
-	}
-	if h.memberRepo != nil {
-		_, _, _, pendingDues, _ = h.memberRepo.GetMemberStats(c.Context(), tenantID)
-	}
-
-	return c.JSON(fiber.Map{
-		"protocol": "HTTP QUERY (RFC 10008)",
-		"summary": fiber.Map{
-			"total_collected": totalCollected,
-			"dues_collected":  duesCollected,
-			"donations":       donations,
-			"pending_dues":    pendingDues,
-		},
-		"period": time.Now().Format("2006-01"),
-	})
-}
-
-func (h *Handler) GetGateways(c *fiber.Ctx) error {
-	return c.JSON([]fiber.Map{
-		{"id": "GW_RAZORPAY", "provider": "Razorpay Payment Gateway", "status": "ACTIVE", "is_primary": true},
-		{"id": "GW_FEDERAL", "provider": "Federal Bank Direct UPI Gateway", "status": "ACTIVE", "is_primary": false},
-	})
-}
-
 func (h *Handler) GetAuditLogs(c *fiber.Ctx) error {
 	tenantID, _ := c.Locals("tenant_id").(string)
 	limit, _ := strconv.ParseInt(c.Query("limit", "50"), 10, 64)
@@ -1953,55 +1801,230 @@ func (h *Handler) GetAuditLogs(c *fiber.Ctx) error {
 	})
 }
 
+// GetAlerts serves both views of the tenant's notices.
+//
+//   - Member view (MEMBER session, or an admin passing ?member_id=): audience
+//     filtered for that member, their own dismissals removed, and each alert's
+//     status reflecting *their* read state (ACTIVE = unread, ACKNOWLEDGED =
+//     read). unread_count is the badge number.
+//   - Admin view (admin session, no member_id): the shared alerts as stored.
 func (h *Handler) GetAlerts(c *fiber.Ctx) error {
 	tenantID, _ := c.Locals("tenant_id").(string)
-	memberID := c.Query("member_id")
-
 	if h.alertRepo == nil {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Alerts service offline"})
 	}
-	alerts, err := h.alertRepo.List(c.Context(), tenantID)
+
+	requested := c.Query("member_id")
+	if isAdminSession(c) && requested == "" {
+		alerts, err := h.alertRepo.List(c.Context(), tenantID)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+		for i := range alerts {
+			alerts[i].Type = alerts[i].EffectiveType()
+		}
+		return c.JSON(fiber.Map{"alerts": alerts, "total": len(alerts)})
+	}
+
+	memberID, aerr := scopeMember(c, requested)
+	if aerr != nil {
+		return aerr.send(c)
+	}
+	alerts, unread, err := h.memberAlerts(c.Context(), tenantID, memberID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
-
-	// Smart Audience Filtering for Members
-	if memberID != "" && h.memberRepo != nil {
-		member, _ := h.memberRepo.GetByID(c.Context(), tenantID, memberID)
-		filtered := make([]domain.SystemAlert, 0, len(alerts))
-		for _, a := range alerts {
-			if a.Audience == "OVERDUE_ONLY" {
-				// Only include for members who have pending dues
-				if member != nil && member.OutstandingBalance <= 0 && member.Status == "ACTIVE" {
-					continue // Member has paid all dues up to date. Do not send overdue alert!
-				}
-			}
-			filtered = append(filtered, a)
-		}
-		return c.JSON(fiber.Map{"alerts": filtered, "total": len(filtered)})
-	}
-
-	return c.JSON(fiber.Map{"alerts": alerts, "total": len(alerts)})
+	return c.JSON(fiber.Map{"alerts": alerts, "total": len(alerts), "unread_count": unread})
 }
 
-func (h *Handler) AcknowledgeAlert(c *fiber.Ctx) error {
-	alertID := c.Params("id")
-	if h.alertRepo != nil {
-		if err := h.alertRepo.Acknowledge(c.Context(), alertID); err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+// memberAlerts returns the alerts one member should see, with Status rewritten
+// to that member's read state, and how many are unread.
+func (h *Handler) memberAlerts(ctx context.Context, tenantID, memberID string) ([]domain.SystemAlert, int, error) {
+	alerts, err := h.alertRepo.List(ctx, tenantID)
+	if err != nil {
+		return nil, 0, err
+	}
+	states, err := h.alertRepo.ListMemberStates(ctx, tenantID, memberID)
+	if err != nil {
+		return nil, 0, err
+	}
+	var member *domain.Member
+	if h.memberRepo != nil {
+		member, _ = h.memberRepo.GetByID(ctx, tenantID, memberID)
+	}
+
+	out := make([]domain.SystemAlert, 0, len(alerts))
+	unread := 0
+	for _, a := range alerts {
+		if !alertVisibleTo(a, memberID, member) {
+			continue
 		}
+		a.Type = a.EffectiveType()
+		// Recipients of a targeted alert are not shown to members.
+		a.MemberIDs = nil
+		st, has := states[a.ID]
+		if has && st.DismissedAt != nil {
+			continue
+		}
+		if has && st.ReadAt != nil {
+			a.Status = "ACKNOWLEDGED"
+		} else {
+			a.Status = "ACTIVE"
+			unread++
+		}
+		out = append(out, a)
+	}
+	return out, unread, nil
+}
+
+// alertVisibleTo applies an alert's audience to one member. Unknown audiences
+// are hidden (fail closed) rather than broadcast.
+func alertVisibleTo(a domain.SystemAlert, memberID string, member *domain.Member) bool {
+	switch a.Audience {
+	case "", domain.AudienceAll:
+		return true
+	case domain.AudienceOverdueOnly:
+		// Paid-up members do not get overdue reminders.
+		return !(member != nil && member.OutstandingBalance <= 0 && member.Status == "ACTIVE")
+	case domain.AudienceFamilyHeads:
+		return member == nil || member.FamilyHead
+	case domain.AudienceMember:
+		for _, id := range a.MemberIDs {
+			if id == memberID {
+				return true
+			}
+		}
+		return false
+	default:
+		return false
+	}
+}
+
+func (h *Handler) visibleAlertIDs(ctx context.Context, tenantID, memberID string) ([]string, error) {
+	alerts, _, err := h.memberAlerts(ctx, tenantID, memberID)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(alerts))
+	for _, a := range alerts {
+		ids = append(ids, a.ID)
+	}
+	return ids, nil
+}
+
+// AcknowledgeAlert (admin) marks the shared alert read for the whole tenant.
+func (h *Handler) AcknowledgeAlert(c *fiber.Ctx) error {
+	tenantID, _ := c.Locals("tenant_id").(string)
+	alertID := c.Params("id")
+	if h.alertRepo == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Alerts service offline"})
+	}
+	ok, err := h.alertRepo.Acknowledge(c.Context(), tenantID, alertID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	if !ok {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Alert not found"})
 	}
 	return c.JSON(fiber.Map{"status": "ACKNOWLEDGED", "alert_id": alertID})
 }
 
+// DismissAlert (admin) deletes the shared alert for the whole tenant.
 func (h *Handler) DismissAlert(c *fiber.Ctx) error {
+	tenantID, _ := c.Locals("tenant_id").(string)
 	alertID := c.Params("id")
-	if h.alertRepo != nil {
-		if err := h.alertRepo.Dismiss(c.Context(), alertID); err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-		}
+	if h.alertRepo == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Alerts service offline"})
+	}
+	ok, err := h.alertRepo.Dismiss(c.Context(), tenantID, alertID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	if !ok {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Alert not found"})
 	}
 	return c.JSON(fiber.Map{"status": "DISMISSED", "alert_id": alertID})
+}
+
+// memberAlertTarget checks that alertID is an alert this member can see.
+func (h *Handler) memberAlertTarget(c *fiber.Ctx) (tenantID, memberID, alertID string, aerr *apiError) {
+	tenantID, _ = c.Locals("tenant_id").(string)
+	memberID, aerr = scopeMember(c, c.Query("member_id"))
+	if aerr != nil {
+		return
+	}
+	if h.alertRepo == nil {
+		aerr = &apiError{status: fiber.StatusServiceUnavailable, msg: "Alerts service offline"}
+		return
+	}
+	// Copy: Fiber reuses the request buffer that backs Params once the
+	// handler returns.
+	alertID = strings.Clone(c.Params("id"))
+	a, err := h.alertRepo.GetByID(c.Context(), tenantID, alertID)
+	if err != nil || a == nil {
+		aerr = errNotFound("Alert not found")
+	}
+	return
+}
+
+// AcknowledgeMemberAlert marks one alert read for the signed-in member only.
+func (h *Handler) AcknowledgeMemberAlert(c *fiber.Ctx) error {
+	tenantID, memberID, alertID, aerr := h.memberAlertTarget(c)
+	if aerr != nil {
+		return aerr.send(c)
+	}
+	if err := h.alertRepo.MarkReadForMember(c.Context(), tenantID, memberID, []string{alertID}); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(fiber.Map{"status": "ACKNOWLEDGED", "alert_id": alertID})
+}
+
+// DismissMemberAlert hides one alert for the signed-in member only.
+func (h *Handler) DismissMemberAlert(c *fiber.Ctx) error {
+	tenantID, memberID, alertID, aerr := h.memberAlertTarget(c)
+	if aerr != nil {
+		return aerr.send(c)
+	}
+	if err := h.alertRepo.DismissForMember(c.Context(), tenantID, memberID, []string{alertID}); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(fiber.Map{"status": "DISMISSED", "alert_id": alertID})
+}
+
+// MarkAllMemberAlertsRead marks every alert the member can see as read.
+func (h *Handler) MarkAllMemberAlertsRead(c *fiber.Ctx) error {
+	return h.applyToAllMemberAlerts(c, false)
+}
+
+// ClearAllMemberAlerts hides every alert the member can currently see.
+func (h *Handler) ClearAllMemberAlerts(c *fiber.Ctx) error {
+	return h.applyToAllMemberAlerts(c, true)
+}
+
+func (h *Handler) applyToAllMemberAlerts(c *fiber.Ctx, dismiss bool) error {
+	tenantID, _ := c.Locals("tenant_id").(string)
+	memberID, aerr := scopeMember(c, c.Query("member_id"))
+	if aerr != nil {
+		return aerr.send(c)
+	}
+	if h.alertRepo == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Alerts service offline"})
+	}
+	ids, err := h.visibleAlertIDs(c.Context(), tenantID, memberID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	status := "ALL_READ"
+	if dismiss {
+		status = "CLEARED"
+		err = h.alertRepo.DismissForMember(c.Context(), tenantID, memberID, ids)
+	} else {
+		err = h.alertRepo.MarkReadForMember(c.Context(), tenantID, memberID, ids)
+	}
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(fiber.Map{"status": status, "count": len(ids)})
 }
 
 func (h *Handler) ClearAllAlerts(c *fiber.Ctx) error {
@@ -2025,11 +2048,16 @@ func (h *Handler) MarkAllAlertsRead(c *fiber.Ctx) error {
 }
 
 type CreateAlertRequest struct {
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Severity    string `json:"severity"`
-	Audience    string `json:"audience"` // ALL | OVERDUE_ONLY | FAMILY_HEADS
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Severity    string   `json:"severity"`
+	Audience    string   `json:"audience"`   // ALL | OVERDUE_ONLY | FAMILY_HEADS | MEMBER
+	MemberIDs   []string `json:"member_ids"` // MEMBER audience recipients
+	Type        string   `json:"type"`       // domain.AlertType*; default by audience
 }
+
+// MaxAlertRecipients caps a MEMBER-audience alert.
+const MaxAlertRecipients = 500
 
 func (h *Handler) CreateAlert(c *fiber.Ctx) error {
 	tenantID, _ := c.Locals("tenant_id").(string)
@@ -2037,18 +2065,49 @@ func (h *Handler) CreateAlert(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
+	req.Title, req.Description = strings.TrimSpace(req.Title), strings.TrimSpace(req.Description)
 	if req.Title == "" || req.Description == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Title and description are required"})
 	}
-	if req.Severity == "" {
+	req.Severity = strings.ToUpper(strings.TrimSpace(req.Severity))
+	switch req.Severity {
+	case "":
 		req.Severity = "INFO"
+	case "INFO", "WARNING", "CRITICAL":
+	default:
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "severity must be INFO, WARNING or CRITICAL"})
 	}
+	req.Audience = strings.ToUpper(strings.TrimSpace(req.Audience))
 	if req.Audience == "" {
-		req.Audience = "ALL"
+		req.Audience = domain.AudienceAll
+	}
+	var recipients []string
+	switch req.Audience {
+	case domain.AudienceAll, domain.AudienceOverdueOnly, domain.AudienceFamilyHeads:
+		if len(req.MemberIDs) > 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "member_ids is only allowed with audience MEMBER"})
+		}
+	case domain.AudienceMember:
+		ids, aerr := h.validateRecipients(c.Context(), tenantID, req.MemberIDs)
+		if aerr != nil {
+			return aerr.send(c)
+		}
+		recipients = ids
+	default:
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "audience must be ALL, OVERDUE_ONLY, FAMILY_HEADS or MEMBER"})
+	}
+	req.Type = strings.ToUpper(strings.TrimSpace(req.Type))
+	switch {
+	case req.Type == "" && req.Audience == domain.AudienceOverdueOnly:
+		req.Type = domain.AlertTypeDuesReminder
+	case req.Type == "":
+		req.Type = domain.AlertTypeAnnouncement
+	case !domain.ValidAlertType(req.Type):
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "type must be DUES_REMINDER, PAYMENT_RECEIVED, ANNOUNCEMENT, EVENT or GENERAL"})
 	}
 
 	title := req.Title
-	if req.Audience == "OVERDUE_ONLY" && !strings.Contains(title, "[Dues Reminder]") {
+	if req.Audience == domain.AudienceOverdueOnly && !strings.Contains(title, "[Dues Reminder]") {
 		title = "[Dues Reminder] " + title
 	}
 
@@ -2056,37 +2115,46 @@ func (h *Handler) CreateAlert(c *fiber.Ctx) error {
 		ID:          "ALT_" + uuid.New().String()[:8],
 		MahalID:     tenantID,
 		Audience:    req.Audience,
+		MemberIDs:   recipients,
+		Type:        req.Type,
 		Title:       title,
 		Description: req.Description,
 		Severity:    req.Severity,
 		Status:      "ACTIVE",
 		CreatedAt:   time.Now().UTC(),
 	}
-	if h.alertRepo != nil {
-		if err := h.alertRepo.Create(c.Context(), &alert); err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-		}
+	if h.alertRepo == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Alerts service offline"})
+	}
+	if err := h.alertRepo.Create(c.Context(), &alert); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	if h.auditRepo != nil {
+		target := req.Audience
+		if req.Audience == domain.AudienceMember {
+			target = fmt.Sprintf("MEMBER (%d)", len(recipients))
+		}
 		_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
 			MahalID:  tenantID,
 			Action:   "ALERT_BROADCAST",
 			Actor:    "Mahal Administrator",
 			EntityID: alert.ID,
-			Details:  "Broadcast notice sent to audience: " + req.Audience + " (Title: " + req.Title + ")",
+			Details:  "Notice (" + req.Type + ") sent to audience: " + target + " (Title: " + req.Title + ")",
 		})
 	}
 
 	h.pushAsync(func(ctx context.Context, p *service.PushService) {
 		n := service.PushNotification{
-			Kind:  service.PushKindAlert,
+			Kind:  pushKindForAlert(alert.Type),
 			Title: alert.Title,
 			Body:  alert.Description,
-			Data:  map[string]string{"alert_id": alert.ID, "severity": alert.Severity},
+			Data:  map[string]string{"alert_id": alert.ID, "severity": alert.Severity, "alert_type": alert.Type},
 		}
 		switch req.Audience {
-		case "OVERDUE_ONLY":
+		case domain.AudienceMember:
+			p.SendToMembers(ctx, tenantID, recipients, n)
+		case domain.AudienceOverdueOnly:
 			if h.memberRepo == nil {
 				return
 			}
@@ -2098,9 +2166,8 @@ func (h *Handler) CreateAlert(c *fiber.Ctx) error {
 			for _, m := range overdue {
 				ids = append(ids, m.ID)
 			}
-			n.Kind = service.PushKindDuesReminder
 			p.SendToMembers(ctx, tenantID, ids, n)
-		case "FAMILY_HEADS":
+		case domain.AudienceFamilyHeads:
 			if h.memberRepo == nil {
 				return
 			}
@@ -2115,43 +2182,94 @@ func (h *Handler) CreateAlert(c *fiber.Ctx) error {
 				}
 			}
 			p.SendToMembers(ctx, tenantID, ids, n)
-		default:
+		case domain.AudienceAll:
 			p.SendToMahal(ctx, tenantID, n)
 		}
 	})
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"status":   "CREATED",
-		"alert":    alert,
-		"audience": req.Audience,
+		"status":     "CREATED",
+		"alert":      alert,
+		"audience":   req.Audience,
+		"recipients": len(recipients),
+	})
+}
+
+// validateRecipients checks a MEMBER-audience recipient list: non-empty,
+// capped, de-duplicated, and every id a member of this tenant.
+func (h *Handler) validateRecipients(ctx context.Context, tenantID string, ids []string) ([]string, *apiError) {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id != "" && !seen[id] {
+			seen[id] = true
+			out = append(out, id)
+		}
+	}
+	if len(out) == 0 {
+		return nil, errBadRequest("member_ids is required for audience MEMBER")
+	}
+	if len(out) > MaxAlertRecipients {
+		return nil, errBadRequest(fmt.Sprintf("at most %d member_ids per notice", MaxAlertRecipients))
+	}
+	if h.memberRepo == nil {
+		return nil, &apiError{status: fiber.StatusServiceUnavailable, msg: "Member service offline"}
+	}
+	var unknown []string
+	for _, id := range out {
+		if m, err := h.memberRepo.GetByID(ctx, tenantID, id); err != nil || m == nil {
+			unknown = append(unknown, id)
+		}
+	}
+	if len(unknown) > 0 {
+		return nil, errBadRequest("unknown member_ids: " + strings.Join(unknown, ", "))
+	}
+	return out, nil
+}
+
+func pushKindForAlert(alertType string) string {
+	switch alertType {
+	case domain.AlertTypeDuesReminder:
+		return service.PushKindDuesReminder
+	case domain.AlertTypePaymentReceived:
+		return service.PushKindReceipt
+	default:
+		return service.PushKindAlert
+	}
+}
+
+// NotifyReceiptAlert records a PAYMENT_RECEIVED notice for the member who was
+// just issued receipt r (registered as a post-commit receipt hook). The id is
+// derived from the receipt, so a repeated hook cannot create duplicates.
+func (h *Handler) NotifyReceiptAlert(ctx context.Context, r *domain.Receipt) {
+	if h.alertRepo == nil || r == nil {
+		return
+	}
+	title := "Payment received"
+	desc := fmt.Sprintf("We received ₹%.2f. Receipt %s.", r.Amount, r.ReceiptNumber)
+	if r.PaymentType == "MONTHLY_DUES" && len(r.PaidMonths) > 0 {
+		desc = fmt.Sprintf("We received ₹%.2f for %s. Receipt %s.", r.Amount, strings.Join(r.PaidMonths, ", "), r.ReceiptNumber)
+	} else if r.Fund != "" {
+		desc = fmt.Sprintf("We received your contribution of ₹%.2f (%s). Receipt %s.", r.Amount, r.Fund, r.ReceiptNumber)
+	}
+	_ = h.alertRepo.Create(ctx, &domain.SystemAlert{
+		ID:          "ALT_RCPT_" + r.ReceiptNumber,
+		MahalID:     r.MahalID,
+		Audience:    domain.AudienceMember,
+		MemberIDs:   []string{r.MemberID},
+		Type:        domain.AlertTypePaymentReceived,
+		Severity:    "INFO",
+		Title:       title,
+		Description: desc,
+		Status:      "ACTIVE",
+		CreatedAt:   time.Now().UTC(),
 	})
 }
 
 // -------------------------------------------------------------
 // 6. EXCEL INGESTION & BATCH JOBS
 // -------------------------------------------------------------
-
-func (h *Handler) UploadExcelPreview(c *fiber.Ctx) error {
-	return c.JSON(fiber.Map{
-		"filename":       "mahal_members_sheet.xlsx",
-		"total_rows":     150,
-		"valid_rows":     148,
-		"duplicate_rows": 2,
-		"preview_rows": []fiber.Map{
-			{"code": "M-105", "name": "Kareem Hassan", "phone": "+919847112233", "status": "VALID"},
-			{"code": "M-106", "name": "Usman Tariq", "phone": "+919847445566", "status": "VALID"},
-		},
-	})
-}
-
-func (h *Handler) CommitExcelImport(c *fiber.Ctx) error {
-	return c.JSON(fiber.Map{
-		"status":          "COMPLETED",
-		"imported_count":  148,
-		"skipped_count":   2,
-		"ingestion_batch": "BATCH_" + uuid.New().String()[:8],
-	})
-}
 
 // -------------------------------------------------------------
 // 7. WEBHOOKS
@@ -2198,13 +2316,13 @@ func (h *Handler) HandlePGWebhook(c *fiber.Ctx) error {
 
 	// Determine internal transaction ID
 	txnID := udf1
-	if txnID == "" && strings.HasPrefix(orderID, "ORD_") {
-		txnID = strings.TrimPrefix(orderID, "ORD_")
-	} else if txnID == "" {
-		txnID = orderID
+	if txnID == "" {
+		txnID = txnIDFromOrderID(orderID)
 	}
 
-	// 2. Verify SHA-512 cryptographic hash if salt is present
+	// 2. Verify the SHA-512 response hash. A callback without a hash, or on a
+	// server with no salt configured, is never trusted to commit a payment.
+	hashVerified := false
 	if h.pgClient != nil && h.pgClient.Salt != "" && receivedHash != "" {
 		if !pg.VerifyResponseHash(params, h.pgClient.Salt, receivedHash) {
 			if h.alertRepo != nil {
@@ -2220,19 +2338,36 @@ func (h *Handler) HandlePGWebhook(c *fiber.Ctx) error {
 			}
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid signature hash"})
 		}
+		hashVerified = true
+	}
+
+	// Defence in depth: even a correctly signed callback is confirmed with the
+	// gateway before money is booked (hashes can be replayed or, via the SDK
+	// hash endpoint, derived).
+	var webhookTxn *domain.Transaction
+	if hashVerified && h.txnRepo != nil && txnID != "" {
+		webhookTxn, _ = h.txnRepo.GetByID(c.Context(), txnID)
+	}
+	gatewayOK := false
+	if webhookTxn != nil {
+		if webhookTxn.Status == domain.TxnSuccess {
+			gatewayOK = true
+		} else {
+			gatewayOK, _ = h.gatewayConfirmsSuccess(c.Context(), webhookTxn)
+		}
 	}
 
 	// 3. Check response code (0 = SUCCESS or PayU status == "success")
 	if respCodeStr == "0" || status == "success" || params["response_message"] == "SUCCESS" || params["response_message"] == "success" {
-		if h.paymentService != nil && txnID != "" {
+		if h.paymentService != nil && gatewayOK {
 			receipt, err := h.paymentService.CommitSuccessfulPayment(c.Context(), txnID)
 			if err != nil {
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 			}
 
 			// Persist PayU's mihpayid from the webhook so refunds work later.
-			if h.txnRepo != nil && params["mihpayid"] != "" {
-				_ = h.txnRepo.SetGatewayPaymentID(c.Context(), txnID, params["mihpayid"])
+			if h.txnRepo != nil {
+				_ = h.txnRepo.SetPaymentDetails(c.Context(), txnID, params["mihpayid"], domain.NormalizePaymentMode(params["mode"]))
 			}
 
 			if h.auditRepo != nil && receipt != nil {
@@ -2284,83 +2419,94 @@ func (h *Handler) HandlePGWebhook(c *fiber.Ctx) error {
 	})
 }
 
-// VerifyPGPaymentStatus queries PG status API to reconcile transaction state
+// VerifyPGPaymentStatus reconciles one transaction with PayU (verify_payment)
+// and commits it when PayU reports success. :id is the transaction id or its
+// PayU order id ("ORD"/"ORD_" prefixed).
 func (h *Handler) VerifyPGPaymentStatus(c *fiber.Ctx) error {
-	txnID := c.Params("id")
-	if txnID == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Transaction ID required"})
+	txn, aerr := h.loadOwnTransaction(c, txnIDFromOrderID(c.Params("id")))
+	if aerr != nil {
+		return aerr.send(c)
 	}
+	resp := fiber.Map{"transaction_id": txn.ID, "pg_transaction_id": txn.GatewayPaymentID}
 
-	orderID := "ORD_" + txnID
-	if h.pgClient != nil {
-		statusResp, err := h.pgClient.GetPaymentStatus(c.Context(), orderID, "")
-		if err != nil {
-			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": err.Error()})
-		}
-
-		if statusResp.ResponseCode == 0 && h.paymentService != nil {
-			receipt, commitErr := h.paymentService.CommitSuccessfulPayment(c.Context(), txnID)
-			if commitErr == nil && receipt != nil {
-				return c.JSON(fiber.Map{
-					"status":  "SUCCESS",
-					"receipt": receipt,
-				})
+	switch txn.Status {
+	case domain.TxnSuccess:
+		resp["status"], resp["gateway_status"] = "SUCCESS", "success"
+		if h.receiptRepo != nil && txn.ReceiptID != "" {
+			if r, _ := h.receiptRepo.GetByNumberForMahal(c.Context(), txn.MahalID, txn.ReceiptID); r != nil {
+				h.decorateReceipt(c.Context(), r)
+				resp["receipt"] = r
 			}
 		}
-
-		return c.JSON(fiber.Map{
-			"status":            statusResp.ResponseMessage,
-			"response_code":     statusResp.ResponseCode,
-			"pg_transaction_id": statusResp.TransactionID,
-		})
+		return c.JSON(resp)
+	case domain.TxnRefunded:
+		resp["status"], resp["gateway_status"] = "REFUNDED", "refunded"
+		return c.JSON(resp)
+	}
+	if h.pgClient == nil || h.paymentService == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Payment gateway client unavailable"})
+	}
+	if strings.EqualFold(txn.Gateway, "CASH") {
+		resp["status"], resp["gateway_status"] = "PENDING", "cash"
+		return c.JSON(resp)
 	}
 
-	return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Payment gateway client unavailable"})
+	gatewayStatus := "success" // simulated gateway: nothing to ask
+	if h.pgClient.Live() {
+		d, err := h.pgClient.VerifyPaymentDetail(c.Context(), orderIDForTxn(txn))
+		if err != nil {
+			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": "Could not reach the payment gateway", "status": "PENDING"})
+		}
+		gatewayStatus = strings.ToLower(strings.TrimSpace(d.Status))
+		if gatewayStatus == "success" && h.txnRepo != nil {
+			_ = h.txnRepo.SetPaymentDetails(c.Context(), txn.ID, d.MihPayID, domain.NormalizePaymentMode(d.Mode))
+			resp["pg_transaction_id"] = d.MihPayID
+		}
+	}
+	resp["gateway_status"] = gatewayStatus
+
+	switch classifyGatewayStatus(gatewayStatus) {
+	case "SUCCESS":
+		receipt, err := h.paymentService.CommitSuccessfulPayment(c.Context(), txn.ID)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+		resp["status"], resp["receipt"] = "SUCCESS", receipt
+	case "FAILED":
+		if h.txnRepo != nil {
+			_ = h.txnRepo.UpdateStatus(c.Context(), txn.ID, domain.TxnFailed, "")
+		}
+		resp["status"] = "FAILED"
+	default:
+		resp["status"] = "PENDING"
+	}
+	return c.JSON(resp)
 }
 
-// GetPayUCheckoutData returns PayU parameters and SHA-512 hash as JSON for frontend/mobile SDK
+// classifyGatewayStatus maps PayU's verify_payment status to ours.
+func classifyGatewayStatus(s string) string {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "success", "captured":
+		return "SUCCESS"
+	case "failure", "failed", "dropped", "bounced", "usercancelled", "cancelled", "user_cancelled":
+		return "FAILED"
+	default: // pending, in progress, not found (not yet submitted)
+		return "PENDING"
+	}
+}
+
+// GetPayUCheckoutData returns PayU parameters and SHA-512 hash as JSON for
+// frontend/mobile SDK. The order id may be ORD/ORD_-prefixed or a mandate id;
+// the response always uses the canonical PayU txnid.
 func (h *Handler) GetPayUCheckoutData(c *fiber.Ctx) error {
-	orderID := c.Params("orderId")
-	if orderID == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "orderId required"})
+	if h.pgClient == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Payment gateway client unavailable"})
 	}
-
-	txnID := strings.TrimPrefix(orderID, "ORD_")
-	txnID = strings.TrimPrefix(txnID, "ORD")
-	txn, err := h.txnRepo.GetByID(c.Context(), txnID)
-	if err != nil || txn == nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Transaction not found"})
+	params, aerr := h.loadOwnPayable(c, c.Params("orderId"))
+	if aerr != nil {
+		return aerr.send(c)
 	}
-
-	memberName := "Mahal Member"
-	memberEmail := "member@mahalflow.org"
-	memberPhone := "9900990099"
-	if h.memberRepo != nil {
-		if m, mErr := h.memberRepo.GetByID(c.Context(), txn.MahalID, txn.MemberID); mErr == nil && m != nil {
-			if m.Name != "" {
-				memberName = m.Name
-			}
-			if m.Phone != "" {
-				memberPhone = m.Phone
-			}
-		}
-	}
-
-	p := pg.PaymentRequestParams{
-		OrderID:     orderID,
-		Amount:      fmt.Sprintf("%.2f", txn.Amount),
-		Currency:    txn.Currency,
-		Description: fmt.Sprintf("Mahal Payment %s", orderID),
-		Name:        memberName,
-		Email:       memberEmail,
-		Phone:       memberPhone,
-		UDF1:        txn.ID,
-		UDF2:        txn.MahalID,
-		UDF3:        txn.MemberID,
-	}
-
-	formData := h.pgClient.GeneratePayUCheckoutParams(p)
-	return c.JSON(formData)
+	return c.JSON(h.pgClient.GeneratePayUCheckoutParams(params))
 }
 
 type PayUHashRequest struct {
@@ -2368,75 +2514,87 @@ type PayUHashRequest struct {
 	HashString string `json:"hash_string"`
 	HashType   string `json:"hash_type"`
 	PostSalt   string `json:"post_salt"`
+	// TxnID is the order / mandate id being paid (optional for V1 hashes,
+	// required for V2).
+	TxnID string `json:"txnid"`
 }
 
-// GeneratePayUDynamicHash computes dynamic hashes requested by PayU mobile SDK
+// GeneratePayUDynamicHash answers the PayU CheckoutPro SDK's hash requests,
+// but only for strings authorizeHashRequest accepts (the caller's own
+// payment, allowlisted SDK commands). It is not a general signing service.
 func (h *Handler) GeneratePayUDynamicHash(c *fiber.Ctx) error {
 	var req PayUHashRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
-
-	if req.HashString == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "hash_string is required"})
+	if h.pgClient == nil || h.pgClient.APIKey == "" {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Payment gateway not configured"})
 	}
-
-	hash := h.pgClient.GenerateDynamicHash(req.HashName, req.HashString, req.HashType, req.PostSalt)
+	if aerr := h.authorizeHashRequest(c, req); aerr != nil {
+		return aerr.send(c)
+	}
 	return c.JSON(fiber.Map{
 		"hash_name": req.HashName,
-		"hash":      hash,
+		"hash":      h.pgClient.GenerateDynamicHash(req.HashName, req.HashString, req.HashType, req.PostSalt),
 	})
 }
 
-// RenderPayUCheckoutPage auto-submits HTML form directly into PayU test/production gateway
+// RenderPayUCheckoutPage auto-submits an HTML form into PayU. It is public
+// (opened in a browser / webview without the app's bearer token), so it
+// requires the short-lived signature from signedCheckoutURL and shows no more
+// of the payer than PayU needs: first name only, placeholder email.
 func (h *Handler) RenderPayUCheckoutPage(c *fiber.Ctx) error {
-	orderID := c.Params("orderId")
+	orderID := strings.Clone(strings.TrimSpace(c.Params("orderId")))
 	if orderID == "" {
 		return c.Status(fiber.StatusBadRequest).SendString("Missing orderId")
 	}
-
-	txnID := strings.TrimPrefix(orderID, "ORD_")
-	txn, err := h.txnRepo.GetByID(c.Context(), txnID)
-	if err != nil || txn == nil {
-		return c.Status(fiber.StatusNotFound).SendString("Transaction not found")
+	if !validCheckoutSignature(orderID, c.Query("exp"), c.Query("sig"), time.Now()) {
+		return c.Status(fiber.StatusForbidden).SendString("This payment link is invalid or has expired. Return to the app and try again.")
+	}
+	if h.pgClient == nil {
+		return c.Status(fiber.StatusServiceUnavailable).SendString("Payment gateway unavailable")
 	}
 
-	memberName := "Mahal Member"
-	memberEmail := "member@mahalflow.org"
-	memberPhone := "9900990099"
-	if h.memberRepo != nil {
-		if m, mErr := h.memberRepo.GetByID(c.Context(), txn.MahalID, txn.MemberID); mErr == nil && m != nil {
-			if m.Name != "" {
-				memberName = m.Name
-			}
-			if m.Phone != "" {
-				memberPhone = m.Phone
-			}
+	var p pg.PaymentRequestParams
+	if isMandateID(orderID) {
+		if h.mandateRepo == nil {
+			return c.Status(fiber.StatusServiceUnavailable).SendString("AutoPay unavailable")
 		}
+		m, err := h.mandateRepo.GetByID(c.Context(), orderID)
+		if err != nil || m == nil {
+			return c.Status(fiber.StatusNotFound).SendString("Mandate not found")
+		}
+		if m.Status != "PENDING_AUTHORIZATION" {
+			return c.Status(fiber.StatusConflict).SendString("This mandate is already " + m.Status)
+		}
+		p = h.checkoutParamsForMandate(c.Context(), m)
+	} else {
+		if h.txnRepo == nil {
+			return c.Status(fiber.StatusServiceUnavailable).SendString("Payments unavailable")
+		}
+		txn, err := h.txnRepo.GetByID(c.Context(), txnIDFromOrderID(orderID))
+		if err != nil || txn == nil {
+			return c.Status(fiber.StatusNotFound).SendString("Transaction not found")
+		}
+		if txn.Status == domain.TxnSuccess || txn.Status == domain.TxnRefunded {
+			return c.Status(fiber.StatusConflict).SendString("This payment is already complete")
+		}
+		p = h.checkoutParamsForTxn(c.Context(), txn)
 	}
-
-	p := pg.PaymentRequestParams{
-		OrderID:     orderID,
-		Amount:      fmt.Sprintf("%.2f", txn.Amount),
-		Currency:    txn.Currency,
-		Description: fmt.Sprintf("Mahal Payment %s", orderID),
-		Name:        memberName,
-		Email:       memberEmail,
-		Phone:       memberPhone,
-		UDF1:        txn.ID,
-		UDF2:        txn.MahalID,
-		UDF3:        txn.MemberID,
-	}
+	p.Name = firstName(p.Name)
+	p.Email = defaultPayerEmail
 
 	formData := h.pgClient.GeneratePayUCheckoutParams(p)
 
-	c.Set("Content-Type", "text/html")
+	c.Set("Content-Type", "text/html; charset=utf-8")
+	c.Set("Cache-Control", "no-store")
+	c.Set("Referrer-Policy", "no-referrer")
 	var inputs strings.Builder
 	for k, v := range formData.Params {
-		inputs.WriteString(fmt.Sprintf(`<input type="hidden" name="%s" value="%s" />`, k, v))
+		inputs.WriteString(fmt.Sprintf(`<input type="hidden" name="%s" value="%s" />`, html.EscapeString(k), html.EscapeString(v)))
 	}
 
-	html := fmt.Sprintf(`<!DOCTYPE html>
+	page := fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
@@ -2461,7 +2619,59 @@ func (h *Handler) RenderPayUCheckoutPage(c *fiber.Ctx) error {
   </div>
   <script>document.getElementById("payuform").submit();</script>
 </body>
-</html>`, formData.Action, inputs.String())
+</html>`, html.EscapeString(formData.Action), inputs.String())
 
-	return c.SendString(html)
+	return c.SendString(page)
+}
+
+// loadOwnTransaction loads a transaction the caller may act on: same tenant,
+// and for a MEMBER session their own. Anything else is "not found".
+func (h *Handler) loadOwnTransaction(c *fiber.Ctx, txnID string) (*domain.Transaction, *apiError) {
+	if h.txnRepo == nil {
+		return nil, &apiError{status: fiber.StatusServiceUnavailable, msg: "Transaction service offline"}
+	}
+	if strings.TrimSpace(txnID) == "" {
+		return nil, errBadRequest("transaction_id is required")
+	}
+	txn, err := h.txnRepo.GetByID(c.Context(), txnID)
+	if err != nil || txn == nil || !canSeeMemberRecord(c, txn.MahalID, txn.MemberID) {
+		return nil, errNotFound("Transaction not found")
+	}
+	return txn, nil
+}
+
+// loadOwnReceipt loads a receipt by number within the request tenant; a
+// MEMBER session only sees their own receipts.
+func (h *Handler) loadOwnReceipt(c *fiber.Ctx, number string) (*domain.Receipt, *apiError) {
+	tenantID, _ := c.Locals("tenant_id").(string)
+	receipt, err := h.receiptRepo.GetByNumberForMahal(c.Context(), tenantID, number)
+	if err != nil || receipt == nil || !canSeeMemberRecord(c, receipt.MahalID, receipt.MemberID) {
+		return nil, errNotFound("Receipt not found")
+	}
+	return receipt, nil
+}
+
+// gatewayConfirmsSuccess asks PayU whether txn was actually paid, and on
+// success records PayU's mihpayid and payment mode on the transaction (so the
+// receipt carries the method). Without a live gateway (no key, or
+// PAYMENT_TEST_MODE) there is nothing to ask and the existing test behaviour
+// is kept.
+func (h *Handler) gatewayConfirmsSuccess(ctx context.Context, txn *domain.Transaction) (bool, string) {
+	if !h.pgClient.Live() {
+		return true, ""
+	}
+	if strings.EqualFold(txn.Gateway, "CASH") {
+		return false, "cash payments are committed by the committee"
+	}
+	d, err := h.pgClient.VerifyPaymentDetail(ctx, orderIDForTxn(txn))
+	if err != nil {
+		return false, "verification unavailable"
+	}
+	if !strings.EqualFold(d.Status, "success") {
+		return false, "gateway status " + d.Status
+	}
+	if h.txnRepo != nil {
+		_ = h.txnRepo.SetPaymentDetails(ctx, txn.ID, d.MihPayID, domain.NormalizePaymentMode(d.Mode))
+	}
+	return true, ""
 }

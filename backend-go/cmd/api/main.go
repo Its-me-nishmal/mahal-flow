@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/mahalflow/backend-go/internal/database"
 	"github.com/mahalflow/backend-go/internal/domain"
 	"github.com/mahalflow/backend-go/internal/gateway/fcm"
+	"github.com/mahalflow/backend-go/internal/gateway/firebaseauth"
 	"github.com/mahalflow/backend-go/internal/gateway/pg"
 	"github.com/mahalflow/backend-go/internal/gateway/whatsapp"
 	"github.com/mahalflow/backend-go/internal/logger"
@@ -50,6 +52,7 @@ func main() {
 	var adminRepo repository.AdminRepository
 	var notifRepo repository.NotificationRepository
 	var deviceTokenRepo repository.DeviceTokenRepository
+	var importRepo repository.ImportBatchRepository
 	var paymentService service.PaymentService
 
 	if dbClient != nil {
@@ -64,6 +67,12 @@ func main() {
 		adminRepo = repository.NewAdminRepository(dbClient.DB)
 		notifRepo = repository.NewNotificationRepository(dbClient.DB)
 		deviceTokenRepo = repository.NewDeviceTokenRepository(dbClient.DB)
+		importRepo = repository.NewImportBatchRepository(dbClient.DB)
+		idxCtx, idxCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if err := importRepo.EnsureIndexes(idxCtx); err != nil {
+			log.Warn().Err(err).Msg("import_batches indexes not ensured")
+		}
+		idxCancel()
 		paymentService = service.NewPaymentService(dbClient.Client, mahalRepo, memberRepo, txnRepo, receiptRepo)
 	}
 
@@ -97,6 +106,16 @@ func main() {
 	// Post-commit receipt side effects (WhatsApp, push). The payment service
 	// takes a single hook, so each channel registers here and one hook fans out.
 	var receiptHooks []func(ctx context.Context, receipt *domain.Receipt)
+	// In-app PAYMENT_RECEIVED notice for the payer. The handler is built
+	// below; the hook only runs after a payment, long after startup.
+	var handler *api.Handler
+	if alertRepo != nil {
+		receiptHooks = append(receiptHooks, func(ctx context.Context, receipt *domain.Receipt) {
+			if handler != nil {
+				handler.NotifyReceiptAlert(ctx, receipt)
+			}
+		})
+	}
 	if pushService.Enabled() {
 		receiptHooks = append(receiptHooks, pushService.NotifyReceipt)
 		log.Info().Msg("Payment receipts will be pushed to the member app")
@@ -149,10 +168,42 @@ func main() {
 		ClientSecret: cfg.PGClientSecret,
 		ReturnURL:    cfg.PGReturnURL,
 		TestMode:     cfg.PaymentTestMode,
+		InfoBaseURL:  cfg.PGInfoAPIURL,
 	})
 
-	handler := api.NewHandler(paymentService, mahalRepo, memberRepo, receiptRepo, txnRepo, auditRepo, alertRepo, refundRepo, mandateRepo, adminRepo, pgClient)
+	handler = api.NewHandler(paymentService, mahalRepo, memberRepo, receiptRepo, txnRepo, auditRepo, alertRepo, refundRepo, mandateRepo, adminRepo, pgClient)
 	handler.SetPush(deviceTokenRepo, pushService)
+	handler.SetImportBatches(importRepo)
+	handler.SetPublicBaseURL(cfg.PublicBaseURL)
+
+	// Phone sign-in: /auth/resolve and /auth/register accept only a verified
+	// Firebase ID token. The project comes from FIREBASE_PROJECT_ID or the
+	// FCM service account. Without either, those routes refuse everything
+	// unless AUTH_DEV_BYPASS=true (never honoured in production).
+	firebaseProject := cfg.FirebaseProjectID
+	if firebaseProject == "" {
+		firebaseProject = fcmClient.ProjectID()
+	}
+	devBypass := cfg.AuthDevBypass
+	if devBypass && isProduction(cfg.Environment) {
+		log.Error().Msg("AUTH_DEV_BYPASS ignored: not allowed when ENV=production")
+		devBypass = false
+	}
+	if firebaseProject != "" {
+		verifier, vErr := firebaseauth.NewVerifier(firebaseProject, nil)
+		if vErr != nil {
+			log.Fatal().Err(vErr).Msg("Firebase ID-token verifier")
+		}
+		handler.SetPhoneAuth(verifier, devBypass)
+		log.Info().Str("project", firebaseProject).Bool("dev_bypass", devBypass).Msg("Phone sign-in verifies Firebase ID tokens")
+	} else {
+		handler.SetPhoneAuth(nil, devBypass)
+		if devBypass {
+			log.Warn().Msg("AUTH_DEV_BYPASS=true and no Firebase project: phone sign-in trusts posted phones (development only)")
+		} else {
+			log.Warn().Msg("No Firebase project configured: /auth/resolve and /auth/register are disabled")
+		}
+	}
 
 	// AutoPay scheduler: automatically charges due mandates on a fixed interval
 	// (no manual trigger). Defaults to every 3 minutes; set AUTOPAY_INTERVAL_SECONDS=0
@@ -202,10 +253,9 @@ func main() {
 	app.Post("/api/v1/webhooks/pg", handler.HandlePGWebhook)
 	app.Get("/api/v1/webhooks/pg", handler.HandlePGWebhook)
 
-	// Public PayU Checkout Redirect & JSON Data
+	// Public PayU checkout redirect page (opened in a browser/webview, so it
+	// cannot carry the app's bearer token).
 	app.Get("/api/v1/payments/payu-checkout/:orderId", handler.RenderPayUCheckoutPage)
-	app.Get("/api/v1/payments/payu-checkout-data/:orderId", handler.GetPayUCheckoutData)
-	app.Post("/api/v1/payments/payu-generate-hash", handler.GeneratePayUDynamicHash)
 
 	// WhatsApp Cloud API callbacks: GET is Meta's subscription handshake,
 	// POST carries delivery receipts and inbound member replies.
@@ -215,74 +265,7 @@ func main() {
 
 	// Tenant-Scoped API Routes (v1) - Requires valid X-Tenant-ID
 	v1 := app.Group("/api/v1", api.TenantExtractionMiddleware())
-
-	// Auth & Profile
-	v1.Post("/auth/resolve", handler.ResolveLogin)
-	v1.Post("/auth/register", handler.RegisterSelf)
-	v1.Get("/auth/me", api.JWTAuthMiddleware(), handler.GetCurrentUser)
-	v1.Get("/members/profile/:id", handler.GetMemberProfile)
-	v1.Put("/members/profile/:id", handler.UpdateMemberProfile)
-
-	// Member Routes (Dues Portal, Contributions & Receipt Verification)
-	v1.Get("/member/dashboard", handler.GetMemberDashboard)
-	v1.Get("/member/receipts", handler.GetMemberReceipts)
-	v1.Post("/payments/dues/initialize", handler.InitializeDuesPayment)
-	v1.Post("/payments/dues/confirm", handler.ConfirmPayment)
-	v1.Get("/payments/:id/status", handler.VerifyPGPaymentStatus)
-	v1.Post("/payments/contribution/initialize", handler.InitializeContribution)
-	v1.Get("/receipts/:number", handler.GetReceipt)
-	v1.Get("/receipts/:number/verify", handler.VerifyReceiptIntegrity)
-
-	// AutoPay Mandates
-	v1.Post("/autopay/mandate/create", handler.CreateAutoPayMandate)
-	v1.Get("/autopay/mandate/status", handler.GetAutoPayStatus)
-	v1.Post("/autopay/mandate/confirm", handler.ConfirmAutoPayMandate)
-	v1.Post("/autopay/mandate/cancel", handler.CancelAutoPayMandate)
-
-	// Alerts for Members & Announcements
-	v1.Get("/member/alerts", handler.GetAlerts)
-	v1.Get("/alerts", handler.GetAlerts)
-
-	// QR Standee (BharatQR & UPI)
-	// Push notifications
-	v1.Post("/notifications/register-token", handler.RegisterDeviceToken)
-	v1.Post("/notifications/unregister-token", handler.UnregisterDeviceToken)
-
-	v1.Get("/mahal/qr-standee", handler.GetMahalQRStandee)
-	v1.Post("/mahal/qr-standee/dynamic", handler.GenerateDynamicQR)
-
-	// Protected Admin Routes (Requires valid JWT Token + MAHAL_ADMIN / SUPER_ADMIN Role)
-	admin := v1.Group("/admin", api.JWTAuthMiddleware(), api.RequireRole("MAHAL_ADMIN", "SUPER_ADMIN"))
-	admin.Get("/dashboard", handler.GetAdminDashboard)
-	admin.Get("/mahals", handler.GetMahals)
-	admin.Post("/mahals", handler.CreateMahal)
-	admin.Get("/mahals/:id", handler.GetMahalByID)
-	admin.Get("/members", handler.GetAdminMembers)
-	admin.Post("/members", handler.CreateMember)
-	admin.Delete("/members/:id", handler.DeleteMember)
-	admin.Post("/members/query", handler.QueryAdminMembers)
-	admin.Get("/members/pending", handler.GetPendingMembers)
-	admin.Post("/members/:id/approve", handler.ApproveMember)
-	admin.Post("/members/:id/reject", handler.RejectMember)
-	admin.Get("/payments", handler.GetPayments)
-	admin.Get("/subscriptions", handler.GetSubscriptions)
-	admin.Get("/refunds", handler.GetRefunds)
-	admin.Post("/refunds/:id/action", handler.ProcessRefund)
-	admin.Get("/qr-standee", handler.GetMahalQRStandee)
-	admin.Post("/qr-standee/dynamic", handler.GenerateDynamicQR)
-	admin.Get("/reports/financial", handler.GetFinancialReports)
-	admin.Post("/reports/financial/query", handler.QueryFinancialReports)
-	admin.Get("/gateways", handler.GetGateways)
-	admin.Get("/audit-logs", handler.GetAuditLogs)
-	admin.Get("/alerts", handler.GetAlerts)
-	admin.Post("/alerts", handler.CreateAlert)
-	admin.Post("/alerts/:id/ack", handler.AcknowledgeAlert)
-	admin.Delete("/alerts/:id", handler.DismissAlert)
-	admin.Delete("/alerts", handler.ClearAllAlerts)
-	admin.Post("/alerts/mark-all-read", handler.MarkAllAlertsRead)
-	admin.Post("/excel/upload-preview", handler.UploadExcelPreview)
-	admin.Post("/excel/commit-import", handler.CommitExcelImport)
-	admin.Post("/autopay/run-due", handler.RunDueAutoPayDebits)
+	api.RegisterTenantRoutes(v1, handler)
 
 	// Graceful shutdown setup
 	sigChan := make(chan os.Signal, 1)
@@ -300,4 +283,9 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = app.ShutdownWithContext(ctx)
+}
+
+func isProduction(env string) bool {
+	e := strings.ToLower(strings.TrimSpace(env))
+	return e == "production" || e == "prod"
 }

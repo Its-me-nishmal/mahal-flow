@@ -16,6 +16,11 @@ type ReceiptRepository interface {
 	AllocateAtomicReceiptSequence(ctx context.Context, mahalID string) (seq int64, prevHash string, err error)
 	UpdateLedgerHeadHash(ctx context.Context, mahalID string, seq int64, newHash string) error
 	GetByNumber(ctx context.Context, receiptNumber string) (*domain.Receipt, error)
+	// GetByNumberForMahal is the tenant-scoped lookup every API read must use:
+	// a receipt number from another Mahal is reported as not found.
+	GetByNumberForMahal(ctx context.Context, mahalID, receiptNumber string) (*domain.Receipt, error)
+	// GetLatestByMember returns the member's most recent receipt, or nil.
+	GetLatestByMember(ctx context.Context, mahalID, memberID string) (*domain.Receipt, error)
 	GetByMemberID(ctx context.Context, mahalID, memberID string) ([]domain.Receipt, error)
 	GetAllByMahal(ctx context.Context, mahalID string, limit int64) ([]domain.Receipt, error)
 	VerifyReceiptChain(ctx context.Context, mahalID string) (int64, int64, error)
@@ -99,6 +104,31 @@ func (r *mongoReceiptRepo) GetByNumber(ctx context.Context, receiptNumber string
 	var receipt domain.Receipt
 	err := r.coll.FindOne(ctx, bson.M{"receipt_number": receiptNumber}).Decode(&receipt)
 	if err != nil {
+		return nil, err
+	}
+	return &receipt, nil
+}
+
+func (r *mongoReceiptRepo) GetByNumberForMahal(ctx context.Context, mahalID, receiptNumber string) (*domain.Receipt, error) {
+	var receipt domain.Receipt
+	err := r.coll.FindOne(ctx, bson.M{"receipt_number": receiptNumber, "mahal_id": mahalID}).Decode(&receipt)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &receipt, nil
+}
+
+func (r *mongoReceiptRepo) GetLatestByMember(ctx context.Context, mahalID, memberID string) (*domain.Receipt, error) {
+	opts := options.FindOne().SetSort(bson.D{{Key: "created_at", Value: -1}, {Key: "sequence_number", Value: -1}})
+	var receipt domain.Receipt
+	err := r.coll.FindOne(ctx, bson.M{"mahal_id": mahalID, "member_id": memberID}, opts).Decode(&receipt)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return &receipt, nil

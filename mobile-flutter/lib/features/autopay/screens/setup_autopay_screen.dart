@@ -125,8 +125,10 @@ class _SetupAutoPayScreenState extends State<SetupAutoPayScreen>
     return _MandateState.none;
   }
 
-  /// Existing mandate amount, else the member's own dues rate, else the
-  /// outstanding balance spread over the unpaid months.
+  /// Existing mandate amount, else the member's dues rate from the server
+  /// (`effective_monthly_dues`: custom amount or the Mahal default), else the
+  /// custom amount, else the outstanding balance spread over the unpaid
+  /// months.
   static double? _duesFrom(
     Map<String, dynamic> status,
     Map<String, dynamic>? profile,
@@ -134,6 +136,10 @@ class _SetupAutoPayScreenState extends State<SetupAutoPayScreen>
   ) {
     final existing = (status['amount'] as num?)?.toDouble();
     if (existing != null && existing > 0) return existing;
+    for (final source in [dashboard, profile]) {
+      final effective = (source?['effective_monthly_dues'] as num?)?.toDouble();
+      if (effective != null && effective > 0) return effective;
+    }
     final custom = (profile?['monthly_dues_custom_amount'] as num?)?.toDouble();
     if (custom != null && custom > 0) return custom;
     final outstanding = (dashboard?['outstanding_balance'] as num?)?.toDouble();
@@ -402,6 +408,7 @@ class _SetupAutoPayScreenState extends State<SetupAutoPayScreen>
       checkoutPro: _checkoutPro,
       response: response,
       checkout: _activePayUData,
+      txnid: _activeMandateId,
     );
   }
 

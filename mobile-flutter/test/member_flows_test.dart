@@ -60,6 +60,26 @@ void main() {
       expect(r.isSuccess, isFalse);
       expect(r.statusLabel, 'Refunded');
     });
+
+    test('reads gateway, method, note and refund date', () {
+      final r = ReceiptView.fromJson({
+        ..._receipt,
+        'status': 'REFUNDED',
+        'gateway': 'PAYU',
+        'payment_method': 'UPI',
+        'note': 'In memory of family',
+        'refunded_at': '2026-09-20T10:00:00Z',
+      });
+      expect(r.isRefunded, isTrue);
+      expect(r.methodLabel, 'Online (UPI)');
+      expect(r.note, 'In memory of family');
+      expect(r.refundedAt, isNotNull);
+      expect(ReceiptView.fromJson({..._receipt, 'gateway': 'CASH'}).methodLabel,
+          'Cash');
+      expect(
+          ReceiptView.fromJson({..._receipt, 'gateway': 'PAYU'}).methodLabel,
+          'Online (PayU)');
+    });
   });
 
   group('alertTypeFromApi', () {
@@ -78,6 +98,22 @@ void main() {
     test('warnings are important, not overdue', () {
       expect(alertTypeFromApi(const {'severity': 'WARNING'}),
           AlertType.important);
+    });
+    test('server alert types', () {
+      expect(alertTypeFromApi(const {'type': 'PAYMENT_RECEIVED'}),
+          AlertType.success);
+      expect(alertTypeFromApi(const {'type': 'EVENT'}), AlertType.event);
+      expect(alertTypeFromApi(const {'type': 'GENERAL'}), AlertType.default_);
+      // An explicit announcement to overdue members is not a pay prompt.
+      expect(
+          alertTypeFromApi(
+              const {'type': 'ANNOUNCEMENT', 'audience': 'OVERDUE_ONLY'}),
+          AlertType.system);
+      // Push payloads carry the alert type as alert_type.
+      expect(
+          alertTypeFromApi(
+              const {'type': 'ALERT', 'alert_type': 'DUES_REMINDER'}),
+          AlertType.overdue);
     });
   });
 

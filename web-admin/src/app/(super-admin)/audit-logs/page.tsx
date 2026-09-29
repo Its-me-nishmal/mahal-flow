@@ -10,7 +10,7 @@ export default function AuditLogsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    ApiClient.getAuditLogs("MH_001_CALICUT", 1, 50)
+    ApiClient.getAuditLogs(undefined, 1, 50)
       .then((res) => {
         if (res && res.logs) {
           setLogs(res.logs);

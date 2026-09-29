@@ -57,3 +57,44 @@ func TestPayUHashGenerationAndVerification(t *testing.T) {
 		t.Fatal("VerifyPayUResponseHash should fail for tampered status")
 	}
 }
+
+func TestParseVerifyPayment(t *testing.T) {
+	body := []byte(`{"status":1,"msg":"1 out of 1 Transactions Fetched Successfully","transaction_details":{"ORDTXN1":{"mihpayid":"403993715521","status":"success","mode":"UPI","amt":"500.00"}}}`)
+	d, err := parseVerifyPayment(body, "ORDTXN1")
+	if err != nil || d.MihPayID != "403993715521" || d.Status != "success" || d.Mode != "UPI" || d.Amount != "500.00" {
+		t.Fatalf("parse: %+v %v", d, err)
+	}
+	d, err = parseVerifyPayment([]byte(`{"status":0,"transaction_details":{}}`), "ORDX")
+	if err != nil || d.Status != "Not Found" {
+		t.Fatalf("missing txn: %+v %v", d, err)
+	}
+	if _, err := parseVerifyPayment([]byte(`<html>`), "ORDX"); err == nil {
+		t.Fatal("HTML must be an error")
+	}
+}
+
+func TestDynamicHashPostSaltIsAppended(t *testing.T) {
+	c := NewClient(Config{APIKey: "K", Salt: "SALT"})
+	withPost := c.GenerateDynamicHash("x", "K|cmd|v|", "", "POST")
+	// The client-supplied post salt must never replace the merchant salt.
+	if withPost == NewClient(Config{APIKey: "K", Salt: "POST"}).GenerateDynamicHash("x", "K|cmd|v|", "", "") {
+		t.Fatal("post_salt replaced the merchant salt")
+	}
+	if withPost != NewClient(Config{APIKey: "K", Salt: "SALTPOST"}).GenerateDynamicHash("x", "K|cmd|v|", "", "") {
+		t.Fatal("post_salt must be appended after the salt")
+	}
+}
+
+func TestModeAndMaskedKey(t *testing.T) {
+	c := NewClient(Config{BaseURL: "https://secure.payu.in/_payment", APIKey: "abcdef1234", Salt: "s"})
+	if c.Mode() != "LIVE" || c.MaskedKey() != "••••1234" || !c.Live() {
+		t.Fatalf("live client: %s %s %v", c.Mode(), c.MaskedKey(), c.Live())
+	}
+	if NewClient(Config{}).Mode() != "TEST" || NewClient(Config{}).Live() {
+		t.Fatal("default client targets the sandbox and is not live")
+	}
+	var nilClient *Client
+	if nilClient.Live() {
+		t.Fatal("nil client is not live")
+	}
+}

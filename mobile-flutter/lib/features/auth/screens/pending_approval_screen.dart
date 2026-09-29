@@ -11,13 +11,16 @@ import '../../../core/widgets/app_page_scaffold.dart';
 import '../../../l10n/l10n.dart';
 import '../auth_flow.dart';
 
-/// Waiting room for a member whose registration is pending committee approval.
-/// They can re-check (button or pull-to-refresh, which re-resolves their
-/// phone) or sign out.
+/// Waiting room for a member whose registration is pending committee approval
+/// — or, with [rejected], the notice that the committee declined it (the
+/// server gives a rejected phone no session). Either way they can re-check
+/// (button or pull-to-refresh, which re-resolves their phone; a rejection
+/// the committee undid shows up as pending again) or sign out.
 class PendingApprovalScreen extends StatefulWidget {
   final String? name;
+  final bool rejected;
 
-  const PendingApprovalScreen({super.key, this.name});
+  const PendingApprovalScreen({super.key, this.name, this.rejected = false});
 
   @override
   State<PendingApprovalScreen> createState() => _PendingApprovalScreenState();
@@ -39,14 +42,20 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
     setState(() => _isChecking = false);
 
     switch (result.status) {
-      case ResolveStatus.pending:
+      case ResolveStatus.pending when !widget.rejected:
         _snack(context.l10n.pendingApprovalStillWaiting);
+      case ResolveStatus.rejected when widget.rejected:
+        _snack(context.l10n.registrationRejectedStill);
       case ResolveStatus.networkError:
         _snack(context.l10n.authServerUnreachable);
+      case ResolveStatus.signedOut:
+        _goToLogin();
       case ResolveStatus.allowed:
+      case ResolveStatus.pending:
+      case ResolveStatus.rejected:
       case ResolveStatus.unregistered:
-        // Approved → dashboard (AuthFlow records the role); rejected and
-        // removed → back to registration.
+        // Approved → dashboard (AuthFlow records the role); declined or
+        // undone → the matching screen; removed → back to registration.
         AuthFlow.route(Navigator.of(context), result);
     }
   }
@@ -69,12 +78,15 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final name = widget.name?.trim() ?? '';
+    final rejected = widget.rejected;
     return AppPageScaffold(
-      title: l10n.pendingApprovalTitle,
+      title: rejected ? l10n.registrationRejectedTitle : l10n.pendingApprovalTitle,
       eyebrow: 'MahalFlow',
-      subtitle: name.isEmpty
-          ? l10n.pendingApprovalRequestSent
-          : l10n.pendingApprovalThanks(name),
+      subtitle: rejected
+          ? l10n.registrationRejectedSubtitle
+          : name.isEmpty
+              ? l10n.pendingApprovalRequestSent
+              : l10n.pendingApprovalThanks(name),
       showBack: false,
       onRefresh: _recheck,
       floatingChild: AppCard.floating(
@@ -82,12 +94,18 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             ExcludeSemantics(
-              child: Icon(Icons.hourglass_top_rounded,
-                  size: 44, color: context.colors.warning),
+              child: Icon(
+                  rejected
+                      ? Icons.block_rounded
+                      : Icons.hourglass_top_rounded,
+                  size: 44,
+                  color: rejected
+                      ? context.colors.error
+                      : context.colors.warning),
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              l10n.pendingApprovalBody,
+              rejected ? l10n.registrationRejectedBody : l10n.pendingApprovalBody,
               textAlign: TextAlign.center,
               style: context.text.body
                   .copyWith(color: context.colors.textSecondary),
@@ -99,8 +117,12 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
         const SizedBox(height: AppSpacing.md),
         AppNoticeCard(
           icon: Icons.info_outline_rounded,
-          title: l10n.pendingApprovalNoticeTitle,
-          message: l10n.pendingApprovalNoticeBody,
+          title: rejected
+              ? l10n.registrationRejectedNoticeTitle
+              : l10n.pendingApprovalNoticeTitle,
+          message: rejected
+              ? l10n.registrationRejectedNoticeBody
+              : l10n.pendingApprovalNoticeBody,
           color: context.colors.info,
           background: context.colors.infoBg,
         ),

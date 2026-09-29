@@ -13,10 +13,14 @@ import (
 )
 
 type EndpointTest struct {
-	Name           string
-	Category       string
-	Method         string
-	Path           string
+	Name     string
+	Category string
+	Method   string
+	Path     string
+	// PathFn, when set, builds the path at run time (from earlier results).
+	PathFn func() string
+	// Auth is "member" (default for tenant routes), "admin" or "none".
+	Auth           string
 	Headers        map[string]string
 	Body           map[string]interface{}
 	ExpectedStatus int
@@ -39,22 +43,34 @@ func main() {
 
 	client := &http.Client{Timeout: 5 * time.Second}
 
-	// Login as admin to get Bearer token for protected routes
-	var adminToken string
-	loginPayload, _ := json.Marshal(map[string]string{
-		"phone":    "9847111222",
-		"mahal_id": tenant1,
-	})
-	loginResp, err := client.Post(baseURL+"/api/v1/auth/login", "application/json", bytes.NewBuffer(loginPayload))
-	if err == nil && loginResp.StatusCode == 200 {
-		var loginData map[string]interface{}
-		if json.NewDecoder(loginResp.Body).Decode(&loginData) == nil {
-			if t, ok := loginData["token"].(string); ok {
-				adminToken = "Bearer " + t
-			}
-		}
-		loginResp.Body.Close()
+	// Every tenant route needs a MahalFlow JWT.
+	//   admin:  POST /auth/login with ADMIN_PHONE + ADMIN_PASSWORD (set the
+	//           password with `go run ./cmd/setpassword`), or ADMIN_TOKEN.
+	//   member: MEMBER_TOKEN, else POST /auth/resolve with MEMBER_PHONE — only
+	//           works against a local server started with AUTH_DEV_BYPASS=true.
+	adminPhone := envOr("ADMIN_PHONE", "9847111222")
+	adminPassword := os.Getenv("ADMIN_PASSWORD")
+	adminToken := bearer(os.Getenv("ADMIN_TOKEN"))
+	if adminToken == "" && adminPassword != "" {
+		adminToken = bearer(postForToken(client, baseURL+"/api/v1/auth/login", "", map[string]string{
+			"phone": adminPhone, "password": adminPassword, "mahal_id": tenant1,
+		}))
 	}
+	memberToken := bearer(os.Getenv("MEMBER_TOKEN"))
+	if memberToken == "" {
+		memberToken = bearer(postForToken(client, baseURL+"/api/v1/auth/resolve", tenant1, map[string]string{
+			"phone": envOr("MEMBER_PHONE", "+919847111222"),
+		}))
+	}
+	if adminToken == "" {
+		fmt.Println("⚠️  No admin token (set ADMIN_PASSWORD or ADMIN_TOKEN): admin tests will fail with 401")
+	}
+	if memberToken == "" {
+		fmt.Println("⚠️  No member token (set MEMBER_TOKEN, or run the server with AUTH_DEV_BYPASS=true): member tests will fail with 401")
+	}
+	var lastOrderID string
+	// Dues must start right after the member's last paid month.
+	nextDueMonth := nextMonthAfter(fetchLastPaidMonth(client, baseURL, tenant1, memberToken))
 
 	tests := []EndpointTest{
 		// -------------------------------------------------------------
@@ -74,11 +90,11 @@ func main() {
 			},
 		},
 		{
-			Name:     "2. Member Dashboard Live Overview",
-			Category: "CORE",
-			Method:   "GET",
-			Path:     "/api/v1/member/dashboard?member_id=MEM_001_9910",
-			Headers:  map[string]string{"X-Tenant-ID": tenant1},
+			Name:           "2. Member Dashboard Live Overview",
+			Category:       "CORE",
+			Method:         "GET",
+			Path:           "/api/v1/member/dashboard?member_id=MEM_001_9910",
+			Headers:        map[string]string{"X-Tenant-ID": tenant1},
 			ExpectedStatus: 200,
 			ValidateModel: func(b map[string]interface{}) error {
 				if b["outstanding_balance"] == nil || b["member_name"] == nil {
@@ -219,13 +235,15 @@ func main() {
 				"gateway":         "RAZORPAY",
 				"idempotency_key": "IDEMP_CROSS_" + uuid.New().String()[:8],
 			},
-			ExpectedStatus: 422, // Blocked
+			// The tenant-1 session is refused by the JWT tenant check before
+			// the request reaches the payment engine.
+			ExpectedStatus: 403,
 		},
 		{
-			Name:     "9. Missing Tenant Header Guard (HTTP 400)",
-			Category: "SECURITY",
-			Method:   "GET",
-			Path:     "/api/v1/admin/dashboard",
+			Name:           "9. Missing Tenant Header Guard (HTTP 400)",
+			Category:       "SECURITY",
+			Method:         "GET",
+			Path:           "/api/v1/admin/dashboard",
 			ExpectedStatus: 400,
 		},
 
@@ -233,11 +251,11 @@ func main() {
 		// 5. CRYPTOGRAPHIC INTEGRITY & AUTOPAY
 		// -------------------------------------------------------------
 		{
-			Name:     "10. Cryptographic Receipt SHA-256 Chain Verification",
-			Category: "CRYPTO",
-			Method:   "GET",
-			Path:     "/api/v1/receipts/GV1MH00120260515R00001/verify",
-			Headers:  map[string]string{"X-Tenant-ID": tenant1},
+			Name:           "10. Cryptographic Receipt SHA-256 Chain Verification",
+			Category:       "CRYPTO",
+			Method:         "GET",
+			Path:           "/api/v1/receipts/GV1MH00120260515R00001/verify",
+			Headers:        map[string]string{"X-Tenant-ID": tenant1},
 			ExpectedStatus: 200,
 			ValidateModel: func(b map[string]interface{}) error {
 				if b["cryptographic_valid"] != true {
@@ -247,11 +265,11 @@ func main() {
 			},
 		},
 		{
-			Name:     "11. AutoPay e-Mandate Lifecycle Status",
-			Category: "AUTOPAY",
-			Method:   "GET",
-			Path:     "/api/v1/autopay/mandate/status",
-			Headers:  map[string]string{"X-Tenant-ID": tenant1},
+			Name:           "11. AutoPay e-Mandate Lifecycle Status",
+			Category:       "AUTOPAY",
+			Method:         "GET",
+			Path:           "/api/v1/autopay/mandate/status",
+			Headers:        map[string]string{"X-Tenant-ID": tenant1},
 			ExpectedStatus: 200,
 		},
 		{
@@ -265,7 +283,7 @@ func main() {
 			},
 			Body: map[string]interface{}{
 				"member_id":       "MEM_001_9910",
-				"selected_months": []string{"2026-09"},
+				"selected_months": []string{nextDueMonth},
 				"gateway":         "PAYU",
 				"idempotency_key": "IDEMP_PAYU_" + uuid.New().String()[:8],
 			},
@@ -274,18 +292,20 @@ func main() {
 				if b["payment_url"] == nil || b["gateway_order_id"] == nil {
 					return fmt.Errorf("expected payment_url and gateway_order_id in PayU response")
 				}
+				lastOrderID, _ = b["gateway_order_id"].(string)
 				return nil
 			},
 		},
 		{
-			Name:     "13. PayU: Public Checkout Data & Hash Endpoint",
-			Category: "PAYU",
-			Method:   "GET",
-			Path:     "/api/v1/payments/payu-checkout-data/ORD_TXN_d1e923ce-774b-4200-a7b7-44fbbe184a93",
+			Name:           "13. PayU: Checkout Data for the order from test 12",
+			Category:       "PAYU",
+			Method:         "GET",
+			PathFn:         func() string { return "/api/v1/payments/payu-checkout-data/" + lastOrderID },
+			Headers:        map[string]string{"X-Tenant-ID": tenant1},
 			ExpectedStatus: 200,
 			ValidateModel: func(b map[string]interface{}) error {
-				if b["hash"] == nil || b["action"] == nil || b["key"] != "XiiFzG" {
-					return fmt.Errorf("invalid PayU checkout payload or key")
+				if b["hash"] == nil || b["action"] == nil || b["txnid"] != lastOrderID {
+					return fmt.Errorf("invalid PayU checkout payload")
 				}
 				return nil
 			},
@@ -293,18 +313,20 @@ func main() {
 		{
 			Name:     "14. Public Auth: Login Endpoint",
 			Category: "AUTH",
+			Auth:     "none",
 			Method:   "POST",
 			Path:     "/api/v1/auth/login",
 			Headers: map[string]string{
 				"Content-Type": "application/json",
 			},
 			Body: map[string]interface{}{
-				"phone":    "9847111222",
+				"phone":    adminPhone,
+				"password": adminPassword,
 				"mahal_id": tenant1,
 			},
-			ExpectedStatus: 200,
+			ExpectedStatus: loginExpectation(adminPassword),
 			ValidateModel: func(b map[string]interface{}) error {
-				if b["token"] == nil || b["role"] == nil {
+				if adminPassword != "" && (b["token"] == nil || b["role"] == nil) {
 					return fmt.Errorf("missing token or role in login response")
 				}
 				return nil
@@ -324,7 +346,11 @@ func main() {
 			reqBody = bytes.NewBuffer(jsonBytes)
 		}
 
-		req, err := http.NewRequest(tc.Method, baseURL+tc.Path, reqBody)
+		path := tc.Path
+		if tc.PathFn != nil {
+			path = tc.PathFn()
+		}
+		req, err := http.NewRequest(tc.Method, baseURL+path, reqBody)
 		if err != nil {
 			fmt.Printf("❌ [%s] %s: Failed to create request: %v\n", tc.Category, tc.Name, err)
 			failed++
@@ -333,6 +359,15 @@ func main() {
 
 		for k, v := range tc.Headers {
 			req.Header.Set(k, v)
+		}
+		if req.Header.Get("Authorization") == "" && tc.Headers["X-Tenant-ID"] != "" {
+			switch tc.Auth {
+			case "none":
+			case "admin":
+				req.Header.Set("Authorization", adminToken)
+			default:
+				req.Header.Set("Authorization", memberToken)
+			}
 		}
 
 		resp, err := client.Do(req)
@@ -382,4 +417,77 @@ func main() {
 		fmt.Println("==================================================================")
 		os.Exit(1)
 	}
+}
+
+func envOr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+func bearer(tok string) string {
+	if tok == "" {
+		return ""
+	}
+	return "Bearer " + tok
+}
+
+// loginExpectation: with no password configured the login test checks that
+// the server refuses a password-less login.
+func loginExpectation(password string) int {
+	if password == "" {
+		return 400
+	}
+	return 200
+}
+
+// postForToken POSTs body and returns the "token" field of a 200 response.
+func postForToken(client *http.Client, url, tenant string, body map[string]string) string {
+	payload, _ := json.Marshal(body)
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if tenant != "" {
+		req.Header.Set("X-Tenant-ID", tenant)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return ""
+	}
+	var out map[string]interface{}
+	if json.NewDecoder(resp.Body).Decode(&out) != nil {
+		return ""
+	}
+	t, _ := out["token"].(string)
+	return t
+}
+
+func fetchLastPaidMonth(client *http.Client, baseURL, tenant, auth string) string {
+	req, _ := http.NewRequest("GET", baseURL+"/api/v1/member/dashboard?member_id=MEM_001_9910", nil)
+	req.Header.Set("X-Tenant-ID", tenant)
+	req.Header.Set("Authorization", auth)
+	resp, err := client.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	var out map[string]interface{}
+	_ = json.NewDecoder(resp.Body).Decode(&out)
+	s, _ := out["last_paid_month"].(string)
+	return s
+}
+
+func nextMonthAfter(month string) string {
+	t, err := time.Parse("2006-01", month)
+	if err != nil {
+		return time.Now().Format("2006-01")
+	}
+	return t.AddDate(0, 1, 0).Format("2006-01")
 }

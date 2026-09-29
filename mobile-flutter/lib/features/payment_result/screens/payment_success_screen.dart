@@ -5,6 +5,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/app_date.dart';
 import '../../../core/utils/currency_format.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../l10n/l10n.dart';
 import '../../receipts/screens/receipt_details_screen.dart';
 import '../payment_result_args.dart';
 import '../widgets/payment_result_view.dart';
@@ -30,6 +31,7 @@ class PaymentSuccessScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return PopScope(
       // Back from a finished payment goes home, never to the pay form.
       canPop: false,
@@ -37,33 +39,34 @@ class PaymentSuccessScreen extends StatelessWidget {
         if (!didPop) AppNav.memberHome(context);
       },
       child: PaymentResultView(
-        headline: _isDues ? 'Payment successful' : 'Thank you',
+        headline:
+            _isDues ? l10n.payResultSuccessTitle : l10n.payResultThankYou,
         message: _isDues
-            ? 'Your dues are cleared. A receipt has been issued in your name.'
-            : 'Your contribution was received. A receipt has been issued in '
-                'your name.',
+            ? l10n.payResultDuesClearedMessage
+            : l10n.payResultContributionReceivedMessage,
         amount: Inr.formatAny(args.amount),
         icon: Icons.check_rounded,
         color: context.colors.success,
         background: context.colors.successBg,
-        statusLabel: 'Paid',
-        primaryLabel: 'View Receipt',
+        statusLabel: l10n.statusPaid,
+        primaryLabel: l10n.payResultViewReceipt,
         primaryIcon: Icons.receipt_long_rounded,
         onPrimary: () => _viewReceipt(context),
-        secondaryLabel: 'Back to Home',
+        secondaryLabel: l10n.payResultBackHome,
         onSecondary: () => AppNav.memberHome(context),
         details: [
           AppDetailRow(
-            label: _isDues ? 'Covers' : 'Fund',
+            label: _isDues ? l10n.payResultCovers : l10n.payResultFund,
             value: args.coverage ?? '—',
           ),
           Divider(height: 1, color: context.colors.border),
           AppDetailRow(
-              label: 'Paid on', value: AppDate.formatDateTime(args.at)),
+              label: l10n.payResultPaidOn,
+              value: AppDate.formatDateTime(args.at)),
           if (args.receiptNumber != null) ...[
             Divider(height: 1, color: context.colors.border),
             AppDetailRow(
-              label: 'Receipt number',
+              label: l10n.payResultReceiptNumber,
               value: args.receiptNumber!,
               emphasize: true,
             ),

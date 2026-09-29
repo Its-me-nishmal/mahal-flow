@@ -65,11 +65,11 @@ class _SplashScreenState extends State<SplashScreen>
       return;
     }
 
-    // Returning user with a live session: straight to their dashboard.
+    // Returning user with a live session: straight to their dashboard. Both
+    // roles need an unexpired JWT — every API call carries it.
     final isAdmin = lastRole == 'admin';
-    final hasLiveSession = isAdmin
-        ? !AuthFlow.isJwtExpired(ApiService.authToken)
-        : ApiService.sessionMemberId != null;
+    final hasLiveSession = !AuthFlow.isJwtExpired(ApiService.authToken) &&
+        (isAdmin || ApiService.sessionMemberId != null);
     if (lastRole != null && hasLiveSession) {
       nav.pushReplacementNamed(
         isAdmin ? AppRoutes.adminDashboard : AppRoutes.memberDashboard,
@@ -77,8 +77,8 @@ class _SplashScreenState extends State<SplashScreen>
       return;
     }
 
-    // Firebase still remembers the verified phone (e.g. admin token expired,
-    // or approval came through): re-resolve it for a fresh session.
+    // Firebase still remembers the verified phone (session JWT expired, or
+    // approval came through): re-resolve with a fresh Firebase ID token.
     final phone = PhoneAuthService.instance.currentPhone;
     if (phone != null) {
       final result = await AuthFlow.resolve(phone);
@@ -87,7 +87,8 @@ class _SplashScreenState extends State<SplashScreen>
         AuthFlow.route(nav, result);
         return;
       }
-      // Offline: a member with a stored id can still open the app.
+      // Offline: a member with a stored session can still open the app; the
+      // first call that reaches the server re-authenticates on 401.
       if (lastRole == 'member' && ApiService.sessionMemberId != null) {
         nav.pushReplacementNamed(AppRoutes.memberDashboard);
         return;

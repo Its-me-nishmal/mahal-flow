@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -28,20 +29,22 @@ const (
 
 // Mahal represents a Tenant organization
 type Mahal struct {
-	ID                 string             `bson:"_id" json:"id"`
-	Name               string             `bson:"name" json:"name"`
-	RegistrationNumber string             `bson:"registration_number" json:"registration_number"`
-	Contact            MahalContact       `bson:"contact" json:"contact"`
-	Settings           MahalSettings      `bson:"settings" json:"settings"`
-	Subscription       MahalSubscription  `bson:"subscription" json:"subscription"`
-	CreatedAt          time.Time          `bson:"created_at" json:"created_at"`
-	UpdatedAt          time.Time          `bson:"updated_at" json:"updated_at"`
+	ID                 string            `bson:"_id" json:"id"`
+	Name               string            `bson:"name" json:"name"`
+	RegistrationNumber string            `bson:"registration_number" json:"registration_number"`
+	Contact            MahalContact      `bson:"contact" json:"contact"`
+	Settings           MahalSettings     `bson:"settings" json:"settings"`
+	Subscription       MahalSubscription `bson:"subscription" json:"subscription"`
+	CreatedAt          time.Time         `bson:"created_at" json:"created_at"`
+	UpdatedAt          time.Time         `bson:"updated_at" json:"updated_at"`
 }
 
 type MahalContact struct {
-	Email   string `bson:"email" json:"email"`
-	Phone   string `bson:"phone" json:"phone"`
-	Address string `bson:"address" json:"address"`
+	Email string `bson:"email" json:"email"`
+	Phone string `bson:"phone" json:"phone"`
+	// WhatsApp is the committee's WhatsApp number when it differs from Phone.
+	WhatsApp string `bson:"whatsapp,omitempty" json:"whatsapp,omitempty"`
+	Address  string `bson:"address" json:"address"`
 }
 
 type MahalSettings struct {
@@ -62,21 +65,34 @@ type MahalSubscription struct {
 
 // Member represents an individual community member
 type Member struct {
-	ID                     string    `bson:"_id" json:"id"`
-	MahalID                string    `bson:"mahal_id" json:"mahal_id"`
-	MemberCode             string    `bson:"member_code" json:"member_code"`
-	Name                   string    `bson:"name" json:"name"`
-	Phone                  string    `bson:"phone" json:"phone"`
-	HouseName              string    `bson:"house_name" json:"house_name"`
-	FamilyHead             bool      `bson:"family_head" json:"family_head"`
-	FamilyMembersCount     int       `bson:"family_members_count" json:"family_members_count"`
-	MonthlyDuesCustomAmount float64  `bson:"monthly_dues_custom_amount" json:"monthly_dues_custom_amount"`
-	Status                 string    `bson:"status" json:"status"`
-	LastPaidMonth          string    `bson:"last_paid_month" json:"last_paid_month"` // YYYY-MM
-	OutstandingBalance     float64   `bson:"outstanding_balance" json:"outstanding_balance"`
-	Version                int64     `bson:"version" json:"version"`
-	CreatedAt              time.Time `bson:"created_at" json:"created_at"`
-	UpdatedAt              time.Time `bson:"updated_at" json:"updated_at"`
+	ID                      string  `bson:"_id" json:"id"`
+	MahalID                 string  `bson:"mahal_id" json:"mahal_id"`
+	MemberCode              string  `bson:"member_code" json:"member_code"`
+	Name                    string  `bson:"name" json:"name"`
+	Phone                   string  `bson:"phone" json:"phone"`
+	HouseName               string  `bson:"house_name" json:"house_name"`
+	FamilyHead              bool    `bson:"family_head" json:"family_head"`
+	FamilyMembersCount      int     `bson:"family_members_count" json:"family_members_count"`
+	MonthlyDuesCustomAmount float64 `bson:"monthly_dues_custom_amount" json:"monthly_dues_custom_amount"`
+	Status                  string  `bson:"status" json:"status"`
+	// Personal details the member (or committee) can edit on the profile.
+	Email    string `bson:"email,omitempty" json:"email,omitempty"`
+	Address2 string `bson:"address2,omitempty" json:"address2,omitempty"`
+	City     string `bson:"city,omitempty" json:"city,omitempty"`
+	State    string `bson:"state,omitempty" json:"state,omitempty"`
+	Pincode  string `bson:"pincode,omitempty" json:"pincode,omitempty"`
+	// ApprovalDecision / ApprovalDecidedAt record the committee's last
+	// approve (ACTIVE) or reject (REJECTED) of a self-registration, so the
+	// decision can be reverted for a short window.
+	ApprovalDecision  string     `bson:"approval_decision,omitempty" json:"approval_decision,omitempty"`
+	ApprovalDecidedAt *time.Time `bson:"approval_decided_at,omitempty" json:"approval_decided_at,omitempty"`
+	// ImportBatchID is set on members created by an Excel import.
+	ImportBatchID      string    `bson:"import_batch_id,omitempty" json:"import_batch_id,omitempty"`
+	LastPaidMonth      string    `bson:"last_paid_month" json:"last_paid_month"` // YYYY-MM
+	OutstandingBalance float64   `bson:"outstanding_balance" json:"outstanding_balance"`
+	Version            int64     `bson:"version" json:"version"`
+	CreatedAt          time.Time `bson:"created_at" json:"created_at"`
+	UpdatedAt          time.Time `bson:"updated_at" json:"updated_at"`
 }
 
 // Transaction represents a financial gateway attempt
@@ -94,9 +110,16 @@ type Transaction struct {
 	GatewayPaymentID string        `bson:"gateway_payment_id,omitempty" json:"gateway_payment_id,omitempty"`
 	Status           PaymentStatus `bson:"status" json:"status"`
 	FailureReason    string        `bson:"failure_reason,omitempty" json:"failure_reason,omitempty"`
-	ReceiptID        string        `bson:"receipt_id,omitempty" json:"receipt_id,omitempty"`
-	CreatedAt        time.Time     `bson:"created_at" json:"created_at"`
-	CompletedAt      *time.Time    `bson:"completed_at,omitempty" json:"completed_at,omitempty"`
+	// Purpose is the fund a contribution goes to (e.g. ZAKAT, BUILDING_FUND);
+	// Note is the member's free-text message. Both copied onto the receipt.
+	Purpose string `bson:"purpose,omitempty" json:"purpose,omitempty"`
+	Note    string `bson:"note,omitempty" json:"note,omitempty"`
+	// PaymentMode is the instrument PayU reported (UPI, CARD, NETBANKING,
+	// WALLET) or CASH; empty when unknown.
+	PaymentMode string     `bson:"payment_mode,omitempty" json:"payment_mode,omitempty"`
+	ReceiptID   string     `bson:"receipt_id,omitempty" json:"receipt_id,omitempty"`
+	CreatedAt   time.Time  `bson:"created_at" json:"created_at"`
+	CompletedAt *time.Time `bson:"completed_at,omitempty" json:"completed_at,omitempty"`
 }
 
 // Receipt is the immutable, cryptographically chained receipt
@@ -115,6 +138,45 @@ type Receipt struct {
 	ReceiptHash         string    `bson:"receipt_hash" json:"receipt_hash"`
 	PDFStorageURL       string    `bson:"pdf_storage_url,omitempty" json:"pdf_storage_url,omitempty"`
 	CreatedAt           time.Time `bson:"created_at" json:"created_at"`
+
+	// Descriptive fields, copied from the transaction when the receipt is
+	// issued. They are deliberately NOT part of the hash input
+	// (CalculateReceiptHash), so receipts issued before these existed keep
+	// verifying. Status is SUCCESS at issue; API reads report REFUNDED once
+	// the transaction is refunded (the stored receipt is never modified).
+	Status        string     `bson:"status,omitempty" json:"status,omitempty"`                 // SUCCESS | REFUNDED
+	Gateway       string     `bson:"gateway,omitempty" json:"gateway,omitempty"`               // PAYU | PAYU_SI | CASH
+	PaymentMethod string     `bson:"payment_method,omitempty" json:"payment_method,omitempty"` // UPI | CARD | NETBANKING | WALLET | CASH
+	Fund          string     `bson:"fund,omitempty" json:"fund,omitempty"`
+	Note          string     `bson:"note,omitempty" json:"note,omitempty"`
+	RefundedAt    *time.Time `bson:"-" json:"refunded_at,omitempty"`
+}
+
+// Receipt statuses.
+const (
+	ReceiptStatusSuccess  = "SUCCESS"
+	ReceiptStatusRefunded = "REFUNDED"
+)
+
+// NormalizePaymentMode maps PayU's `mode` (CC, DC, NB, UPI, PPI, ...) and our
+// own gateway names to the receipt's payment_method vocabulary.
+func NormalizePaymentMode(mode string) string {
+	switch m := strings.ToUpper(strings.TrimSpace(mode)); m {
+	case "":
+		return ""
+	case "UPI", "UPI_INTENT", "UPI_COLLECT", "INTENT":
+		return "UPI"
+	case "CC", "DC", "CARD", "CREDITCARD", "DEBITCARD", "EMI", "CARD_SI":
+		return "CARD"
+	case "NB", "NETBANKING", "NET_BANKING", "E_NACH", "ENACH":
+		return "NETBANKING"
+	case "PPI", "WALLET", "CASH_CARD":
+		return "WALLET"
+	case "CASH":
+		return "CASH"
+	default:
+		return m
+	}
 }
 
 // MoneyPaise represents an integer minor-unit monetary amount (1 INR = 100 Paise) to eliminate floating-point rounding errors
@@ -152,14 +214,55 @@ type AuditLog struct {
 
 // SystemAlert represents actionable system/security alerts
 type SystemAlert struct {
-	ID          string    `bson:"_id" json:"id"`
-	MahalID     string    `bson:"mahal_id,omitempty" json:"mahal_id,omitempty"`
-	Audience    string    `bson:"audience,omitempty" json:"audience,omitempty"` // ALL | OVERDUE_ONLY | FAMILY_HEADS
+	ID       string `bson:"_id" json:"id"`
+	MahalID  string `bson:"mahal_id,omitempty" json:"mahal_id,omitempty"`
+	Audience string `bson:"audience,omitempty" json:"audience,omitempty"` // ALL | OVERDUE_ONLY | FAMILY_HEADS | MEMBER
+	// MemberIDs are the recipients of a MEMBER-audience alert.
+	MemberIDs []string `bson:"member_ids,omitempty" json:"member_ids,omitempty"`
+	// Type categorises the alert for the app (see AlertType* constants).
+	Type        string    `bson:"type,omitempty" json:"type,omitempty"`
 	Severity    string    `bson:"severity" json:"severity"` // CRITICAL | WARNING | INFO
 	Title       string    `bson:"title" json:"title"`
 	Description string    `bson:"description" json:"description"`
 	Status      string    `bson:"status" json:"status"` // ACTIVE | ACKNOWLEDGED | RESOLVED
 	CreatedAt   time.Time `bson:"created_at" json:"created_at"`
+}
+
+// Alert audiences.
+const (
+	AudienceAll         = "ALL"
+	AudienceOverdueOnly = "OVERDUE_ONLY"
+	AudienceFamilyHeads = "FAMILY_HEADS"
+	AudienceMember      = "MEMBER"
+)
+
+// Alert types.
+const (
+	AlertTypeDuesReminder    = "DUES_REMINDER"
+	AlertTypePaymentReceived = "PAYMENT_RECEIVED"
+	AlertTypeAnnouncement    = "ANNOUNCEMENT"
+	AlertTypeEvent           = "EVENT"
+	AlertTypeGeneral         = "GENERAL"
+)
+
+// ValidAlertType reports whether t is one of the alert types.
+func ValidAlertType(t string) bool {
+	switch t {
+	case AlertTypeDuesReminder, AlertTypePaymentReceived, AlertTypeAnnouncement, AlertTypeEvent, AlertTypeGeneral:
+		return true
+	}
+	return false
+}
+
+// EffectiveType is Type, or a best guess for alerts stored before types existed.
+func (a *SystemAlert) EffectiveType() string {
+	if ValidAlertType(a.Type) {
+		return a.Type
+	}
+	if a.Audience == AudienceOverdueOnly || strings.Contains(a.Title, "[Dues Reminder]") {
+		return AlertTypeDuesReminder
+	}
+	return AlertTypeGeneral
 }
 
 // RefundRequest represents a member refund dispute
@@ -177,14 +280,50 @@ type RefundRequest struct {
 	ProcessedAt   *time.Time `bson:"processed_at,omitempty" json:"processed_at,omitempty"`
 }
 
-// Admin is a committee member who manages a Mahal. Phone-based identity: a
-// login whose phone matches an Admin gets a MAHAL_ADMIN session.
+// Admin roles carried in the session JWT.
+const (
+	RoleMahalAdmin = "MAHAL_ADMIN"
+	RoleSuperAdmin = "SUPER_ADMIN"
+	RoleMember     = "MEMBER"
+)
+
+// Admin is a committee member who manages a Mahal. Two ways in:
+//   - mobile: Firebase-verified phone OTP resolved against Phone (/auth/resolve)
+//   - web-admin: Phone + password checked against PasswordHash (/auth/login)
+//
+// PasswordHash is a bcrypt hash set with `go run ./cmd/setpassword`; an admin
+// without one cannot use password login. Role defaults to MAHAL_ADMIN when
+// empty (records created before roles existed).
 type Admin struct {
-	ID        string    `bson:"_id" json:"id"`
-	MahalID   string    `bson:"mahal_id" json:"mahal_id"`
-	Name      string    `bson:"name" json:"name"`
-	Phone     string    `bson:"phone" json:"phone"`
-	CreatedAt time.Time `bson:"created_at" json:"created_at"`
+	ID                string     `bson:"_id" json:"id"`
+	MahalID           string     `bson:"mahal_id" json:"mahal_id"`
+	Name              string     `bson:"name" json:"name"`
+	Phone             string     `bson:"phone" json:"phone"`
+	Role              string     `bson:"role,omitempty" json:"role,omitempty"`
+	PasswordHash      string     `bson:"password_hash,omitempty" json:"-"`
+	PasswordUpdatedAt *time.Time `bson:"password_updated_at,omitempty" json:"-"`
+	CreatedAt         time.Time  `bson:"created_at" json:"created_at"`
+}
+
+// EffectiveRole is Role, defaulting to MAHAL_ADMIN. Anything unrecognised is
+// also treated as MAHAL_ADMIN so a typo can never escalate to SUPER_ADMIN.
+func (a *Admin) EffectiveRole() string {
+	if a.Role == RoleSuperAdmin {
+		return RoleSuperAdmin
+	}
+	return RoleMahalAdmin
+}
+
+// AlertMemberState is one member's private read / dismiss state for a
+// tenant-wide alert. Alerts are shared by every member of a Mahal, so a
+// member acknowledging or dismissing one must not change it for anyone else.
+type AlertMemberState struct {
+	ID          string     `bson:"_id" json:"id"` // alertID + ":" + memberID
+	AlertID     string     `bson:"alert_id" json:"alert_id"`
+	MahalID     string     `bson:"mahal_id" json:"mahal_id"`
+	MemberID    string     `bson:"member_id" json:"member_id"`
+	ReadAt      *time.Time `bson:"read_at,omitempty" json:"read_at,omitempty"`
+	DismissedAt *time.Time `bson:"dismissed_at,omitempty" json:"dismissed_at,omitempty"`
 }
 
 // Mandate is a PayU Standing Instruction (recurring AutoPay authorization).
@@ -210,6 +349,41 @@ type Mandate struct {
 	UpdatedAt      time.Time  `bson:"updated_at" json:"updated_at"`
 }
 
+// ImportBatch is a parsed Excel/CSV member import awaiting (or after) commit.
+// Stored in import_batches with a TTL on ExpiresAt.
+type ImportBatch struct {
+	ID          string      `bson:"_id" json:"batch_id"`
+	MahalID     string      `bson:"mahal_id" json:"mahal_id"`
+	Filename    string      `bson:"filename" json:"filename"`
+	Status      string      `bson:"status" json:"status"` // PREVIEW | COMMITTING | COMMITTED
+	Rows        []ImportRow `bson:"rows" json:"preview_rows"`
+	Total       int         `bson:"total" json:"total_rows"`
+	Valid       int         `bson:"valid" json:"valid_rows"`
+	Duplicate   int         `bson:"duplicate" json:"duplicate_rows"`
+	Invalid     int         `bson:"invalid" json:"invalid_rows"`
+	Imported    int         `bson:"imported" json:"imported"`
+	Skipped     int         `bson:"skipped" json:"skipped"`
+	CreatedBy   string      `bson:"created_by" json:"-"`
+	CreatedAt   time.Time   `bson:"created_at" json:"created_at"`
+	CommittedAt *time.Time  `bson:"committed_at,omitempty" json:"committed_at,omitempty"`
+	ExpiresAt   time.Time   `bson:"expires_at" json:"expires_at"`
+}
+
+// ImportRow is one spreadsheet data row after validation.
+type ImportRow struct {
+	Row                int      `bson:"row" json:"row"`
+	Name               string   `bson:"name" json:"name"`
+	Phone              string   `bson:"phone" json:"phone"`
+	HouseName          string   `bson:"house_name" json:"house_name"`
+	MonthlyDues        float64  `bson:"monthly_dues" json:"monthly_dues"`
+	FamilyHead         bool     `bson:"family_head" json:"family_head"`
+	FamilyMembersCount int      `bson:"family_members_count" json:"family_members_count"`
+	Email              string   `bson:"email,omitempty" json:"email,omitempty"`
+	MemberCode         string   `bson:"member_code,omitempty" json:"member_code,omitempty"`
+	Status             string   `bson:"status" json:"status"` // VALID | DUPLICATE | INVALID
+	Errors             []string `bson:"errors,omitempty" json:"errors"`
+}
+
 // SubscriptionInvoice represents SaaS billing records for a Mahal
 type SubscriptionInvoice struct {
 	ID          string    `bson:"_id" json:"id"`
@@ -233,4 +407,3 @@ type GatewayConfig struct {
 	KeyID     string    `bson:"key_id,omitempty" json:"key_id,omitempty"`
 	CreatedAt time.Time `bson:"created_at" json:"created_at"`
 }
-

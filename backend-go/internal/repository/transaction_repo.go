@@ -23,6 +23,25 @@ type TransactionRepository interface {
 	GetRecentRefundsByMahal(ctx context.Context, mahalID string, since time.Time) ([]domain.Transaction, error)
 	GetTotalCollectionByMahal(ctx context.Context, mahalID string, since time.Time) (float64, error)
 	GetFinancialSummary(ctx context.Context, mahalID string) (totalCollected, duesCollected, donations float64, err error)
+	// GetFinancialSummaryRange sums SUCCESS transactions collected in
+	// [from, to) (nil = unbounded). A transaction is dated by completed_at,
+	// falling back to created_at for rows without one.
+	GetFinancialSummaryRange(ctx context.Context, mahalID string, from, to *time.Time) (FinancialSummary, error)
+	// GetByIDs returns the tenant's transactions with the given ids, keyed by id.
+	GetByIDs(ctx context.Context, mahalID string, ids []string) (map[string]domain.Transaction, error)
+	// CountByMember counts the member's transactions that reached SUCCESS or REFUNDED.
+	CountByMember(ctx context.Context, mahalID, memberID string) (int64, error)
+	// SetPaymentDetails records what the gateway reported (mihpayid, mode);
+	// empty values are left unchanged.
+	SetPaymentDetails(ctx context.Context, id, gatewayPaymentID, paymentMode string) error
+}
+
+// FinancialSummary is a collected-money breakdown for a period.
+type FinancialSummary struct {
+	TotalCollected   float64 `json:"total_collected"`
+	DuesCollected    float64 `json:"dues_collected"`
+	Donations        float64 `json:"donations"`
+	TransactionCount int64   `json:"transaction_count"`
 }
 
 type mongoTxnRepo struct {
@@ -96,7 +115,7 @@ func (r *mongoTxnRepo) SetGatewayPaymentID(ctx context.Context, id, gatewayPayme
 func (r *mongoTxnRepo) FindPendingOlderThan(ctx context.Context, threshold time.Duration) ([]domain.Transaction, error) {
 	cutoff := time.Now().UTC().Add(-threshold)
 	filter := bson.M{
-		"status":    domain.TxnPending,
+		"status":     domain.TxnPending,
 		"created_at": bson.M{"$lte": cutoff},
 	}
 	cursor, err := r.coll.Find(ctx, filter)
@@ -123,9 +142,9 @@ func (r *mongoTxnRepo) FindByIDempotencyKey(ctx context.Context, key string) (*d
 func (r *mongoTxnRepo) CountFailedByIP(ctx context.Context, ip string, within time.Duration) (int64, error) {
 	since := time.Now().UTC().Add(-within)
 	filter := bson.M{
-		"status":     domain.TxnFailed,
+		"status":         domain.TxnFailed,
 		"failure_reason": bson.M{"$regex": ip, "$options": "i"},
-		"created_at": bson.M{"$gte": since},
+		"created_at":     bson.M{"$gte": since},
 	}
 	count, err := r.coll.CountDocuments(ctx, filter)
 	return count, err
@@ -134,9 +153,9 @@ func (r *mongoTxnRepo) CountFailedByIP(ctx context.Context, ip string, within ti
 func (r *mongoTxnRepo) CountFailedByDevice(ctx context.Context, deviceID string, within time.Duration) (int64, error) {
 	since := time.Now().UTC().Add(-within)
 	filter := bson.M{
-		"status":     domain.TxnFailed,
+		"status":         domain.TxnFailed,
 		"failure_reason": bson.M{"$regex": deviceID, "$options": "i"},
-		"created_at": bson.M{"$gte": since},
+		"created_at":     bson.M{"$gte": since},
 	}
 	count, err := r.coll.CountDocuments(ctx, filter)
 	return count, err
@@ -228,3 +247,99 @@ func (r *mongoTxnRepo) GetTotalCollectionByMahal(ctx context.Context, mahalID st
 	return result.Total, nil
 }
 
+func (r *mongoTxnRepo) GetFinancialSummaryRange(ctx context.Context, mahalID string, from, to *time.Time) (FinancialSummary, error) {
+	var out FinancialSummary
+	match := bson.M{"status": domain.TxnSuccess}
+	if mahalID != "" {
+		match["mahal_id"] = mahalID
+	}
+	if from != nil || to != nil {
+		rng := bson.M{}
+		if from != nil {
+			rng["$gte"] = *from
+		}
+		if to != nil {
+			rng["$lt"] = *to
+		}
+		match["$or"] = bson.A{
+			bson.M{"completed_at": rng},
+			bson.M{"completed_at": bson.M{"$exists": false}, "created_at": rng},
+			bson.M{"completed_at": nil, "created_at": rng},
+		}
+	}
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: match}},
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: "$type"},
+			{Key: "sum", Value: bson.D{{Key: "$sum", Value: "$amount"}}},
+			{Key: "n", Value: bson.D{{Key: "$sum", Value: 1}}},
+		}}},
+	}
+	cursor, err := r.coll.Aggregate(ctx, pipeline)
+	if err != nil {
+		return out, err
+	}
+	defer cursor.Close(ctx)
+	for cursor.Next(ctx) {
+		var item struct {
+			Type string  `bson:"_id"`
+			Sum  float64 `bson:"sum"`
+			N    int64   `bson:"n"`
+		}
+		if err := cursor.Decode(&item); err != nil {
+			continue
+		}
+		out.TotalCollected += item.Sum
+		out.TransactionCount += item.N
+		switch item.Type {
+		case "MONTHLY_DUES":
+			out.DuesCollected += item.Sum
+		case "CONTRIBUTION":
+			out.Donations += item.Sum
+		}
+	}
+	return out, cursor.Err()
+}
+
+func (r *mongoTxnRepo) GetByIDs(ctx context.Context, mahalID string, ids []string) (map[string]domain.Transaction, error) {
+	out := map[string]domain.Transaction{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	cursor, err := r.coll.Find(ctx, bson.M{"mahal_id": mahalID, "_id": bson.M{"$in": ids}})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var txns []domain.Transaction
+	if err := cursor.All(ctx, &txns); err != nil {
+		return nil, err
+	}
+	for _, t := range txns {
+		out[t.ID] = t
+	}
+	return out, nil
+}
+
+func (r *mongoTxnRepo) CountByMember(ctx context.Context, mahalID, memberID string) (int64, error) {
+	return r.coll.CountDocuments(ctx, bson.M{
+		"mahal_id":  mahalID,
+		"member_id": memberID,
+		"status":    bson.M{"$in": bson.A{domain.TxnSuccess, domain.TxnRefunded}},
+	})
+}
+
+func (r *mongoTxnRepo) SetPaymentDetails(ctx context.Context, id, gatewayPaymentID, paymentMode string) error {
+	set := bson.M{}
+	if gatewayPaymentID != "" {
+		set["gateway_payment_id"] = gatewayPaymentID
+	}
+	if paymentMode != "" {
+		set["payment_mode"] = paymentMode
+	}
+	if len(set) == 0 {
+		return nil
+	}
+	_, err := r.coll.UpdateOne(ctx, bson.M{"_id": id}, bson.M{"$set": set})
+	return err
+}

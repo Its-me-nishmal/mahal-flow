@@ -123,17 +123,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminDashLoadingCollection => 'Loading collection summary';
 
   @override
-  String get adminDashTotalCollectedCaps => 'TOTAL COLLECTED';
-
-  @override
-  String get adminDashTotalCollected => 'Total collected';
-
-  @override
-  String adminDashTotalCollectedSpoken(String amount) {
-    return 'Total collected $amount';
-  }
-
-  @override
   String adminDashOutstandingAcrossMahal(String amount) {
     return '$amount still outstanding across the Mahal.';
   }
@@ -667,7 +656,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String approvalsRejectMessage(String name) {
-    return '$name will not be added to the Mahal. They would need to register again to be reconsidered.';
+    return '$name will not be added to the Mahal and cannot sign in. You can undo this for 10 minutes.';
   }
 
   @override
@@ -917,9 +906,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get reportsContributions => 'Contributions';
 
   @override
-  String get reportsPendingDues => 'Pending dues';
-
-  @override
   String get reportsTransactionsError => 'Couldn\'t load transactions';
 
   @override
@@ -980,7 +966,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get importStepDone => 'Done';
 
   @override
-  String get importErrorExtension => 'Choose an .xlsx, .xls or .csv file.';
+  String get importErrorExtension =>
+      'Choose an .xlsx or .csv file. Save older .xls files as .xlsx first.';
 
   @override
   String get importErrorEmpty => 'That file is empty.';
@@ -1028,7 +1015,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get importTemplateDesc =>
-      'A CSV with name, phone, house_name and monthly_dues columns. Save or send it from the share sheet.';
+      'A CSV with name, phone, house_name, monthly_dues, family_head, family_members_count and email columns. Save or send it from the share sheet.';
 
   @override
   String get importNothingSaved => 'Nothing is saved yet';
@@ -1049,7 +1036,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get importChooseSpreadsheet => 'Choose a spreadsheet';
 
   @override
-  String get importAccepts => 'Accepts .xlsx, .xls and .csv files';
+  String get importAccepts => 'Accepts .xlsx and .csv files';
 
   @override
   String get importTapToChange => 'Tap to choose a different file';
@@ -1177,7 +1164,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String importDuesPerMonth(String amount) {
-    return '₹$amount/mo';
+    return '$amount/mo';
   }
 
   @override
@@ -1199,7 +1186,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get importGoToMembers => 'Go to members';
 
   @override
-  String get gatewayKeyNotShown => 'Not shown in the app';
+  String get gatewayKeyNotShown => 'Not set';
 
   @override
   String get gatewayTitle => 'Gateways';
@@ -1211,11 +1198,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gatewaySubtitle => 'Where member payments are processed.';
 
   @override
-  String get gatewayManagedTitle => 'Managed from web admin';
+  String get gatewayManagedTitle => 'Managed from server config';
 
   @override
   String get gatewayManagedDesc =>
-      'Gateway keys, webhook secrets and routing are set up in the MahalFlow web admin. This screen is read-only and never shows secrets.';
+      'Gateway credentials and routing are set in the MahalFlow server configuration. This screen is read-only and never shows secrets.';
 
   @override
   String get gatewayConfigured => 'Configured gateways';
@@ -1231,7 +1218,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get gatewayEmptyDesc =>
-      'Set one up in the web admin to accept online payments.';
+      'Add gateway credentials to the server configuration to accept online payments.';
 
   @override
   String get gatewayPrimaryHeading => 'PRIMARY GATEWAY';
@@ -1257,7 +1244,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gatewayFallbackRoute => 'Fallback route';
 
   @override
-  String get gatewayKeyId => 'Key ID';
+  String get gatewayKeyId => 'Merchant key';
 
   @override
   String get gatewayId => 'Gateway ID';
@@ -1989,13 +1976,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get editProfilePincode => 'PIN code';
-
-  @override
-  String get editProfileOfficeKeepsTitle => 'What the office keeps';
-
-  @override
-  String get editProfileOfficeKeepsBody =>
-      'Your name and house name are saved to your membership record. Email, street, city and PIN code are not kept by the office yet.';
 
   @override
   String get editProfileSaving => 'Saving…';
@@ -3415,4 +3395,199 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get payResultReceiptNumber => 'Receipt number';
+
+  @override
+  String get statusNotConfigured => 'Not configured';
+
+  @override
+  String importRowNumber(int row) {
+    return 'Row $row';
+  }
+
+  @override
+  String get importNoBatch =>
+      'This preview has no batch ID from the server. Upload the file again.';
+
+  @override
+  String get importStatusAlreadyCommitted => 'Already imported';
+
+  @override
+  String get importAlreadyCommittedTitle => 'This file was already imported';
+
+  @override
+  String get importAlreadyCommittedBody =>
+      'No new members were added. The counts below are from the first import.';
+
+  @override
+  String get gatewayMode => 'Mode';
+
+  @override
+  String get gatewayModeLive => 'Live';
+
+  @override
+  String get gatewayModeTest => 'Test';
+
+  @override
+  String gatewayModeSimulated(String mode) {
+    return '$mode · simulated';
+  }
+
+  @override
+  String get gatewaySimulatedTitle => 'Payments are simulated';
+
+  @override
+  String get gatewaySimulatedDesc =>
+      'The server is in payment test mode: no real gateway calls are made and no money moves.';
+
+  @override
+  String get gatewayMethods => 'Methods';
+
+  @override
+  String get gatewayAutoPay => 'AutoPay';
+
+  @override
+  String get gatewayAutoPayOn => 'Enabled';
+
+  @override
+  String get gatewayAutoPayOff => 'Not enabled';
+
+  @override
+  String get gatewayCashRoute => 'Recorded by the committee';
+
+  @override
+  String get paymentMethodUpi => 'UPI';
+
+  @override
+  String get paymentMethodCard => 'Card';
+
+  @override
+  String get paymentMethodNetbanking => 'Net banking';
+
+  @override
+  String get paymentMethodWallet => 'Wallet';
+
+  @override
+  String get receiptMethodAutoPay => 'AutoPay';
+
+  @override
+  String receiptMethodAutoPayVia(String method) {
+    return 'AutoPay ($method)';
+  }
+
+  @override
+  String get receiptRefundedTitle => 'This payment was refunded';
+
+  @override
+  String get receiptRefundedBody =>
+      'The amount was returned to the payer. This receipt is kept as a record and no longer counts as paid.';
+
+  @override
+  String receiptRefundedOnBody(String date) {
+    return 'Refunded on $date. This receipt is kept as a record and no longer counts as paid.';
+  }
+
+  @override
+  String get receiptRefundedOnLabel => 'Refunded on';
+
+  @override
+  String get receiptNoteLabel => 'Note';
+
+  @override
+  String receiptShareNote(String note) {
+    return 'Note: $note';
+  }
+
+  @override
+  String get receiptSheetStatus => 'Status';
+
+  @override
+  String editProfileSaveRejected(String reason) {
+    return 'Couldn\'t save: $reason';
+  }
+
+  @override
+  String get memberDetailsReminderChooseSubtitle =>
+      'Send it in the app, or open WhatsApp or SMS with the text filled in';
+
+  @override
+  String get memberDetailsSendInAppNotice => 'Send in-app notice';
+
+  @override
+  String get memberDetailsInAppNoticeHint =>
+      'Only this member sees it, in their alerts and as a notification.';
+
+  @override
+  String get memberDetailsNoticeTitle => 'Dues reminder';
+
+  @override
+  String get memberDetailsNoticeSent => 'Reminder sent in the app';
+
+  @override
+  String memberDetailsNoticeFailed(String reason) {
+    return 'Couldn\'t send the reminder: $reason';
+  }
+
+  @override
+  String approvalsUndone(String name) {
+    return '$name is back in pending requests.';
+  }
+
+  @override
+  String approvalsUndoFailed(String reason) {
+    return 'Couldn\'t undo. $reason';
+  }
+
+  @override
+  String get registrationRejectedTitle => 'Registration not approved';
+
+  @override
+  String get registrationRejectedSubtitle =>
+      'The committee did not approve this request.';
+
+  @override
+  String get registrationRejectedBody =>
+      'You cannot sign in with this number right now. No payments or member details are available.';
+
+  @override
+  String get registrationRejectedNoticeTitle => 'Think this is a mistake?';
+
+  @override
+  String get registrationRejectedNoticeBody =>
+      'Contact the Mahal office. If the committee changes its decision, check again here.';
+
+  @override
+  String get registrationRejectedStill => 'Still not approved.';
+
+  @override
+  String get adminDashCollectedMonthCaps => 'COLLECTED THIS MONTH';
+
+  @override
+  String get adminDashCollectedMonth => 'Collected this month';
+
+  @override
+  String adminDashCollectedMonthSpoken(String amount) {
+    return 'Collected this month $amount';
+  }
+
+  @override
+  String adminDashAllTime(String amount) {
+    return 'All time: $amount';
+  }
+
+  @override
+  String get reportsPendingDuesNow => 'Pending dues (now)';
+
+  @override
+  String reportsPeriodAllTypes(String period) {
+    return '$period · all types';
+  }
+
+  @override
+  String get alertTypeEvent => 'Event';
+
+  @override
+  String get broadcastType => 'Type';
+
+  @override
+  String get broadcastTypeGeneral => 'General notice';
 }

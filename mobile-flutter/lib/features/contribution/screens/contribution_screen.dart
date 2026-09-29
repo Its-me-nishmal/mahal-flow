@@ -75,6 +75,7 @@ class _ContributionScreenState extends State<ContributionScreen>
   // Held across the PayU checkout lifecycle so the callbacks can confirm the
   // right transaction and describe the right payment.
   String? _activeTxnId;
+  String? _activeOrderId;
   Map<String, dynamic>? _activePayUData;
   num? _activeAmount;
   String? _activeFund;
@@ -213,6 +214,7 @@ class _ContributionScreenState extends State<ContributionScreen>
       return;
     }
     final orderId = res["gateway_order_id"]?.toString() ?? "ORD$txnId";
+    _activeOrderId = orderId;
 
     final payUData = await _apiService.getPayUCheckoutData(orderId);
     if (!mounted) return;
@@ -251,7 +253,8 @@ class _ContributionScreenState extends State<ContributionScreen>
         kind: PaymentKind.contribution,
         receipt: receipt,
         fallbackAmount: _activeAmount,
-        // A receipt has no fund field, so the fund the member picked labels it.
+        // Used only when the receipt has no paid months; the fund title the
+        // member picked reads better than the receipt's raw `fund` code.
         fallbackCoverage: _activeFundTitle ?? _activeFund,
         transactionId: _activeTxnId,
       ),
@@ -285,6 +288,7 @@ class _ContributionScreenState extends State<ContributionScreen>
       checkoutPro: _checkoutPro,
       response: response,
       checkout: _activePayUData,
+      txnid: _activeOrderId,
     );
   }
 
@@ -385,7 +389,8 @@ class _ContributionScreenState extends State<ContributionScreen>
                     label: context.l10n.contributionNoteLabel,
                     hint: context.l10n.contributionNoteHint,
                     maxLines: 2,
-                    maxLength: 120,
+                    // The server stores up to 280 characters.
+                    maxLength: 280,
                     enabled: !_isProcessing,
                     textCapitalization: TextCapitalization.sentences,
                     textInputAction: TextInputAction.done,

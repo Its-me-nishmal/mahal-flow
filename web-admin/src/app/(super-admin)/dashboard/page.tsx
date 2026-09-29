@@ -14,6 +14,9 @@ export default function DashboardPage() {
     pending_members: 0,
     total_pending_dues: 0,
     total_collected_mtd: 0,
+    total_collected_all_time: 0 as number | undefined,
+    mtd_month: undefined as string | undefined,
+    timezone: undefined as string | undefined,
     subscription_status: "ACTIVE",
   });
   const [mahals, setMahals] = useState<any[]>([]);
@@ -22,11 +25,11 @@ export default function DashboardPage() {
   const loadData = () => {
     setLoading(true);
     Promise.all([
-      ApiClient.getAdminDashboard("MH_001_CALICUT").catch(() => null),
+      ApiClient.getAdminDashboard().catch(() => null),
       ApiClient.getMahals().catch(() => null),
     ]).then(([dashboardRes, mahalsRes]) => {
       if (dashboardRes) {
-        setMetrics(dashboardRes);
+        setMetrics((prev) => ({ ...prev, ...dashboardRes }));
       }
       if (mahalsRes && mahalsRes.mahals) {
         setMahals(mahalsRes.mahals);
@@ -93,15 +96,23 @@ export default function DashboardPage() {
               icon="payments"
               iconBg="bg-success-bg"
               iconColor="text-success"
-              label="Total Collections (MTD)"
+              label={`Collected this month${metrics.mtd_month ? ` (${metrics.mtd_month})` : ""}`}
               value={`₹${(metrics.total_collected_mtd || 0).toLocaleString()}`}
-              trend={{ value: "Settled", positive: true }}
+              trend={{ value: "Month to date", positive: true }}
               footer={
-                <div className="flex justify-between items-center text-xs text-text-secondary pt-1">
-                  <span>Paid Members</span>
-                  <span className="font-bold text-success">
-                    {metrics.paid_members} / {metrics.total_members} ({metrics.total_members > 0 ? Math.round((metrics.paid_members / metrics.total_members) * 100) : 0}%)
-                  </span>
+                <div className="space-y-1 pt-1">
+                  <div className="flex justify-between items-center text-xs text-text-secondary">
+                    <span>All-time Collected</span>
+                    <span className="font-bold text-text-primary">
+                      ₹{(metrics.total_collected_all_time || 0).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs text-text-secondary">
+                    <span>Paid Members</span>
+                    <span className="font-bold text-success">
+                      {metrics.paid_members} / {metrics.total_members} ({metrics.total_members > 0 ? Math.round((metrics.paid_members / metrics.total_members) * 100) : 0}%)
+                    </span>
+                  </div>
                 </div>
               }
             />

@@ -4,7 +4,7 @@
 
 const crypto = require('crypto');
 
-const BASE_URL = 'http://localhost:8080/api/v1';
+const BASE_URL = process.env.API_BASE_URL || 'http://localhost:8080/api/v1';
 const TENANT_A = 'MH_001_CALICUT';
 const TENANT_B = 'MH_002_KOCHI';
 
@@ -12,6 +12,17 @@ let totalTests = 0;
 let passedTests = 0;
 let failedTests = 0;
 let adminToken = '';
+let memberToken = '';
+
+// Credentials (every tenant route needs a MahalFlow JWT):
+//   ADMIN_TOKEN, or ADMIN_PHONE + ADMIN_PASSWORD (set with `go run ./cmd/setpassword`)
+//   MEMBER_TOKEN, or MEMBER_PHONE resolved via /auth/resolve — the latter only
+//   against a local server started with AUTH_DEV_BYPASS=true.
+const ADMIN_PHONE = process.env.ADMIN_PHONE || '+919847111222';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+const MEMBER_PHONE = process.env.MEMBER_PHONE || '+919847111222';
+
+const bearer = (tok) => (tok ? { Authorization: `Bearer ${tok}` } : {});
 
 function reportResult(name, passed, detail) {
   totalTests++;
@@ -27,13 +38,26 @@ function reportResult(name, passed, detail) {
 }
 
 async function getAdminToken() {
+  if (process.env.ADMIN_TOKEN) return process.env.ADMIN_TOKEN;
+  if (!ADMIN_PASSWORD) return '';
   const res = await fetch(`${BASE_URL}/auth/login`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': TENANT_A },
-    body: JSON.stringify({ phone: '+919847111222', password: 'adminPassword123' }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone: ADMIN_PHONE, password: ADMIN_PASSWORD, mahal_id: TENANT_A }),
   });
-  const data = await res.json();
-  return data.token;
+  const data = await res.json().catch(() => ({}));
+  return data.token || '';
+}
+
+async function getMemberToken() {
+  if (process.env.MEMBER_TOKEN) return process.env.MEMBER_TOKEN;
+  const res = await fetch(`${BASE_URL}/auth/resolve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': TENANT_A },
+    body: JSON.stringify({ phone: MEMBER_PHONE }),
+  });
+  const data = await res.json().catch(() => ({}));
+  return data.token || '';
 }
 
 async function test1_MultiTenantIsolation() {
@@ -41,7 +65,7 @@ async function test1_MultiTenantIsolation() {
   
   // 1. Tenant B accessing Tenant A's member
   const res1 = await fetch(`${BASE_URL}/member/dashboard?member_id=MEM_001_9910`, {
-    headers: { 'X-Tenant-ID': TENANT_B },
+    headers: { 'X-Tenant-ID': TENANT_B, ...bearer(memberToken) },
   });
   const data1 = await res1.json();
   reportResult(
@@ -52,7 +76,7 @@ async function test1_MultiTenantIsolation() {
 
   // 2. Tenant B accessing Tenant A's receipts
   const res2 = await fetch(`${BASE_URL}/member/receipts?member_id=MEM_001_9910`, {
-    headers: { 'X-Tenant-ID': TENANT_B },
+    headers: { 'X-Tenant-ID': TENANT_B, ...bearer(memberToken) },
   });
   const data2 = await res2.json();
   const receipts = Array.isArray(data2) ? data2 : (data2.receipts || []);
@@ -72,11 +96,12 @@ async function test2_ParameterTamperingAndNegativeAmounts() {
     headers: {
       'Content-Type': 'application/json',
       'X-Tenant-ID': TENANT_A,
+      ...bearer(memberToken),
     },
     body: JSON.stringify({
       member_id: 'MEM_001_9910',
       amount: -500,
-      fund: 'General',
+      purpose: 'General',
       idempotency_key: `SEC_TAMPER_${Date.now()}`,
     }),
   });
@@ -92,11 +117,12 @@ async function test2_ParameterTamperingAndNegativeAmounts() {
     headers: {
       'Content-Type': 'application/json',
       'X-Tenant-ID': TENANT_A,
+      ...bearer(memberToken),
     },
     body: JSON.stringify({
       member_id: 'MEM_001_9910',
       amount: 0,
-      fund: 'General',
+      purpose: 'General',
       idempotency_key: `SEC_ZERO_${Date.now()}`,
     }),
   });
@@ -116,6 +142,7 @@ async function test3_StrictContiguousMonthValidation() {
     headers: {
       'Content-Type': 'application/json',
       'X-Tenant-ID': TENANT_A,
+      ...bearer(adminToken), // CASH is committee-only
     },
     body: JSON.stringify({
       member_id: 'MEM_001_9910',
@@ -137,6 +164,7 @@ async function test3_StrictContiguousMonthValidation() {
     headers: {
       'Content-Type': 'application/json',
       'X-Tenant-ID': TENANT_A,
+      ...bearer(adminToken), // CASH is committee-only
     },
     body: JSON.stringify({
       member_id: 'MEM_001_9910',
@@ -163,7 +191,7 @@ async function test4_IdempotencyAndReplayAttackDefense() {
 
   // Fetch dynamic next month
   const memberRes = await fetch(`${BASE_URL}/member/dashboard?member_id=MEM_001_9910`, {
-    headers: { 'X-Tenant-ID': TENANT_A },
+    headers: { 'X-Tenant-ID': TENANT_A, ...bearer(memberToken) },
   });
   const memberData = await memberRes.json();
   const lastPaid = memberData.last_paid_month || memberData.member?.last_paid_month || '2026-08';
@@ -180,6 +208,7 @@ async function test4_IdempotencyAndReplayAttackDefense() {
         headers: {
           'Content-Type': 'application/json',
           'X-Tenant-ID': TENANT_A,
+          ...bearer(memberToken),
         },
         body: JSON.stringify({
           member_id: 'MEM_001_9910',
@@ -281,14 +310,16 @@ async function test8_SecretKeyMasking() {
     },
   });
   const data = await res.json();
-  const gateways = data.gateways || [];
+  const gateways = Array.isArray(data) ? data : (data.gateways || []);
 
+  // Only a masked key may appear: no secret/salt fields, and any key shown
+  // is reduced to its last four characters.
   let secretsExposed = false;
   for (const gw of gateways) {
-    if (gw.secret_key && !gw.secret_key.includes('•') && !gw.secret_key.includes('***')) {
-      secretsExposed = true;
-      break;
-    }
+    const keys = Object.keys(gw).map((k) => k.toLowerCase());
+    if (keys.some((k) => k.includes('secret') || k.includes('salt'))) secretsExposed = true;
+    const masked = gw.merchant_key_masked || '';
+    if (masked && !masked.startsWith('••••')) secretsExposed = true;
   }
 
   reportResult(
@@ -336,7 +367,9 @@ async function main() {
   console.log('================================================================');
 
   adminToken = await getAdminToken();
-  console.log('🔐 Authenticated Security Auditor with valid JWT token.');
+  memberToken = await getMemberToken();
+  console.log(adminToken ? '🔐 Admin JWT acquired.' : '⚠️  No admin JWT (set ADMIN_PASSWORD or ADMIN_TOKEN): admin vectors will fail.');
+  console.log(memberToken ? '🔐 Member JWT acquired.' : '⚠️  No member JWT (set MEMBER_TOKEN or run the server with AUTH_DEV_BYPASS=true): member vectors will fail.');
 
   await test1_MultiTenantIsolation();
   await test2_ParameterTamperingAndNegativeAmounts();

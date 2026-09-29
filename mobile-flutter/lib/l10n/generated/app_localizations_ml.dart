@@ -123,17 +123,6 @@ class AppLocalizationsMl extends AppLocalizations {
   String get adminDashLoadingCollection => 'പിരിവ് വിവരങ്ങൾ ലോഡ് ചെയ്യുന്നു';
 
   @override
-  String get adminDashTotalCollectedCaps => 'ആകെ പിരിച്ചെടുത്തത്';
-
-  @override
-  String get adminDashTotalCollected => 'ആകെ പിരിച്ചെടുത്തത്';
-
-  @override
-  String adminDashTotalCollectedSpoken(String amount) {
-    return 'ആകെ പിരിച്ചെടുത്തത് $amount';
-  }
-
-  @override
   String adminDashOutstandingAcrossMahal(String amount) {
     return 'മഹലിൽ ഇനിയും $amount അടയ്ക്കാനുണ്ട്.';
   }
@@ -667,7 +656,7 @@ class AppLocalizationsMl extends AppLocalizations {
 
   @override
   String approvalsRejectMessage(String name) {
-    return '$name മഹലിൽ ചേർക്കപ്പെടില്ല. വീണ്ടും പരിഗണിക്കാൻ വീണ്ടും രജിസ്റ്റർ ചെയ്യേണ്ടി വരും.';
+    return '$name മഹലിൽ ചേർക്കപ്പെടില്ല, സൈൻ ഇൻ ചെയ്യാനും കഴിയില്ല. 10 മിനിറ്റിനുള്ളിൽ ഇത് പഴയപടിയാക്കാം.';
   }
 
   @override
@@ -917,9 +906,6 @@ class AppLocalizationsMl extends AppLocalizations {
   String get reportsContributions => 'സംഭാവനകൾ';
 
   @override
-  String get reportsPendingDues => 'ബാക്കി വരി';
-
-  @override
   String get reportsTransactionsError => 'ഇടപാടുകൾ ലോഡ് ചെയ്യാനായില്ല';
 
   @override
@@ -981,7 +967,7 @@ class AppLocalizationsMl extends AppLocalizations {
 
   @override
   String get importErrorExtension =>
-      '.xlsx, .xls അല്ലെങ്കിൽ .csv ഫയൽ തിരഞ്ഞെടുക്കുക.';
+      '.xlsx അല്ലെങ്കിൽ .csv ഫയൽ തിരഞ്ഞെടുക്കുക. പഴയ .xls ഫയലുകൾ ആദ്യം .xlsx ആയി സേവ് ചെയ്യുക.';
 
   @override
   String get importErrorEmpty => 'ആ ഫയൽ ശൂന്യമാണ്.';
@@ -1031,7 +1017,7 @@ class AppLocalizationsMl extends AppLocalizations {
 
   @override
   String get importTemplateDesc =>
-      'name, phone, house_name, monthly_dues എന്നീ കോളങ്ങളുള്ള CSV. ഷെയർ ഷീറ്റിൽ നിന്ന് സേവ് ചെയ്യാം അല്ലെങ്കിൽ അയയ്ക്കാം.';
+      'name, phone, house_name, monthly_dues, family_head, family_members_count, email എന്നീ കോളങ്ങളുള്ള CSV. ഷെയർ ഷീറ്റിൽ നിന്ന് സേവ് ചെയ്യാം അല്ലെങ്കിൽ അയയ്ക്കാം.';
 
   @override
   String get importNothingSaved => 'ഇതുവരെ ഒന്നും സേവ് ചെയ്തിട്ടില്ല';
@@ -1052,7 +1038,7 @@ class AppLocalizationsMl extends AppLocalizations {
   String get importChooseSpreadsheet => 'സ്പ്രെഡ്ഷീറ്റ് തിരഞ്ഞെടുക്കുക';
 
   @override
-  String get importAccepts => '.xlsx, .xls, .csv ഫയലുകൾ സ്വീകരിക്കും';
+  String get importAccepts => '.xlsx, .csv ഫയലുകൾ സ്വീകരിക്കും';
 
   @override
   String get importTapToChange => 'മറ്റൊരു ഫയൽ തിരഞ്ഞെടുക്കാൻ ടാപ്പ് ചെയ്യുക';
@@ -1180,7 +1166,7 @@ class AppLocalizationsMl extends AppLocalizations {
 
   @override
   String importDuesPerMonth(String amount) {
-    return '₹$amount/മാസം';
+    return '$amount/മാസം';
   }
 
   @override
@@ -1202,7 +1188,7 @@ class AppLocalizationsMl extends AppLocalizations {
   String get importGoToMembers => 'അംഗങ്ങളിലേക്ക് പോകുക';
 
   @override
-  String get gatewayKeyNotShown => 'ആപ്പിൽ കാണിക്കില്ല';
+  String get gatewayKeyNotShown => 'സജ്ജീകരിച്ചിട്ടില്ല';
 
   @override
   String get gatewayTitle => 'ഗേറ്റ്‌വേകൾ';
@@ -1215,11 +1201,12 @@ class AppLocalizationsMl extends AppLocalizations {
       'അംഗങ്ങളുടെ പേയ്മെന്റുകൾ നടക്കുന്നത് ഇവിടെയാണ്.';
 
   @override
-  String get gatewayManagedTitle => 'വെബ് അഡ്മിനിൽ നിന്ന് നിയന്ത്രിക്കുന്നു';
+  String get gatewayManagedTitle =>
+      'സെർവർ കോൺഫിഗറേഷനിൽ നിന്ന് നിയന്ത്രിക്കുന്നു';
 
   @override
   String get gatewayManagedDesc =>
-      'ഗേറ്റ്‌വേ കീകൾ, webhook രഹസ്യങ്ങൾ, റൂട്ടിംഗ് എന്നിവ MahalFlow വെബ് അഡ്മിനിലാണ് ക്രമീകരിക്കുന്നത്. ഈ സ്ക്രീനിൽ കാണാൻ മാത്രം; രഹസ്യങ്ങൾ ഒരിക്കലും കാണിക്കില്ല.';
+      'ഗേറ്റ്‌വേ ക്രെഡൻഷ്യലുകളും റൂട്ടിംഗും MahalFlow സെർവർ കോൺഫിഗറേഷനിലാണ് സജ്ജീകരിക്കുന്നത്. ഈ സ്ക്രീൻ കാണാൻ മാത്രമുള്ളതാണ്, രഹസ്യ വിവരങ്ങൾ ഒരിക്കലും കാണിക്കില്ല.';
 
   @override
   String get gatewayConfigured => 'ക്രമീകരിച്ച ഗേറ്റ്‌വേകൾ';
@@ -1235,7 +1222,7 @@ class AppLocalizationsMl extends AppLocalizations {
 
   @override
   String get gatewayEmptyDesc =>
-      'ഓൺലൈൻ പേയ്മെന്റുകൾ സ്വീകരിക്കാൻ വെബ് അഡ്മിനിൽ ഒന്ന് ക്രമീകരിക്കുക.';
+      'ഓൺലൈൻ പേയ്‌മെന്റുകൾ സ്വീകരിക്കാൻ സെർവർ കോൺഫിഗറേഷനിൽ ഗേറ്റ്‌വേ ക്രെഡൻഷ്യലുകൾ ചേർക്കുക.';
 
   @override
   String get gatewayPrimaryHeading => 'പ്രധാന ഗേറ്റ്‌വേ';
@@ -1262,7 +1249,7 @@ class AppLocalizationsMl extends AppLocalizations {
   String get gatewayFallbackRoute => 'പകരം വഴി';
 
   @override
-  String get gatewayKeyId => 'കീ ID';
+  String get gatewayKeyId => 'മർച്ചന്റ് കീ';
 
   @override
   String get gatewayId => 'ഗേറ്റ്‌വേ ID';
@@ -1994,13 +1981,6 @@ class AppLocalizationsMl extends AppLocalizations {
 
   @override
   String get editProfilePincode => 'PIN കോഡ്';
-
-  @override
-  String get editProfileOfficeKeepsTitle => 'ഓഫീസിൽ സൂക്ഷിക്കുന്നത്';
-
-  @override
-  String get editProfileOfficeKeepsBody =>
-      'പേരും വീട്ടുപേരും അംഗത്വ രേഖയിൽ സേവ് ചെയ്യും. ഇമെയിൽ, തെരുവ്, നഗരം, PIN കോഡ് എന്നിവ ഓഫീസ് ഇപ്പോൾ സൂക്ഷിക്കുന്നില്ല.';
 
   @override
   String get editProfileSaving => 'സേവ് ചെയ്യുന്നു…';
@@ -3432,4 +3412,201 @@ class AppLocalizationsMl extends AppLocalizations {
 
   @override
   String get payResultReceiptNumber => 'രസീത് നമ്പർ';
+
+  @override
+  String get statusNotConfigured => 'ക്രമീകരിച്ചിട്ടില്ല';
+
+  @override
+  String importRowNumber(int row) {
+    return 'വരി $row';
+  }
+
+  @override
+  String get importNoBatch =>
+      'ഈ പ്രിവ്യൂവിന് സെർവറിൽ നിന്നുള്ള ബാച്ച് ID ഇല്ല. ഫയൽ വീണ്ടും അപ്‌ലോഡ് ചെയ്യുക.';
+
+  @override
+  String get importStatusAlreadyCommitted => 'നേരത്തെ ഇംപോർട്ട് ചെയ്തു';
+
+  @override
+  String get importAlreadyCommittedTitle =>
+      'ഈ ഫയൽ നേരത്തെ ഇംപോർട്ട് ചെയ്തിട്ടുണ്ട്';
+
+  @override
+  String get importAlreadyCommittedBody =>
+      'പുതിയ അംഗങ്ങളെ ചേർത്തിട്ടില്ല. താഴെയുള്ള എണ്ണം ആദ്യ ഇംപോർട്ടിലേതാണ്.';
+
+  @override
+  String get gatewayMode => 'മോഡ്';
+
+  @override
+  String get gatewayModeLive => 'ലൈവ്';
+
+  @override
+  String get gatewayModeTest => 'ടെസ്റ്റ്';
+
+  @override
+  String gatewayModeSimulated(String mode) {
+    return '$mode · സിമുലേറ്റഡ്';
+  }
+
+  @override
+  String get gatewaySimulatedTitle => 'പേയ്‌മെന്റുകൾ സിമുലേറ്റ് ചെയ്യുന്നു';
+
+  @override
+  String get gatewaySimulatedDesc =>
+      'സെർവർ പേയ്‌മെന്റ് ടെസ്റ്റ് മോഡിലാണ്: യഥാർത്ഥ ഗേറ്റ്‌വേ കോളുകൾ നടക്കുന്നില്ല, പണം കൈമാറുന്നില്ല.';
+
+  @override
+  String get gatewayMethods => 'രീതികൾ';
+
+  @override
+  String get gatewayAutoPay => 'ഓട്ടോപേ';
+
+  @override
+  String get gatewayAutoPayOn => 'സജീവം';
+
+  @override
+  String get gatewayAutoPayOff => 'സജീവമല്ല';
+
+  @override
+  String get gatewayCashRoute => 'കമ്മിറ്റി രേഖപ്പെടുത്തുന്നു';
+
+  @override
+  String get paymentMethodUpi => 'UPI';
+
+  @override
+  String get paymentMethodCard => 'കാർഡ്';
+
+  @override
+  String get paymentMethodNetbanking => 'നെറ്റ് ബാങ്കിംഗ്';
+
+  @override
+  String get paymentMethodWallet => 'വാലറ്റ്';
+
+  @override
+  String get receiptMethodAutoPay => 'ഓട്ടോപേ';
+
+  @override
+  String receiptMethodAutoPayVia(String method) {
+    return 'ഓട്ടോപേ ($method)';
+  }
+
+  @override
+  String get receiptRefundedTitle => 'ഈ പേയ്‌മെന്റ് റീഫണ്ട് ചെയ്തു';
+
+  @override
+  String get receiptRefundedBody =>
+      'തുക അടച്ചയാൾക്ക് തിരികെ നൽകി. ഈ രസീത് രേഖയായി സൂക്ഷിക്കുന്നു, ഇനി അടച്ചതായി കണക്കാക്കില്ല.';
+
+  @override
+  String receiptRefundedOnBody(String date) {
+    return '$date-ന് റീഫണ്ട് ചെയ്തു. ഈ രസീത് രേഖയായി സൂക്ഷിക്കുന്നു, ഇനി അടച്ചതായി കണക്കാക്കില്ല.';
+  }
+
+  @override
+  String get receiptRefundedOnLabel => 'റീഫണ്ട് ചെയ്ത തീയതി';
+
+  @override
+  String get receiptNoteLabel => 'കുറിപ്പ്';
+
+  @override
+  String receiptShareNote(String note) {
+    return 'കുറിപ്പ്: $note';
+  }
+
+  @override
+  String get receiptSheetStatus => 'നില';
+
+  @override
+  String editProfileSaveRejected(String reason) {
+    return 'സേവ് ചെയ്യാനായില്ല: $reason';
+  }
+
+  @override
+  String get memberDetailsReminderChooseSubtitle =>
+      'ആപ്പിൽ അയയ്ക്കുക, അല്ലെങ്കിൽ സന്ദേശം പൂരിപ്പിച്ച് WhatsApp / SMS തുറക്കുക';
+
+  @override
+  String get memberDetailsSendInAppNotice => 'ആപ്പിൽ അറിയിപ്പ് അയയ്ക്കുക';
+
+  @override
+  String get memberDetailsInAppNoticeHint =>
+      'ഈ അംഗത്തിന് മാത്രമേ ഇത് കാണാനാകൂ — അറിയിപ്പുകളിലും നോട്ടിഫിക്കേഷനായും.';
+
+  @override
+  String get memberDetailsNoticeTitle => 'മാസവരി ഓർമ്മപ്പെടുത്തൽ';
+
+  @override
+  String get memberDetailsNoticeSent => 'ആപ്പിൽ ഓർമ്മപ്പെടുത്തൽ അയച്ചു';
+
+  @override
+  String memberDetailsNoticeFailed(String reason) {
+    return 'ഓർമ്മപ്പെടുത്തൽ അയയ്ക്കാനായില്ല: $reason';
+  }
+
+  @override
+  String approvalsUndone(String name) {
+    return '$name വീണ്ടും കാത്തിരിക്കുന്ന അപേക്ഷകളിലാണ്.';
+  }
+
+  @override
+  String approvalsUndoFailed(String reason) {
+    return 'പഴയപടിയാക്കാനായില്ല. $reason';
+  }
+
+  @override
+  String get registrationRejectedTitle => 'രജിസ്ട്രേഷൻ അംഗീകരിച്ചില്ല';
+
+  @override
+  String get registrationRejectedSubtitle =>
+      'കമ്മിറ്റി ഈ അപേക്ഷ അംഗീകരിച്ചില്ല.';
+
+  @override
+  String get registrationRejectedBody =>
+      'ഈ നമ്പർ ഉപയോഗിച്ച് ഇപ്പോൾ സൈൻ ഇൻ ചെയ്യാനാകില്ല. പേയ്‌മെന്റുകളോ അംഗ വിവരങ്ങളോ ലഭ്യമല്ല.';
+
+  @override
+  String get registrationRejectedNoticeTitle =>
+      'ഇത് തെറ്റാണെന്ന് തോന്നുന്നുണ്ടോ?';
+
+  @override
+  String get registrationRejectedNoticeBody =>
+      'മഹൽ ഓഫീസുമായി ബന്ധപ്പെടുക. കമ്മിറ്റി തീരുമാനം മാറ്റിയാൽ ഇവിടെ വീണ്ടും പരിശോധിക്കുക.';
+
+  @override
+  String get registrationRejectedStill => 'ഇപ്പോഴും അംഗീകരിച്ചിട്ടില്ല.';
+
+  @override
+  String get adminDashCollectedMonthCaps => 'ഈ മാസം പിരിച്ചെടുത്തത്';
+
+  @override
+  String get adminDashCollectedMonth => 'ഈ മാസം പിരിച്ചെടുത്തത്';
+
+  @override
+  String adminDashCollectedMonthSpoken(String amount) {
+    return 'ഈ മാസം പിരിച്ചെടുത്തത് $amount';
+  }
+
+  @override
+  String adminDashAllTime(String amount) {
+    return 'ആകെ ഇതുവരെ: $amount';
+  }
+
+  @override
+  String get reportsPendingDuesNow => 'ബാക്കി വരി (ഇപ്പോൾ)';
+
+  @override
+  String reportsPeriodAllTypes(String period) {
+    return '$period · എല്ലാ തരവും';
+  }
+
+  @override
+  String get alertTypeEvent => 'പരിപാടി';
+
+  @override
+  String get broadcastType => 'തരം';
+
+  @override
+  String get broadcastTypeGeneral => 'പൊതു അറിയിപ്പ്';
 }

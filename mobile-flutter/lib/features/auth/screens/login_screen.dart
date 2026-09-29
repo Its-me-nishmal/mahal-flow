@@ -9,7 +9,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/navigation/app_routes.dart';
-import '../../../core/network/api_service.dart';
 import '../../../core/services/phone_auth_service.dart';
 import '../../../core/storage/app_prefs.dart';
 import '../../../core/theme/app_theme.dart';
@@ -149,16 +148,15 @@ class _LoginScreenState extends State<LoginScreen> {
       _isSubmitting = true;
     });
     final l10n = context.l10n;
-    if (role == 'admin') {
-      // Admin routes require a JWT; without it every /admin/* call 401s.
-      final ok = await ApiService().login(phone: '9847123456');
-      if (!ok) {
-        _stopSubmitting(error: l10n.loginDemoServerError);
-        return;
-      }
-    } else {
-      // Seed member from the local backend's fixtures.
-      ApiService.sessionMemberId ??= 'MEM_001_9910';
+    // Every route needs a session JWT, so demo sign-in resolves a seeded
+    // phone through the local server's AUTH_DEV_BYPASS (no OTP). Fails
+    // against any server without that flag — which is the point.
+    final result = await AuthFlow.resolveDemo(
+      role == 'admin' ? '+919847123456' : '+919847111222',
+    );
+    if (result.status != ResolveStatus.allowed) {
+      _stopSubmitting(error: l10n.loginDemoServerError);
+      return;
     }
 
     await AppPrefs.setLastRole(role);

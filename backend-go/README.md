@@ -52,6 +52,13 @@ backend-go/
 | `WHATSAPP_TEMPLATE_RECEIPT` | _(empty)_ | Approved template for payment receipts |
 | `WHATSAPP_DRY_RUN` | `false` | Log messages without calling the Graph API |
 
+### Authentication
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `FIREBASE_PROJECT_ID` | _(FCM service account `project_id`)_ | Firebase project whose ID tokens `/auth/resolve` and `/auth/register` accept |
+| `AUTH_DEV_BYPASS` | `false` | Local dev only: accept a posted `phone` on `/auth/resolve` / `/auth/register` when no ID token is sent. Ignored when `ENV=production` |
+
 > Copy `.env.example` to `.env` and fill in secrets. `.env` is gitignored — never commit it.
 
 ---
@@ -91,6 +98,64 @@ payment or ledger path can fail because of a notification.
 dedupe key is claimed *before* the send. The dunning agent re-scans hourly, so
 without this a single overdue member would be messaged every hour until they
 paid — enough to get the number flagged by Meta.
+
+---
+
+## 🔐 Authentication & Access Control
+
+Every route except `/health`, `/auth/*`, the PayU/Razorpay/WhatsApp webhooks
+and the PayU checkout redirect page (`GET /payments/payu-checkout/:orderId`)
+needs `Authorization: Bearer <MahalFlow JWT>` **and** `X-Tenant-ID`. The JWT's
+tenant must equal `X-Tenant-ID` (only `SUPER_ADMIN` may cross tenants).
+
+| Client | Sign-in | Endpoint |
+| :--- | :--- | :--- |
+| web-admin | phone + password (bcrypt) | `POST /api/v1/auth/login` `{phone, password, mahal_id?}` |
+| mobile (members & committee) | Firebase phone OTP | `POST /api/v1/auth/resolve` `{id_token}` (or `Authorization: Bearer <Firebase ID token>`) |
+| mobile self-registration | Firebase phone OTP | `POST /api/v1/auth/register` `{id_token, name, mahal_id}` |
+
+* **Login** looks the phone up in `admins`, checks `password_hash` with bcrypt
+  and issues a JWT with the record's own `_id`, `role` (`MAHAL_ADMIN` default,
+  or `SUPER_ADMIN`) and `mahal_id`. Failures always answer
+  `401 Invalid phone or password`. A phone that administers several Mahals
+  gets `409` until `mahal_id` is sent. Admins without a password cannot log in.
+* **Resolve / register** verify the Firebase ID token server-side (RS256 against
+  Google's securetoken certificates; `aud`/`iss` = the Firebase project) and use
+  only its `phone_number` claim — a posted `phone` is ignored. With no Firebase
+  project configured both routes return `503` unless `AUTH_DEV_BYPASS=true`.
+* **Member scoping**: with a `MEMBER` JWT, member routes act on the JWT subject
+  only; a different `member_id`/`:id` is `403`, and other members' receipts,
+  transactions and mandates are `404`. Admin JWTs may pass any `member_id` of
+  their own tenant. Cash payments (`gateway: CASH`) are admin-only.
+* **Notices**: alerts are shared per Mahal; members keep private read/dismiss
+  state in `alert_member_states` via
+  `POST /member/alerts/:id/ack`, `DELETE /member/alerts/:id`,
+  `POST /member/alerts/mark-all-read`, `DELETE /member/alerts`.
+  `GET /member/alerts` returns each alert's status for *that* member plus
+  `unread_count`.
+* **Payment confirmation**: with a live PayU gateway (`PG_API_KEY` set and
+  `PAYMENT_TEST_MODE` off), `/payments/dues/confirm` and the PG webhook commit a
+  receipt only after PayU `verify_payment` reports the transaction `success`
+  (`409 {status: PENDING}` otherwise; the app keeps polling). A PG callback
+  without a valid response hash never commits.
+
+### Setting admin passwords
+
+Passwords are set from the command line (≥ 10 characters, bcrypt cost 12). The
+tool uses the same `MONGO_URI` / `DB_NAME` as the API and prints the target
+before writing — double-check it.
+
+```bash
+# Set / reset (prompts for the password; or set MAHALFLOW_ADMIN_PASSWORD)
+go run ./cmd/setpassword --phone 9847123456
+
+# Phone that administers several Mahals
+go run ./cmd/setpassword --phone 9847123456 --mahal MH_001_CALICUT
+
+# Create an admin record with a password (e.g. the first SUPER_ADMIN)
+go run ./cmd/setpassword --phone 9000000000 --create --name "Ops" \
+  --mahal MH_001_CALICUT --role SUPER_ADMIN
+```
 
 ---
 

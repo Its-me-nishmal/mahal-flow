@@ -12,7 +12,7 @@ export default function PaymentsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    ApiClient.getPayments("MH_001_CALICUT", 1, 100)
+    ApiClient.getPayments(undefined, 1, 100)
       .then((res) => {
         if (res && res.payments) {
           setPayments(res.payments);
@@ -37,7 +37,8 @@ export default function PaymentsPage() {
     const matchesSearch =
       (p.id || "").toLowerCase().includes(search.toLowerCase()) ||
       (p.member_id || "").toLowerCase().includes(search.toLowerCase()) ||
-      (p.receipt_id || "").toLowerCase().includes(search.toLowerCase());
+      (p.receipt_id || "").toLowerCase().includes(search.toLowerCase()) ||
+      (p.purpose || "").toLowerCase().includes(search.toLowerCase());
 
     return matchesStatus && matchesSearch;
   });
@@ -116,9 +117,15 @@ export default function PaymentsPage() {
                 <tr key={txn.id} className="hover:bg-surface-bright transition-colors">
                   <td className="py-4 px-lg font-button text-button text-text-primary">{txn.id}</td>
                   <td className="py-4 px-lg font-body text-body text-text-primary">{txn.member_id}</td>
-                  <td className="py-4 px-lg font-body text-body text-text-secondary">{txn.type || "MONTHLY_DUES"}</td>
+                  <td className="py-4 px-lg font-body text-body text-text-secondary">
+                    {txn.type || "MONTHLY_DUES"}
+                    {txn.purpose && <span className="block text-xs text-text-muted">Fund: {txn.purpose}</span>}
+                  </td>
                   <td className="py-4 px-lg font-body text-body text-text-primary font-semibold">₹{txn.amount}</td>
-                  <td className="py-4 px-lg font-body text-body text-text-secondary">{txn.gateway || "RAZORPAY"}</td>
+                  <td className="py-4 px-lg font-body text-body text-text-secondary">
+                    {txn.gateway || "—"}
+                    {txn.payment_mode && <span className="block text-xs text-text-muted">{txn.payment_mode}</span>}
+                  </td>
                   <td className="py-4 px-lg font-body text-body text-text-secondary">
                     {txn.created_at ? new Date(txn.created_at).toLocaleDateString() : "Live"}
                   </td>

@@ -24,11 +24,24 @@ export 'api_exception.dart';
 class ApiService {
   static final ValueNotifier<int> unreadAlertsCount = ValueNotifier<int>(0);
 
-  /// Bearer token for /admin/* routes. Set by [login] / [resolveLogin],
-  /// restored on launch by [restoreSession], and injected into every request in
-  /// [_getDio]. Null = unauthenticated (member-only routes still work; admin
-  /// routes 401).
+  /// MahalFlow session JWT (members and committee alike). Issued by
+  /// [resolveLoginOrThrow] in exchange for a Firebase ID token, persisted,
+  /// restored on launch by [restoreSession], and sent as a Bearer header on
+  /// every request by [_getDio]. Null = signed out: every route except
+  /// /auth/* answers 401.
   static String? authToken;
+
+  /// Silent re-authentication, installed at startup by the auth layer (it
+  /// needs Firebase, which this class deliberately does not import). Called
+  /// once when a request answers 401: it should mint a fresh Firebase ID
+  /// token, re-resolve it, and return true when a new [authToken] is set.
+  static Future<bool> Function()? reauthenticate;
+
+  /// Called when a 401 could not be recovered by [reauthenticate] — the app
+  /// sends the user back to sign-in.
+  static void Function()? onSessionExpired;
+
+  static Future<bool>? _reauthInFlight;
 
   /// The signed-in member's id, set after phone resolve and restored on launch.
   /// Member-scoped calls default to this so each user sees their own data.
@@ -68,6 +81,9 @@ class ApiService {
   ];
 
   static String activeBaseUrl = candidateBaseUrls.first;
+  /// The Mahal this build serves, sent as X-Tenant-ID. It only routes the
+  /// request: access comes from the session JWT, which the server binds to
+  /// its own tenant and rejects (403) for any other.
   static const String defaultTenant = "MH_001_CALICUT";
 
   // Runtime cache of the signed-in member, filled from API responses. Empty
@@ -107,6 +123,44 @@ class ApiService {
   /// a connection problem. An HTTP error response means a server answered, so
   /// it is surfaced immediately as an [ApiException] instead of retried.
   Future<Response<dynamic>> _send(
+    Future<Response<dynamic>> Function(Dio dio) requestFn, {
+    bool allowReauth = true,
+  }) async {
+    try {
+      return await _sendOnce(requestFn);
+    } on ApiException catch (e) {
+      if (e.kind != ApiErrorKind.unauthorized || !allowReauth) rethrow;
+      // The JWT expired or was revoked: re-authenticate once (single-flight,
+      // so a screen firing five requests triggers one re-resolve), then retry.
+      if (await _refreshSession()) {
+        try {
+          return await _sendOnce(requestFn);
+        } on ApiException catch (retry) {
+          if (retry.kind == ApiErrorKind.unauthorized) onSessionExpired?.call();
+          rethrow;
+        }
+      }
+      onSessionExpired?.call();
+      rethrow;
+    }
+  }
+
+  static Future<bool> _refreshSession() {
+    final reauth = reauthenticate;
+    if (reauth == null) return Future.value(false);
+    return _reauthInFlight ??= () async {
+      try {
+        return await reauth();
+      } catch (e) {
+        debugPrint("[API_SERVICE] re-authentication failed: $e");
+        return false;
+      } finally {
+        _reauthInFlight = null;
+      }
+    }();
+  }
+
+  Future<Response<dynamic>> _sendOnce(
     Future<Response<dynamic>> Function(Dio dio) requestFn,
   ) async {
     final urls = [
@@ -243,28 +297,6 @@ class ApiService {
   // Auth / session
   // ---------------------------------------------------------------------------
 
-  /// Exchange a phone (and optional mahal) for a JWT and cache it in memory and
-  /// secure storage. Returns true on success. The backend issues a MAHAL_ADMIN
-  /// token; the password field is currently ignored server-side.
-  Future<bool> login({
-    required String phone,
-    String mahalId = defaultTenant,
-  }) async {
-    final response = await _requestWithFallback(
-      (dio) => dio.post("/auth/login", data: {
-        "phone": phone,
-        "mahal_id": mahalId,
-      }),
-    );
-    final data = response?.data;
-    if (data is Map<String, dynamic> && data["token"] is String) {
-      authToken = data["token"] as String;
-      await AppPrefs.setAuthToken(authToken!);
-      return true;
-    }
-    return false;
-  }
-
   /// Restore a persisted token + member session into memory on app launch.
   static Future<void> restoreSession() async {
     authToken = await AppPrefs.authToken();
@@ -283,15 +315,28 @@ class ApiService {
     await AppPrefs.clearSession();
   }
 
-  /// Resolve an OTP-verified phone to an identity within the tenant. Returns the
-  /// raw map: {status: ALLOWED|PENDING|UNREGISTERED, role, member_id, name, token}.
-  /// Null = the server could not be reached.
-  Future<Map<String, dynamic>?> resolveLogin(String phone) =>
-      _orNull(() => resolveLoginOrThrow(phone));
+  /// Resolve a Firebase-verified phone to an identity within the tenant.
+  /// Returns the raw map: {status: ALLOWED|PENDING|REJECTED|UNREGISTERED,
+  /// role, member_id, name, token}. Only ALLOWED carries a token; REJECTED
+  /// (the committee declined the registration) never opens a session. Null = the server could not be reached or
+  /// refused the ID token.
+  Future<Map<String, dynamic>?> resolveLogin({String? idToken}) =>
+      _orNull(() => resolveLoginOrThrow(idToken: idToken));
 
-  Future<Map<String, dynamic>> resolveLoginOrThrow(String phone) async {
+  /// [idToken] is the Firebase ID token (`User.getIdToken()`); the server
+  /// takes the phone from it and ignores anything else. [devPhone] is for
+  /// debug demo sign-in only and works solely against a server running with
+  /// AUTH_DEV_BYPASS=true.
+  Future<Map<String, dynamic>> resolveLoginOrThrow({
+    String? idToken,
+    String? devPhone,
+  }) async {
     final response = await _send(
-      (dio) => dio.post("/auth/resolve", data: {"phone": phone}),
+      (dio) => dio.post("/auth/resolve", data: {
+        if (idToken != null) "id_token": idToken,
+        if (idToken == null && devPhone != null) "phone": devPhone,
+      }),
+      allowReauth: false,
     );
     final data = _asMap(response.data);
     if (data["status"] == "ALLOWED") {
@@ -311,24 +356,31 @@ class ApiService {
         sessionMemberId = null;
         await AppPrefs.clearMemberSession();
       }
+    } else {
+      // Pending / rejected / unregistered: no session. Never keep a
+      // previous user's.
+      authToken = null;
+      sessionMemberId = null;
+      await AppPrefs.clearSession();
     }
     return data;
   }
 
-  /// Self-register an unregistered phone as a PENDING member. Returns the raw
-  /// map: {status: PENDING|ALLOWED, member_id, name} or {error}.
+  /// Self-register a Firebase-verified phone as a PENDING member. Returns the
+  /// raw map: {status: PENDING|ALLOWED, member_id, name} or {error}.
   Future<Map<String, dynamic>?> registerSelf({
-    required String phone,
+    required String idToken,
     required String mahalId,
     required String name,
   }) async {
     try {
       final response = await _send(
         (dio) => dio.post("/auth/register", data: {
-          "phone": phone,
+          "id_token": idToken,
           "mahal_id": mahalId,
           "name": name,
         }),
+        allowReauth: false,
       );
       return _asMap(response.data);
     } on ApiException catch (e) {
@@ -459,12 +511,17 @@ class ApiService {
     return _asMap(response.data);
   }
 
-  // 3.03 Dynamically generate PayU hash from backend
+  // 3.03 Dynamically generate PayU hash from backend.
+  /// The server only signs payment hashes that match the caller's own
+  /// transaction / mandate, and an allowlist of SDK read commands. Pass
+  /// [txnid] (the order or mandate id being paid) so it can find the record;
+  /// anything it will not sign answers 403 and this returns null.
   Future<String?> generatePayUHash({
     required String hashName,
     required String hashString,
     String? hashType,
     String? postSalt,
+    String? txnid,
   }) async {
     final response = await _requestWithFallback(
       (dio) => dio.post(
@@ -474,6 +531,7 @@ class ApiService {
           "hash_string": hashString,
           "hash_type": hashType ?? "",
           "post_salt": postSalt ?? "",
+          if (txnid != null && txnid.isNotEmpty) "txnid": txnid,
         },
       ),
     );
@@ -485,9 +543,10 @@ class ApiService {
   }
 
   // 3.1 Initialize Contribution / Donation Payment
-  /// [note] is an optional free-text message from the member ("In memory
-  /// of…"). It is sent as `note`; the current backend ignores unknown fields,
-  /// so it is only persisted once the server stores it.
+  /// [fund] is sent as `purpose` and [note] (optional, ≤280 chars, "In memory
+  /// of…") as `note`; the server stores both and prints them on the receipt
+  /// (`fund`, `note`). The response carries `transaction_id`,
+  /// `gateway_order_id` ("ORD"+txn id) and a signed `payment_url`.
   Future<Map<String, dynamic>?> initializeContribution({
     required String memberId,
     required double amount,
@@ -526,37 +585,69 @@ class ApiService {
     String? memberId,
     required String name,
     String? email,
-    String? address,
+    String? houseName,
+    String? address2,
     String? city,
     String? state,
     String? pincode,
-    String? address2,
   }) async {
-    final id = memberId ?? currentMemberId;
-    if (id == null || id.isEmpty) return false;
+    try {
+      await updateMemberProfileOrThrow(
+        memberId: memberId,
+        name: name,
+        email: email,
+        houseName: houseName,
+        address2: address2,
+        city: city,
+        state: state,
+        pincode: pincode,
+      );
+      return true;
+    } on ApiException catch (e) {
+      debugPrint("[API_SERVICE] $e");
+      return false;
+    }
+  }
 
-    final response = await _requestWithFallback(
+  /// PUT /members/profile/:id → {status: UPDATED, member_id, updated_at,
+  /// member}. A null field is left unchanged; an empty string clears the
+  /// optional ones (email, address2, city, state, pincode). The server
+  /// validates email and the 6-digit PIN code and answers 400 with a reason
+  /// in [ApiException.serverMessage].
+  Future<Map<String, dynamic>> updateMemberProfileOrThrow({
+    String? memberId,
+    required String name,
+    String? email,
+    String? houseName,
+    String? address2,
+    String? city,
+    String? state,
+    String? pincode,
+  }) async {
+    final id = memberId ?? requireMemberId();
+    final response = await _send(
       (dio) => dio.put(
         "/members/profile/$id",
         data: {
           "name": name,
-          "email": email,
-          "address": address,
-          "city": city,
-          "state": state,
-          "pincode": pincode,
+          if (houseName != null) "house_name": houseName,
+          if (email != null) "email": email,
           if (address2 != null) "address2": address2,
+          if (city != null) "city": city,
+          if (state != null) "state": state,
+          if (pincode != null) "pincode": pincode,
         },
       ),
     );
-    final ok = response != null && response.statusCode == 200;
-    if (ok) {
-      // Only cache what the server accepted.
-      cachedMemberName = name;
-      if (email != null && email.isNotEmpty) cachedEmail = email;
-      if (address != null && address.isNotEmpty) cachedAddress = address;
-    }
-    return ok;
+    final data = _asMap(response.data);
+    final member = data["member"];
+    final saved = member is Map ? member : const {};
+    // Only cache what the server accepted.
+    cachedMemberName = saved["name"]?.toString() ?? name;
+    cachedEmail = saved["email"]?.toString() ?? email ?? cachedEmail;
+    cachedAddress =
+        saved["house_name"]?.toString() ?? houseName ?? cachedAddress;
+    return data;
   }
 
   // 5. Get Member Profile
@@ -631,11 +722,18 @@ class ApiService {
     final response = await _send(
       (dio) => dio.get("/member/alerts", queryParameters: {"member_id": id}),
     );
-    final list = _listField(response.data, "alerts");
-    unreadAlertsCount.value =
-        list.where((item) => item is Map && item["status"] == "ACTIVE").length;
+    final map = _asMap(response.data);
+    final list = _listField(map, "alerts");
+    // Read state is per member on the server; prefer its count.
+    final serverUnread = map["unread_count"];
+    unreadAlertsCount.value = serverUnread is num
+        ? serverUnread.toInt()
+        : list.where((item) => item is Map && item["status"] == "ACTIVE").length;
     return list;
   }
+
+  // Member notice actions. Notices are shared by the whole Mahal, so these
+  // change only the signed-in member's own read / dismissed state.
 
   /// Mark one alert read. Pass [wasUnread] = true only when the alert was
   /// unread before this call, so the badge count is not decremented twice.
@@ -645,26 +743,27 @@ class ApiService {
       unreadAlertsCount.value--;
     }
     final response = await _requestWithFallback(
-      (dio) => dio.post("/admin/alerts/$alertId/ack"),
+      (dio) => dio.post("/member/alerts/$alertId/ack"),
     );
     return response != null && response.statusCode == 200;
   }
 
-  /// Remove one alert. [wasUnread] as for [acknowledgeAlert].
+  /// Hide one alert for this member. [wasUnread] as for [acknowledgeAlert].
   Future<bool> dismissAlert(String alertId, {bool wasUnread = false}) async {
     if (wasUnread && unreadAlertsCount.value > 0) {
       unreadAlertsCount.value--;
     }
     final response = await _requestWithFallback(
-      (dio) => dio.delete("/admin/alerts/$alertId"),
+      (dio) => dio.delete("/member/alerts/$alertId"),
     );
     return response != null && response.statusCode == 200;
   }
 
+  /// Hide every alert currently visible to this member.
   Future<bool> clearAllAlerts() async {
     unreadAlertsCount.value = 0;
     final response = await _requestWithFallback(
-      (dio) => dio.delete("/admin/alerts"),
+      (dio) => dio.delete("/member/alerts"),
     );
     return response != null && response.statusCode == 200;
   }
@@ -672,7 +771,7 @@ class ApiService {
   Future<bool> markAllAlertsRead() async {
     unreadAlertsCount.value = 0;
     final response = await _requestWithFallback(
-      (dio) => dio.post("/admin/alerts/mark-all-read"),
+      (dio) => dio.post("/member/alerts/mark-all-read"),
     );
     return response != null && response.statusCode == 200;
   }
@@ -683,23 +782,17 @@ class ApiService {
     required String description,
     String severity = "INFO",
     String audience = "ALL",
-  }) async {
-    final response = await _requestWithFallback(
-      (dio) => dio.post(
-        "/admin/alerts",
-        data: {
-          "title": title,
-          "description": description,
-          "severity": severity,
-          "audience": audience,
-        },
-      ),
-    );
-    if (response != null && response.data is Map<String, dynamic>) {
-      return response.data as Map<String, dynamic>;
-    }
-    return null;
-  }
+    List<String>? memberIds,
+    String? type,
+  }) =>
+      _orNull(() => createAlertOrThrow(
+            title: title,
+            description: description,
+            severity: severity,
+            audience: audience,
+            memberIds: memberIds,
+            type: type,
+          ));
 
   // ---------------------------------------------------------------------------
   // Admin dashboard / members / payments / audit / reports
@@ -797,11 +890,35 @@ class ApiService {
   }
 
   // 14. Get Financial Report (Live MongoDB)
-  Future<Map<String, dynamic>?> getFinancialReport() =>
-      _orNull(getFinancialReportOrThrow);
+  Future<Map<String, dynamic>?> getFinancialReport({
+    String? month,
+    DateTime? from,
+    DateTime? to,
+  }) =>
+      _orNull(() => getFinancialReportOrThrow(month: month, from: from, to: to));
 
-  Future<Map<String, dynamic>> getFinancialReportOrThrow() async {
-    final response = await _send((dio) => dio.get("/admin/reports/financial"));
+  /// GET /admin/reports/financial → {summary: {total_collected,
+  /// dues_collected, donations, pending_dues, transaction_count}, period,
+  /// from, to, timezone}. Pass [month] as `YYYY-MM`, or [from] / [to]
+  /// (inclusive calendar days, Asia/Kolkata); none = all time.
+  /// `pending_dues` is always the current snapshot, not period-limited.
+  Future<Map<String, dynamic>> getFinancialReportOrThrow({
+    String? month,
+    DateTime? from,
+    DateTime? to,
+  }) async {
+    String day(DateTime d) => "${d.year.toString().padLeft(4, '0')}-"
+        "${d.month.toString().padLeft(2, '0')}-"
+        "${d.day.toString().padLeft(2, '0')}";
+    final query = <String, dynamic>{
+      if (month != null && month.isNotEmpty) "month": month,
+      if ((month == null || month.isEmpty) && from != null) "from": day(from),
+      if ((month == null || month.isEmpty) && to != null) "to": day(to),
+    };
+    final response = await _send(
+      (dio) => dio.get("/admin/reports/financial",
+          queryParameters: query.isEmpty ? null : query),
+    );
     return _asMap(response.data);
   }
 
@@ -1057,12 +1174,14 @@ class ApiService {
     return _asMap(response.data);
   }
 
-  /// PUT /members/profile/:id with only the given fields.
+  /// PUT /members/profile/:id with only the given fields. [email] null =
+  /// unchanged, "" = cleared; the server answers 400 for a malformed one.
   Future<Map<String, dynamic>> updateMemberDetailsOrThrow({
     required String memberId,
     String? name,
     String? phone,
     String? houseName,
+    String? email,
     double? duesAmount,
     String? status,
   }) async {
@@ -1070,6 +1189,7 @@ class ApiService {
       if (name != null && name.isNotEmpty) "name": name,
       if (phone != null && phone.isNotEmpty) "phone": phone,
       if (houseName != null && houseName.isNotEmpty) "house_name": houseName,
+      if (email != null) "email": email.trim(),
       if (duesAmount != null && duesAmount > 0)
         "monthly_dues_custom_amount": duesAmount,
       if (status != null && status.isNotEmpty) "status": status,
@@ -1080,23 +1200,47 @@ class ApiService {
     return _asMap(response.data);
   }
 
-  /// POST /admin/members/:id/approve.
-  Future<void> approveMemberOrThrow(String memberId) async {
-    await _send((dio) => dio.post("/admin/members/$memberId/approve"));
+  /// POST /admin/members/:id/approve → {member_id, status: ACTIVE,
+  /// revertible_until}. 409 when the member is no longer pending.
+  Future<Map<String, dynamic>> approveMemberOrThrow(String memberId) async {
+    final response =
+        await _send((dio) => dio.post("/admin/members/$memberId/approve"));
+    return _asMap(response.data);
   }
 
-  /// POST /admin/members/:id/reject.
-  Future<void> rejectMemberOrThrow(String memberId) async {
-    await _send((dio) => dio.post("/admin/members/$memberId/reject"));
+  /// POST /admin/members/:id/reject → {member_id, status: REJECTED,
+  /// revertible_until}. The member is soft-marked, not deleted, so the
+  /// decision can be undone with [revertApprovalOrThrow].
+  Future<Map<String, dynamic>> rejectMemberOrThrow(String memberId) async {
+    final response =
+        await _send((dio) => dio.post("/admin/members/$memberId/reject"));
+    return _asMap(response.data);
+  }
+
+  /// POST /admin/members/:id/revert-approval → {member_id, status:
+  /// PENDING_APPROVAL}. Undoes an approve or reject made in the last 10
+  /// minutes. 409 (reason in [ApiException.serverMessage]) when the window
+  /// has passed, the member has already paid, or the decision was not made
+  /// through the approvals flow.
+  Future<Map<String, dynamic>> revertApprovalOrThrow(String memberId) async {
+    final response = await _send(
+        (dio) => dio.post("/admin/members/$memberId/revert-approval"));
+    return _asMap(response.data);
   }
 
   /// POST /admin/alerts → {status, alert, audience}. [audience] is one of
-  /// ALL | OVERDUE_ONLY | FAMILY_HEADS (the server has no per-member target).
+  /// ALL | OVERDUE_ONLY | FAMILY_HEADS | MEMBER. MEMBER requires [memberIds]
+  /// (≤500, same Mahal) and reaches only those members. [type] is one of
+  /// DUES_REMINDER | PAYMENT_RECEIVED | ANNOUNCEMENT | EVENT | GENERAL; when
+  /// omitted the server picks DUES_REMINDER for OVERDUE_ONLY, else
+  /// ANNOUNCEMENT. An unknown audience or type answers 400.
   Future<Map<String, dynamic>> createAlertOrThrow({
     required String title,
     required String description,
     String severity = "INFO",
     String audience = "ALL",
+    List<String>? memberIds,
+    String? type,
   }) async {
     final response = await _send(
       (dio) => dio.post("/admin/alerts", data: {
@@ -1104,6 +1248,8 @@ class ApiService {
         "description": description,
         "severity": severity,
         "audience": audience,
+        if (memberIds != null && memberIds.isNotEmpty) "member_ids": memberIds,
+        if (type != null && type.isNotEmpty) "type": type,
       }),
     );
     return _asMap(response.data);
@@ -1141,9 +1287,13 @@ class ApiService {
     return data;
   }
 
-  /// POST /admin/excel/upload-preview (multipart, field `file`) → the
-  /// server's validation preview: {filename, total_rows, valid_rows,
-  /// duplicate_rows, preview_rows: [...]}. Pass either [path] or [bytes].
+  /// POST /admin/excel/upload-preview (multipart, field `file`, .xlsx or
+  /// .csv, ≤5 MB / 2000 rows) → the server's validation preview:
+  /// {batch_id, filename, total_rows, valid_rows, duplicate_rows,
+  /// invalid_rows, expires_at, preview_rows: [{row, name, phone, house_name,
+  /// monthly_dues, family_head, family_members_count, email,
+  /// status: VALID|DUPLICATE|INVALID, errors: [...]}]}. Pass either [path]
+  /// or [bytes].
   Future<Map<String, dynamic>> uploadExcelPreviewOrThrow({
     required String fileName,
     String? path,
@@ -1168,16 +1318,16 @@ class ApiService {
     return _asMap(response.data);
   }
 
-  /// POST /admin/excel/commit-import → {status, imported_count,
-  /// skipped_count, ingestion_batch}.
+  /// POST /admin/excel/commit-import {batch_id} → {status: COMPLETED |
+  /// ALREADY_COMMITTED, batch_id, imported, skipped}. Committing the same
+  /// batch twice is a no-op that answers ALREADY_COMMITTED with the original
+  /// counts. 404 when the batch is unknown or expired (24 h).
   Future<Map<String, dynamic>> commitExcelImportOrThrow({
-    required String fileName,
-    String? uploadId,
+    required String batchId,
   }) async {
     final response = await _send(
       (dio) => dio.post("/admin/excel/commit-import", data: {
-        "filename": fileName,
-        if (uploadId != null && uploadId.isNotEmpty) "upload_id": uploadId,
+        "batch_id": batchId,
       }),
     );
     return _asMap(response.data);

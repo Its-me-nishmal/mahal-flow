@@ -68,7 +68,9 @@ func JWTAuthMiddleware() fiber.Handler {
 
 		// Cross-tenant verification: Ensure token's tenant matches request tenant
 		reqTenant, _ := c.Locals("tenant_id").(string)
-		if reqTenant != "" && claims.MahalID != "" && claims.MahalID != reqTenant && claims.Role != "SUPER_ADMIN" {
+		// Only SUPER_ADMIN may act across tenants; every other token is bound to
+		// the tenant it was issued for (a token without one is bound to none).
+		if reqTenant != "" && claims.Role != "SUPER_ADMIN" && claims.MahalID != reqTenant {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 				"error":  "Token tenant mismatch: access to target organization is unauthorized",
 				"status": 403,

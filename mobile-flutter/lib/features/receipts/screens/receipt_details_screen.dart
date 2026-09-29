@@ -12,6 +12,7 @@ import '../../../core/utils/pdf_generator.dart';
 import '../../../core/widgets/app_buttons.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_page_scaffold.dart';
+import '../../../l10n/l10n.dart';
 import '../receipt_view.dart';
 
 /// The proof of a payment. Styled as a ticket — a floating card with a dashed
@@ -47,8 +48,10 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
   Future<File> _writePdf() async {
     final dir = await getApplicationDocumentsDirectory();
     final file = File('${dir.path}/$_fileName');
-    await file.writeAsBytes(
-      SimplePdfGenerator.generateReceiptPdf(
+    // The PDF stays English: its built-in Helvetica font has no Malayalam
+    // glyphs, and it is the record the office and banks read.
+    final bytes = L10n.inEnglish(
+      () => SimplePdfGenerator.generateReceiptPdf(
         receiptNumber: _r.receiptNumber,
         memberName: _r.memberName,
         amount: _r.amountLabel,
@@ -58,15 +61,17 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
         paymentMethod: _r.methodLabel,
         status: _r.statusLabel,
       ),
-      flush: true,
     );
+    await file.writeAsBytes(bytes, flush: true);
     return file;
   }
 
-  void _snack(String message) {
+  /// [message] is resolved after the mounted check, so callers never touch
+  /// the context across an async gap.
+  void _snack(String Function(AppLocalizations l10n) message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+        .showSnackBar(SnackBar(content: Text(message(context.l10n))));
   }
 
   Future<void> _download() async {
@@ -78,26 +83,30 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
       if (result.type != ResultType.done) {
         // Saved, but no PDF viewer is installed: offer the share sheet so
         // the member can still send it to Files / WhatsApp / Drive.
-        _snack('Receipt saved. No PDF viewer found — use Share to send it.');
+        _snack((l) => l.receiptPdfSavedNoViewer);
       }
     } catch (e) {
       debugPrint('[RECEIPT_PDF] $e');
-      _snack("Couldn't create the receipt PDF. Try again.");
+      _snack((l) => l.receiptPdfFailed);
     } finally {
       if (mounted) setState(() => _busy = _PdfAction.none);
     }
   }
 
-  String get _shareText => [
-        'MahalFlow payment receipt',
-        'Receipt no: ${_r.receiptNumber}',
-        'Member: ${_r.memberName}',
-        'Amount: ${_r.amountLabel}',
-        'For: ${_r.title} (${_r.subtitle})',
-        'Date: ${_r.dateTimeLabel}',
-        'Paid via: ${_r.methodLabel}',
-        'Status: ${_r.statusLabel}',
-      ].join('\n');
+  String get _shareText {
+    final l10n = context.l10n;
+    return [
+      l10n.receiptShareHeading,
+      l10n.receiptShareNumber(_r.receiptNumber),
+      l10n.receiptShareMember(_r.memberName),
+      l10n.receiptShareAmount(_r.amountLabel),
+      l10n.receiptShareFor(_r.title, _r.subtitle),
+      l10n.receiptShareDate(_r.dateTimeLabel),
+      l10n.receiptSharePaidVia(_r.methodLabel),
+      l10n.receiptShareStatus(_r.statusLabel),
+      if (_r.note != null) l10n.receiptShareNote(_r.note!),
+    ].join('\n');
+  }
 
   Future<void> _share() async {
     if (_busy != _PdfAction.none) return;
@@ -115,7 +124,7 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
       await SharePlus.instance.share(
         ShareParams(
           text: _shareText,
-          subject: 'Receipt ${_r.receiptNumber}',
+          subject: context.l10n.receiptShareSubject(_r.receiptNumber),
           files: pdf == null
               ? null
               : [XFile(pdf.path, mimeType: 'application/pdf')],
@@ -125,7 +134,7 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
       );
     } catch (e) {
       debugPrint('[RECEIPT_SHARE] $e');
-      _snack("Couldn't open the share sheet. Try again.");
+      _snack((l) => l.receiptShareFailed);
     } finally {
       if (mounted) setState(() => _busy = _PdfAction.none);
     }
@@ -133,38 +142,50 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
 
   Future<void> _copyText() async {
     await Clipboard.setData(ClipboardData(text: _shareText));
-    _snack('Receipt details copied');
+    if (!mounted) return;
+    _snack((l) => l.receiptDetailsCopied);
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return AppPageScaffold(
-      title: 'Receipt',
+      title: l10n.receiptTitle,
       eyebrow: _r.title,
       floatingChild: _receiptCard(context),
       content: [
         const SizedBox(height: AppSpacing.md),
         // Only a committed payment is a verified record worth sharing.
-        if (_r.isSuccess)
+        if (_r.isRefunded)
+          AppNoticeCard(
+            icon: Icons.undo_rounded,
+            title: l10n.receiptRefundedTitle,
+            message: _r.refundedAt == null
+                ? l10n.receiptRefundedBody
+                : l10n.receiptRefundedOnBody(_r.refundedAtLabel),
+            color: context.colors.info,
+            background: context.colors.infoBg,
+          )
+        else if (_r.isSuccess)
           AppNoticeCard(
             icon: Icons.verified_user_outlined,
-            title: 'Verified record',
-            message: 'Issued by your Mahal through MahalFlow. Safe to share.',
+            title: l10n.receiptVerifiedTitle,
+            message: l10n.receiptVerifiedBody,
             color: context.colors.success,
             background: context.colors.successBg,
           )
         else
           AppNoticeCard(
             icon: Icons.info_outline_rounded,
-            title: 'Payment ${_r.statusLabel.toLowerCase()}',
-            message: 'This record is not a confirmed payment receipt.',
+            title: l10n.receiptPaymentStatus(_r.statusLabel.toLowerCase()),
+            message: l10n.receiptNotConfirmedBody,
             color: context.colors.warning,
             background: context.colors.warningBg,
           ),
         const SizedBox(height: AppSpacing.sm),
         Center(
           child: AppTextActionButton(
-            label: 'Copy details as text',
+            label: l10n.receiptCopyAsText,
             icon: Icons.copy_rounded,
             onPressed: _copyText,
           ),
@@ -173,14 +194,16 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
       bottomBar: AppBottomActionBar(
         children: [
           AppPrimaryButton(
-            label: 'Download PDF',
+            label: l10n.receiptDownloadPdf,
             icon: Icons.download_rounded,
             isLoading: _busy == _PdfAction.download,
             onPressed: _busy == _PdfAction.none ? _download : null,
           ),
           const SizedBox(height: AppSpacing.sm),
           AppSecondaryButton(
-            label: _busy == _PdfAction.share ? 'Preparing…' : 'Share Receipt',
+            label: _busy == _PdfAction.share
+                ? l10n.receiptPreparing
+                : l10n.receiptShareReceipt,
             icon: Icons.ios_share_rounded,
             onPressed: _busy == _PdfAction.none ? _share : null,
           ),
@@ -190,7 +213,19 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
   }
 
   Widget _receiptCard(BuildContext context) {
+    final l10n = context.l10n;
     final ok = _r.isSuccess;
+    final refunded = _r.isRefunded;
+    final Color badgeFg = refunded
+        ? context.colors.info
+        : ok
+            ? context.colors.success
+            : context.colors.warning;
+    final Color badgeBg = refunded
+        ? context.colors.infoBg
+        : ok
+            ? context.colors.successBg
+            : context.colors.warningBg;
     return AppCard.floating(
       padding: EdgeInsets.zero,
       child: Column(
@@ -209,18 +244,25 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
                   height: 56,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: ok ? context.colors.successBg : context.colors.warningBg,
+                    color: badgeBg,
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    ok ? Icons.check_rounded : Icons.schedule_rounded,
+                    refunded
+                        ? Icons.undo_rounded
+                        : ok
+                            ? Icons.check_rounded
+                            : Icons.schedule_rounded,
                     size: 30,
-                    color: ok ? context.colors.success : context.colors.warning,
+                    color: badgeFg,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.ms),
                 Text(
-                  ok ? 'Payment successful' : 'Payment ${_r.statusLabel}',
+                  ok
+                      ? l10n.receiptPaymentSuccessful
+                      : l10n.receiptPaymentStatus(_r.statusLabel),
+                  textAlign: TextAlign.center,
                   style: context.text.body.copyWith(
                     color: context.colors.textSecondary,
                   ),
@@ -244,27 +286,39 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
             child: Column(
               children: [
                 AppDetailRow(
-                  label: 'Receipt number',
+                  label: l10n.receiptNumberLabel,
                   value: _r.receiptNumber,
                   emphasize: true,
                   copyable: _r.receiptNumber != '—',
                   onCopy: () {
                     Clipboard.setData(ClipboardData(text: _r.receiptNumber));
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Receipt number copied'),
-                        duration: Duration(seconds: 2),
+                      SnackBar(
+                        content: Text(l10n.receiptNumberCopied),
+                        duration: const Duration(seconds: 2),
                       ),
                     );
                   },
                 ),
-                AppDetailRow(label: 'Member', value: _r.memberName),
-                AppDetailRow(label: 'Payment type', value: _r.title),
                 AppDetailRow(
-                  label: _r.isDues ? 'Covers' : 'Fund',
+                    label: l10n.receiptMemberLabel, value: _r.memberName),
+                AppDetailRow(
+                    label: l10n.receiptPaymentTypeLabel, value: _r.title),
+                AppDetailRow(
+                  label: _r.isDues
+                      ? l10n.receiptCoversLabel
+                      : l10n.receiptFundLabel,
                   value: _r.subtitle,
                 ),
-                AppDetailRow(label: 'Paid via', value: _r.methodLabel),
+                AppDetailRow(
+                    label: l10n.receiptPaidViaLabel, value: _r.methodLabel),
+                if (_r.note != null)
+                  AppDetailRow(label: l10n.receiptNoteLabel, value: _r.note!),
+                if (refunded)
+                  AppDetailRow(
+                    label: l10n.receiptRefundedOnLabel,
+                    value: _r.refundedAtLabel,
+                  ),
               ],
             ),
           ),
@@ -286,7 +340,7 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  'Computer-generated receipt. No signature required.',
+                  l10n.receiptFooter,
                   textAlign: TextAlign.center,
                   style: context.text.small.copyWith(
                     color: context.colors.textMuted,

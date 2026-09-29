@@ -20,6 +20,7 @@ class AppRoutes {
 
   /// Optional `String` name.
   static const String pendingApproval = '/pending-approval';
+  static const String registrationRejected = '/registration-rejected';
 
   // Member
   static const String memberDashboard = '/member/dashboard';

@@ -44,6 +44,20 @@ class L10n {
     Intl.defaultLocale = localeName;
   }
 
+  /// Runs [body] with the context-free strings and intl formatters in
+  /// English, then restores the app language. For output that must stay
+  /// English whatever the UI language — the receipt PDF's built-in Helvetica
+  /// font has no Malayalam glyphs. Synchronous, so no frame sees the switch.
+  static T inEnglish<T>(T Function() body) {
+    final saved = Locale(_current.localeName);
+    setLocale(const Locale('en'));
+    try {
+      return body();
+    } finally {
+      setLocale(saved);
+    }
+  }
+
   static const List<Locale> supportedLocales =
       AppLocalizations.supportedLocales;
 }

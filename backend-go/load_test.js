@@ -2,20 +2,44 @@
  * MahalFlow Backend Concurrency, Load & Edge-Case Benchmark Suite
  */
 
-const BASE_URL = 'http://localhost:8080/api/v1';
+const BASE_URL = process.env.API_BASE_URL || 'http://localhost:8080/api/v1';
 const TENANT_A = 'MH_001_CALICUT';
 const TENANT_B = 'MH_002_KOCHI';
 
 let adminToken = '';
+let memberToken = '';
+
+// Credentials (every tenant route needs a MahalFlow JWT):
+//   ADMIN_TOKEN, or ADMIN_PHONE + ADMIN_PASSWORD (set with `go run ./cmd/setpassword`)
+//   MEMBER_TOKEN, or MEMBER_PHONE resolved via /auth/resolve — the latter only
+//   against a local server started with AUTH_DEV_BYPASS=true.
+const ADMIN_PHONE = process.env.ADMIN_PHONE || '+919847111222';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+const MEMBER_PHONE = process.env.MEMBER_PHONE || '+919847111222';
+
+const bearer = (tok) => (tok ? { Authorization: `Bearer ${tok}` } : {});
 
 async function getAdminToken() {
+  if (process.env.ADMIN_TOKEN) return process.env.ADMIN_TOKEN;
+  if (!ADMIN_PASSWORD) return '';
   const res = await fetch(`${BASE_URL}/auth/login`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': TENANT_A },
-    body: JSON.stringify({ phone: '+919847111222', password: 'adminPassword123' }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone: ADMIN_PHONE, password: ADMIN_PASSWORD, mahal_id: TENANT_A }),
   });
-  const data = await res.json();
-  return data.token;
+  const data = await res.json().catch(() => ({}));
+  return data.token || '';
+}
+
+async function getMemberToken() {
+  if (process.env.MEMBER_TOKEN) return process.env.MEMBER_TOKEN;
+  const res = await fetch(`${BASE_URL}/auth/resolve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': TENANT_A },
+    body: JSON.stringify({ phone: MEMBER_PHONE }),
+  });
+  const data = await res.json().catch(() => ({}));
+  return data.token || '';
 }
 
 async function measureRequest(name, fn) {
@@ -108,7 +132,7 @@ async function runScenario2_ConcurrentPayments() {
 
   // Fetch member profile to get dynamic next unpaid month
   const memberRes = await fetch(`${BASE_URL}/member/dashboard?member_id=MEM_001_9910`, {
-    headers: { 'X-Tenant-ID': TENANT_A },
+    headers: { 'X-Tenant-ID': TENANT_A, ...bearer(memberToken) },
   });
   const memberData = await memberRes.json();
   const lastPaid = memberData.last_paid_month || memberData.member?.last_paid_month || '2026-08';
@@ -127,6 +151,7 @@ async function runScenario2_ConcurrentPayments() {
           headers: {
             'Content-Type': 'application/json',
             'X-Tenant-ID': TENANT_A,
+            ...bearer(memberToken),
           },
           body: JSON.stringify({
             member_id: 'MEM_001_9910',
@@ -149,6 +174,7 @@ async function runScenario2_ConcurrentPayments() {
           headers: {
             'Content-Type': 'application/json',
             'X-Tenant-ID': TENANT_A,
+            ...bearer(memberToken),
           },
           body: JSON.stringify({
             transaction_id: txnId,
@@ -188,7 +214,7 @@ async function runScenario3_IdempotencyStressTest() {
 
   // Fetch member profile to get dynamic next unpaid month
   const memberRes = await fetch(`${BASE_URL}/member/dashboard?member_id=MEM_001_9910`, {
-    headers: { 'X-Tenant-ID': TENANT_A },
+    headers: { 'X-Tenant-ID': TENANT_A, ...bearer(memberToken) },
   });
   const memberData = await memberRes.json();
   const lastPaid = memberData.last_paid_month || memberData.member?.last_paid_month || '2026-08';
@@ -206,6 +232,7 @@ async function runScenario3_IdempotencyStressTest() {
           headers: {
             'Content-Type': 'application/json',
             'X-Tenant-ID': TENANT_A,
+            ...bearer(adminToken), // CASH is committee-only
           },
           body: JSON.stringify({
             member_id: 'MEM_001_9910',
@@ -251,7 +278,7 @@ async function runScenario4_TenantIsolation() {
 
   // Attempt to access Tenant A member using Tenant B credentials
   const crossTenantRes = await fetch(`${BASE_URL}/member/dashboard?member_id=MEM_001_9910`, {
-    headers: { 'X-Tenant-ID': TENANT_B },
+    headers: { 'X-Tenant-ID': TENANT_B, ...bearer(memberToken) },
   });
 
   const body = await crossTenantRes.json();
@@ -350,11 +377,14 @@ async function runScenario5_ReceiptHashChainVerification() {
 async function main() {
   console.log('======================================================');
   console.log(' MahalFlow Go Backend Load & Reliability Test Suite ');
-  console.log(' Target: http://localhost:8080');
+  console.log(` Target: ${BASE_URL}`);
   console.log(' Time:   ' + new Date().toISOString());
   console.log('======================================================');
 
   adminToken = await getAdminToken();
+  memberToken = await getMemberToken();
+  if (!adminToken) console.log('⚠️  No admin JWT (set ADMIN_PASSWORD or ADMIN_TOKEN): admin scenarios will get 401.');
+  if (!memberToken) console.log('⚠️  No member JWT (set MEMBER_TOKEN or run the server with AUTH_DEV_BYPASS=true): member scenarios will get 401.');
   console.log('🔐 Obtained Admin JWT Token successfully.');
 
   await runScenario1_ConcurrentReads();

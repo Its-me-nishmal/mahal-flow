@@ -10,6 +10,7 @@ import '../../../core/widgets/app_buttons.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_page_scaffold.dart';
 import '../../../core/widgets/app_text_field.dart';
+import '../../../l10n/l10n.dart';
 import '../data/admin_context.dart';
 import '../utils/admin_format.dart';
 
@@ -30,11 +31,13 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
   late final TextEditingController _nameController;
   late final TextEditingController _phoneController;
   late final TextEditingController _houseController;
+  late final TextEditingController _emailController;
   late final TextEditingController _amountController;
 
   late String _initialName;
   late String _initialPhone;
   late String _initialHouse;
+  late String _initialEmail;
   late String _initialAmount;
   late String _initialStatus;
 
@@ -46,7 +49,10 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
   int _statusFieldEpoch = 0;
   String? _nameError;
   String? _phoneError;
+  String? _emailError;
   String? _amountError;
+
+  static final RegExp _emailPattern = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]{2,}$');
 
   /// The latest server-confirmed member, returned to the caller on pop.
   late Map<String, dynamic> _current = Map<String, dynamic>.from(widget.member);
@@ -73,6 +79,7 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
     final phone = m['phone']?.toString() ?? '';
     _initialPhone = phone.isEmpty ? '' : PhoneFormat.nationalDigits(phone);
     _initialHouse = m['house_name']?.toString() ?? '';
+    _initialEmail = m['email']?.toString() ?? '';
     final dues = AdminFormat.monthlyDues(m);
     _initialAmount = dues == null ? '' : dues.round().toString();
     _initialStatus = _normalizeStatus(m['status']?.toString());
@@ -82,11 +89,13 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
     _nameController = TextEditingController(text: _initialName);
     _phoneController = TextEditingController(text: _initialPhone);
     _houseController = TextEditingController(text: _initialHouse);
+    _emailController = TextEditingController(text: _initialEmail);
     _amountController = TextEditingController(text: _initialAmount);
     for (final c in [
       _nameController,
       _phoneController,
       _houseController,
+      _emailController,
       _amountController,
     ]) {
       c.addListener(_onEdited);
@@ -98,6 +107,7 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
     _nameController.dispose();
     _phoneController.dispose();
     _houseController.dispose();
+    _emailController.dispose();
     _amountController.dispose();
     super.dispose();
   }
@@ -108,6 +118,7 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
       _nameController.text.trim() != _initialName.trim() ||
       _phoneController.text.replaceAll(' ', '') != _initialPhone ||
       _houseController.text.trim() != _initialHouse.trim() ||
+      _emailController.text.trim() != _initialEmail.trim() ||
       _amountController.text.trim() != _initialAmount ||
       _selectedStatus != _savedStatus;
 
@@ -115,24 +126,31 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
     final name = _nameController.text.trim();
     final phone = _phoneController.text.trim();
     final amount = int.tryParse(_amountController.text.trim());
+    final email = _emailController.text.trim();
+    final l10n = context.l10n;
     setState(() {
-      _nameError = name.isEmpty ? 'A name is required' : null;
+      _nameError = name.isEmpty ? l10n.editMemberNameRequired : null;
       _phoneError = phone.isEmpty
-          ? 'A phone number is required'
+          ? l10n.editMemberPhoneRequired
           : PhoneFormat.isValidIndianMobile(phone)
               ? null
-              : 'Enter a 10-digit mobile number';
-      _amountError = (amount == null || amount < 1)
-          ? 'Monthly dues must be at least ₹1'
+              : l10n.adminPhoneInvalid;
+      _emailError = email.isNotEmpty && !_emailPattern.hasMatch(email)
+          ? l10n.editProfileEmailInvalid
           : null;
+      _amountError =
+          (amount == null || amount < 1) ? l10n.editMemberDuesInvalid : null;
     });
-    return _nameError == null && _phoneError == null && _amountError == null;
+    return _nameError == null &&
+        _phoneError == null &&
+        _emailError == null &&
+        _amountError == null;
   }
 
-  void _showError(ApiException e, String what) {
+  void _showError(ApiException e, String Function(String reason) message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text("Couldn't $what. ${e.userMessage}"),
+        content: Text(message(e.userMessage)),
         backgroundColor: context.colors.error,
       ),
     );
@@ -146,6 +164,8 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
     final name = _nameController.text.trim();
     final phone = '+91${PhoneFormat.nationalDigits(_phoneController.text)}';
     final house = _houseController.text.trim();
+    final email = _emailController.text.trim();
+    final emailChanged = email != _initialEmail.trim();
     final dues = double.parse(_amountController.text.trim());
 
     setState(() => _isSaving = true);
@@ -155,6 +175,7 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
         name: name,
         phone: phone,
         houseName: house,
+        email: emailChanged ? email : null,
         duesAmount: dues,
         status: _selectedStatus,
       );
@@ -164,6 +185,7 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
         'name': name,
         'phone': phone,
         if (house.isNotEmpty) 'house_name': house,
+        'email': email,
         'monthly_dues_custom_amount': dues,
         'status': _selectedStatus,
       };
@@ -171,7 +193,7 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
       AdminContext.invalidateMembers();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Member details updated.'),
+          content: Text(context.l10n.editMemberUpdated),
           backgroundColor: context.colors.primary,
         ),
       );
@@ -179,18 +201,17 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() => _isSaving = false);
-      _showError(e, 'save the changes');
+      _showError(e, context.l10n.editMemberSaveFailed);
     }
   }
 
   Future<bool> _confirmSuspend() async {
     final confirmed = await AppBottomSheet.showConfirmation(
       context: context,
-      title: 'Suspend this member?',
+      title: context.l10n.editMemberSuspendTitle,
       message:
-          'Dues collection for ${_nameController.text.trim()} will be put on '
-          'hold until you reactivate them. Their history is kept.',
-      confirmLabel: 'Suspend',
+          context.l10n.editMemberSuspendMessage(_nameController.text.trim()),
+      confirmLabel: context.l10n.editMemberSuspend,
       icon: Icons.person_off_rounded,
       destructive: true,
     );
@@ -205,10 +226,10 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
     } else {
       final ok = await AppBottomSheet.showConfirmation(
         context: context,
-        title: 'Reactivate this member?',
-        message: '${_nameController.text.trim()} becomes active again and '
-            'dues collection resumes.',
-        confirmLabel: 'Reactivate',
+        title: context.l10n.editMemberReactivateTitle,
+        message: context.l10n
+            .editMemberReactivateMessage(_nameController.text.trim()),
+        confirmLabel: context.l10n.editMemberReactivate,
         icon: Icons.person_add_alt_1_rounded,
       );
       if (ok != true || !mounted) return;
@@ -233,8 +254,8 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(suspending
-              ? 'This member is now suspended.'
-              : 'This member is active again.'),
+              ? context.l10n.editMemberNowSuspended
+              : context.l10n.editMemberActiveAgain),
           backgroundColor: suspending ? context.colors.error : context.colors.primary,
         ),
       );
@@ -242,7 +263,10 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
       if (!mounted) return;
       setState(() => _isSaving = false);
       _showError(
-          e, suspending ? 'suspend this member' : 'reactivate this member');
+          e,
+          suspending
+              ? context.l10n.editMemberSuspendFailed
+              : context.l10n.editMemberReactivateFailed);
     }
   }
 
@@ -271,10 +295,10 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
     }
     final discard = await AppBottomSheet.showConfirmation(
       context: context,
-      title: 'Discard changes?',
-      message: 'Your edits to this member have not been saved.',
-      confirmLabel: 'Discard',
-      cancelLabel: 'Keep editing',
+      title: context.l10n.editMemberDiscardTitle,
+      message: context.l10n.editMemberDiscardMessage,
+      confirmLabel: context.l10n.editMemberDiscard,
+      cancelLabel: context.l10n.editMemberKeepEditing,
       destructive: true,
     );
     if (discard == true && mounted) {
@@ -285,6 +309,7 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     final suspended = _savedStatus == 'SUSPENDED';
+    final l10n = context.l10n;
 
     return PopScope<Object?>(
       canPop: false,
@@ -292,19 +317,19 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
         if (!didPop) _handlePop();
       },
       child: AppPageScaffold(
-        title: 'Edit member',
-        eyebrow: _initialName.isEmpty ? 'Member' : _initialName,
-        subtitle: 'Changes take effect for the next dues cycle.',
+        title: l10n.adminEditMember,
+        eyebrow: _initialName.isEmpty ? l10n.commonMember : _initialName,
+        subtitle: l10n.editMemberSubtitle,
         onBack: _handlePop,
         floatingChild: AppCard.floating(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const AppSectionLabel('Household'),
+              AppSectionLabel(l10n.editMemberHousehold),
               const SizedBox(height: AppSpacing.md),
               AppTextField(
                 controller: _nameController,
-                label: 'Full name',
+                label: l10n.adminFullName,
                 icon: Icons.person_outline_rounded,
                 errorText: _nameError,
                 textCapitalization: TextCapitalization.words,
@@ -316,7 +341,7 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
               const SizedBox(height: AppSpacing.md),
               AppTextField(
                 controller: _phoneController,
-                label: 'Mobile number',
+                label: l10n.adminMobileNumber,
                 icon: Icons.phone_iphone_rounded,
                 prefixText: '+91 ',
                 keyboardType: TextInputType.phone,
@@ -333,9 +358,22 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
               const SizedBox(height: AppSpacing.md),
               AppTextField(
                 controller: _houseController,
-                label: 'House or family name',
+                label: l10n.editMemberHouseLabel,
                 icon: Icons.home_outlined,
                 textCapitalization: TextCapitalization.words,
+                textInputAction: TextInputAction.next,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              AppTextField(
+                controller: _emailController,
+                label: l10n.editProfileEmail,
+                hint: l10n.editProfileEmailHint,
+                icon: Icons.mail_outline_rounded,
+                keyboardType: TextInputType.emailAddress,
+                errorText: _emailError,
+                onChanged: (_) {
+                  if (_emailError != null) setState(() => _emailError = null);
+                },
               ),
             ],
           ),
@@ -346,16 +384,16 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const AppSectionLabel('Membership'),
+                AppSectionLabel(l10n.editMemberMembership),
                 const SizedBox(height: AppSpacing.md),
                 AppTextField(
                   controller: _amountController,
-                  label: 'Monthly dues (₹)',
+                  label: l10n.adminMonthlyDuesRupees,
                   prefixText: '₹ ',
                   keyboardType: TextInputType.number,
                   errorText: _amountError,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  helper: 'Change only when the committee agreed a new amount.',
+                  helper: l10n.editMemberDuesHelper,
                   onChanged: (_) {
                     if (_amountError != null) {
                       setState(() => _amountError = null);
@@ -366,14 +404,19 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
                 KeyedSubtree(
                   key: ValueKey(_statusFieldEpoch),
                   child: AppDropdownField<String>(
-                    label: 'Membership status',
+                    label: l10n.editMemberStatusLabel,
                     value: _selectedStatus,
-                    items: const [
-                      DropdownMenuItem(value: 'ACTIVE', child: Text('Active')),
-                      DropdownMenuItem(
-                          value: 'GRACE_PERIOD', child: Text('Grace period')),
-                      DropdownMenuItem(
-                          value: 'SUSPENDED', child: Text('Suspended')),
+                    items: [
+                      for (final (value, label) in [
+                        ('ACTIVE', l10n.adminFormatStatusActive),
+                        ('GRACE_PERIOD', l10n.adminFormatStatusGrace),
+                        ('SUSPENDED', l10n.adminFormatStatusSuspended),
+                      ])
+                        DropdownMenuItem(
+                          value: value,
+                          child: Text(label,
+                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ),
                     ],
                     onChanged: _isSaving ? (_) {} : _onStatusChanged,
                   ),
@@ -384,10 +427,8 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
           const SizedBox(height: AppSpacing.md),
           AppNoticeCard(
             icon: Icons.info_outline_rounded,
-            title: 'Suspending is reversible',
-            message:
-                'A suspended household keeps its history and can be reactivated '
-                'from this screen.',
+            title: l10n.editMemberReversibleTitle,
+            message: l10n.editMemberReversibleBody,
             color: context.colors.info,
             background: context.colors.infoBg,
           ),
@@ -395,14 +436,16 @@ class _EditMemberDetailsScreenState extends State<EditMemberDetailsScreen> {
         bottomBar: AppBottomActionBar(
           children: [
             AppPrimaryButton(
-              label: 'Save changes',
+              label: l10n.editMemberSaveChanges,
               icon: Icons.check_rounded,
               isLoading: _isSaving,
               onPressed: (_isSaving || !_isDirty) ? null : _handleSave,
             ),
             const SizedBox(height: AppSpacing.sm),
             AppSecondaryButton(
-              label: suspended ? 'Reactivate member' : 'Suspend member',
+              label: suspended
+                  ? l10n.editMemberReactivateMember
+                  : l10n.editMemberSuspendMember,
               icon: suspended
                   ? Icons.person_add_alt_1_outlined
                   : Icons.person_off_outlined,

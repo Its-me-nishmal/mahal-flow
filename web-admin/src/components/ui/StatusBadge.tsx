@@ -1,6 +1,6 @@
 import { cn } from "@/lib/cn";
 
-type StatusVariant = "ACTIVE" | "GRACE_PERIOD" | "READ_ONLY" | "SUSPENDED" | "PENDING" | "SUCCESS" | "FAILED" | "REFUNDED" | "CANCELLED";
+type StatusVariant = "ACTIVE" | "GRACE_PERIOD" | "READ_ONLY" | "SUSPENDED" | "PENDING" | "SUCCESS" | "FAILED" | "REFUNDED" | "CANCELLED" | "REJECTED" | "PENDING_APPROVAL" | "NOT_CONFIGURED";
 
 const variantStyles: Record<StatusVariant, string> = {
   ACTIVE: "bg-success-bg text-success",
@@ -12,6 +12,9 @@ const variantStyles: Record<StatusVariant, string> = {
   FAILED: "bg-error-bg text-error",
   CANCELLED: "bg-surface-variant text-text-secondary",
   REFUNDED: "bg-info-bg text-info",
+  REJECTED: "bg-error-bg text-error",
+  PENDING_APPROVAL: "bg-warning-bg text-warning",
+  NOT_CONFIGURED: "bg-error-bg text-error",
 };
 
 const dotStyles: Record<StatusVariant, string> = {
@@ -24,6 +27,9 @@ const dotStyles: Record<StatusVariant, string> = {
   FAILED: "bg-error",
   CANCELLED: "bg-text-secondary",
   REFUNDED: "bg-info",
+  REJECTED: "bg-error",
+  PENDING_APPROVAL: "bg-warning",
+  NOT_CONFIGURED: "bg-error",
 };
 
 export function StatusBadge({ status }: { status: string }) {

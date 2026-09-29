@@ -6,7 +6,8 @@ import '../../l10n/l10n.dart';
 
 class AppSearchBar extends StatelessWidget {
   final TextEditingController controller;
-  final String hintText;
+  /// Placeholder; defaults to the localized "Search…".
+  final String? hintText;
   final ValueChanged<String>? onChanged;
   final VoidCallback? onClear;
   final Widget? suffixAction;
@@ -14,7 +15,7 @@ class AppSearchBar extends StatelessWidget {
   const AppSearchBar({
     super.key,
     required this.controller,
-    this.hintText = "Search...",
+    this.hintText,
     this.onChanged,
     this.onClear,
     this.suffixAction,
@@ -52,7 +53,7 @@ class AppSearchBar extends StatelessWidget {
                 fontWeight: FontWeight.w500,
               ),
               decoration: InputDecoration(
-                hintText: hintText,
+                hintText: hintText ?? '${context.l10n.commonSearch}…',
                 hintStyle: context.text.body.copyWith(
                   color: context.colors.textMuted,
                 ),

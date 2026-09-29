@@ -9,6 +9,7 @@ import '../../../core/widgets/app_bottom_sheet.dart';
 import '../../../core/widgets/app_buttons.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_text_field.dart';
+import '../../../l10n/l10n.dart';
 import '../data/admin_context.dart';
 
 /// "Register a member" sheet, shared by the dashboard and the directory.
@@ -20,8 +21,8 @@ class AddMemberSheet {
   static Future<Map<String, dynamic>?> show(BuildContext context) {
     return AppBottomSheet.show<Map<String, dynamic>>(
       context: context,
-      title: 'Register a member',
-      subtitle: 'Adds a household to the Mahal directory',
+      title: context.l10n.addMemberTitle,
+      subtitle: context.l10n.addMemberSubtitle,
       icon: Icons.person_add_rounded,
       builder: (ctx, _) => const _AddMemberForm(),
     );
@@ -61,16 +62,15 @@ class _AddMemberFormState extends State<_AddMemberForm> {
     final name = _name.text.trim();
     final phone = _phone.text.trim();
     final dues = int.tryParse(_dues.text.trim());
+    final l10n = context.l10n;
     setState(() {
-      _nameError = name.isEmpty ? 'Enter the member\'s full name' : null;
+      _nameError = name.isEmpty ? l10n.addMemberNameRequired : null;
       _phoneError = phone.isEmpty
-          ? 'Enter a phone number'
+          ? l10n.addMemberPhoneRequired
           : PhoneFormat.isValidIndianMobile(phone)
               ? null
-              : 'Enter a 10-digit mobile number';
-      _duesError = (dues == null || dues < 1)
-          ? 'Enter the monthly dues in whole rupees (at least ₹1)'
-          : null;
+              : l10n.adminPhoneInvalid;
+      _duesError = (dues == null || dues < 1) ? l10n.addMemberDuesInvalid : null;
     });
     return _nameError == null && _phoneError == null && _duesError == null;
   }
@@ -103,13 +103,14 @@ class _AddMemberFormState extends State<_AddMemberForm> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         AppTextField(
           controller: _name,
-          label: 'Full name',
-          hint: 'e.g. Abdul Kareem',
+          label: l10n.adminFullName,
+          hint: l10n.addMemberNameHint,
           errorText: _nameError,
           textCapitalization: TextCapitalization.words,
           textInputAction: TextInputAction.next,
@@ -120,7 +121,7 @@ class _AddMemberFormState extends State<_AddMemberForm> {
         const SizedBox(height: AppSpacing.md),
         AppTextField(
           controller: _phone,
-          label: 'Mobile number',
+          label: l10n.adminMobileNumber,
           hint: '98471 11222',
           prefixText: '+91 ',
           keyboardType: TextInputType.phone,
@@ -137,16 +138,16 @@ class _AddMemberFormState extends State<_AddMemberForm> {
         const SizedBox(height: AppSpacing.md),
         AppTextField(
           controller: _house,
-          label: 'House name (optional)',
-          hint: 'e.g. Darussalam',
+          label: l10n.addMemberHouseLabel,
+          hint: l10n.addMemberHouseHint,
           textCapitalization: TextCapitalization.words,
           textInputAction: TextInputAction.next,
         ),
         const SizedBox(height: AppSpacing.md),
         AppTextField(
           controller: _dues,
-          label: 'Monthly dues (₹)',
-          hint: 'As agreed by the committee',
+          label: l10n.adminMonthlyDuesRupees,
+          hint: l10n.addMemberDuesHint,
           prefixText: '₹ ',
           keyboardType: TextInputType.number,
           errorText: _duesError,
@@ -161,7 +162,7 @@ class _AddMemberFormState extends State<_AddMemberForm> {
           const SizedBox(height: AppSpacing.md),
           AppNoticeCard(
             icon: Icons.error_outline_rounded,
-            title: "Couldn't register this member",
+            title: l10n.addMemberError,
             message: _submitError!,
             color: context.colors.error,
             background: context.colors.errorBg,
@@ -169,7 +170,7 @@ class _AddMemberFormState extends State<_AddMemberForm> {
         ],
         const SizedBox(height: AppSpacing.lg),
         AppPrimaryButton(
-          label: 'Register member',
+          label: l10n.addMemberSubmit,
           icon: Icons.check_rounded,
           isLoading: _saving,
           onPressed: _saving ? null : _submit,

@@ -25,7 +25,7 @@ export default function MemberManagementPage() {
 
   const loadMembers = () => {
     setLoading(true);
-    ApiClient.getMembers("MH_001_CALICUT", 1, 100)
+    ApiClient.getMembers(undefined, 1, 100)
       .then((res) => {
         if (res && res.members) {
           setMembers(res.members);
@@ -77,7 +77,9 @@ export default function MemberManagementPage() {
       (m.name || "").toLowerCase().includes(search.toLowerCase()) ||
       (m.id || "").toLowerCase().includes(search.toLowerCase()) ||
       (m.phone || "").includes(search) ||
-      (m.house_name || "").toLowerCase().includes(search.toLowerCase());
+      (m.house_name || "").toLowerCase().includes(search.toLowerCase()) ||
+      (m.email || "").toLowerCase().includes(search.toLowerCase()) ||
+      (m.city || "").toLowerCase().includes(search.toLowerCase());
 
     return matchesFilter && matchesSearch;
   });
@@ -93,7 +95,7 @@ export default function MemberManagementPage() {
     <>
       <PageHeader
         title="Members Directory"
-        description="Live MongoDB member registry and automated dues ledger for MH_001_CALICUT."
+        description="Live MongoDB member registry and automated dues ledger."
         actions={
           <div className="flex gap-2">
             <button
@@ -153,7 +155,7 @@ export default function MemberManagementPage() {
             <div
               key={member.id}
               className={`bg-surface border border-border-base rounded-2xl p-5 hover:border-primary/40 hover:shadow-md transition-all duration-200 ${
-                member.status === "SUSPENDED" ? "opacity-60" : ""
+                member.status === "SUSPENDED" || member.status === "REJECTED" ? "opacity-60" : ""
               }`}
             >
               <div className="flex items-start justify-between mb-4">
@@ -182,6 +184,21 @@ export default function MemberManagementPage() {
                   <span>Phone Number</span>
                   <span className="font-medium text-text-primary">{member.phone}</span>
                 </div>
+                {member.email && (
+                  <div className="flex justify-between items-center gap-3">
+                    <span>Email</span>
+                    <span className="font-medium text-text-primary truncate">{member.email}</span>
+                  </div>
+                )}
+                {(member.city || member.state) && (
+                  <div className="flex justify-between items-center gap-3">
+                    <span>Location</span>
+                    <span className="font-medium text-text-primary truncate">
+                      {[member.city, member.state].filter(Boolean).join(", ")}
+                      {member.pincode ? ` ${member.pincode}` : ""}
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between items-center">
                   <span>Monthly Rate</span>
                   <span className="font-semibold text-text-primary">

@@ -26,7 +26,7 @@ export function Sidebar() {
   const [unreadAlerts, setUnreadAlerts] = useState<number>(0);
 
   useEffect(() => {
-    ApiClient.getAlerts("MH_001_CALICUT")
+    ApiClient.getAlerts()
       .then((res) => {
         if (res && res.alerts) {
           const active = res.alerts.filter((a: any) => a.status === "ACTIVE").length;

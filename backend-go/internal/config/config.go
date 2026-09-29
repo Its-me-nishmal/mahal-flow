@@ -16,12 +16,19 @@ type Config struct {
 	PaymentTestMode bool
 
 	// Payment Gateway (PayU)
-	PGAPIURL      string
-	PGAPIKey      string
-	PGSalt        string
-	PGClientID    string
+	PGAPIURL       string
+	PGAPIKey       string
+	PGSalt         string
+	PGClientID     string
 	PGClientSecret string
-	PGReturnURL   string
+	PGReturnURL    string
+	// PGInfoAPIURL is PayU's Merchant Web Service host (postservice:
+	// verify_payment, refunds, SI). Empty = derived from PG_API_URL
+	// (test.payu.in for the sandbox, info.payu.in otherwise).
+	PGInfoAPIURL string
+	// PublicBaseURL is how browsers reach this API (for signed checkout
+	// links), e.g. https://api.example.org. Default http://localhost:<PORT>.
+	PublicBaseURL string
 
 	// WhatsApp Business Cloud API (Meta)
 	WhatsAppAPIURL             string
@@ -40,6 +47,15 @@ type Config struct {
 	FCMServiceAccountFile string
 	FCMServiceAccountJSON string
 	FCMDryRun             bool
+
+	// Firebase Authentication. /auth/resolve and /auth/register verify the
+	// app's Firebase ID token against this project. Defaults to the FCM
+	// service account's project_id when unset.
+	FirebaseProjectID string
+	// AuthDevBypass lets /auth/resolve and /auth/register trust a posted
+	// phone when no ID token is sent. Local development only; refused when
+	// ENV=production.
+	AuthDevBypass bool
 }
 
 func Load() *Config {
@@ -113,6 +129,8 @@ func Load() *Config {
 		PGClientID:      pgClientID,
 		PGClientSecret:  pgClientSecret,
 		PGReturnURL:     pgReturnURL,
+		PGInfoAPIURL:    os.Getenv("PG_INFO_API_URL"),
+		PublicBaseURL:   publicBaseURL(port),
 
 		WhatsAppAPIURL:             waAPIURL,
 		WhatsAppAPIVersion:         waAPIVersion,
@@ -128,5 +146,15 @@ func Load() *Config {
 		FCMServiceAccountFile: os.Getenv("FCM_SERVICE_ACCOUNT_FILE"),
 		FCMServiceAccountJSON: os.Getenv("FCM_SERVICE_ACCOUNT_JSON"),
 		FCMDryRun:             os.Getenv("FCM_DRY_RUN") == "true",
+
+		FirebaseProjectID: os.Getenv("FIREBASE_PROJECT_ID"),
+		AuthDevBypass:     os.Getenv("AUTH_DEV_BYPASS") == "true",
 	}
+}
+
+func publicBaseURL(port string) string {
+	if v := os.Getenv("PUBLIC_BASE_URL"); v != "" {
+		return v
+	}
+	return "http://localhost:" + port
 }

@@ -13,6 +13,7 @@ import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_page_scaffold.dart';
 import '../../../core/widgets/empty_state_view.dart';
 import '../../../core/widgets/shimmer_loading.dart';
+import '../../../l10n/l10n.dart';
 import '../data/admin_context.dart';
 import '../utils/admin_format.dart';
 
@@ -67,36 +68,30 @@ class _PendingApprovalsScreenState extends State<PendingApprovalsScreen> {
     try {
       await _api.approveMemberOrThrow(id);
       if (!mounted) return;
-      _removeRow(id);
+      final index = _removeRow(id);
       AdminContext.invalidateMembers();
-      final approved = {...m, 'status': 'ACTIVE'};
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${m['name'] ?? 'Member'} approved.'),
-          backgroundColor: context.colors.primary,
-          action: SnackBarAction(
-            label: 'View member',
-            textColor: context.colors.onPrimary,
-            onPressed: () => Navigator.of(context)
-                .pushNamed(AppRoutes.adminMemberDetails, arguments: approved),
-          ),
-        ),
+      _showUndo(
+        m,
+        index,
+        context.l10n.approvalsApproved(
+            m['name']?.toString() ?? context.l10n.commonMember),
+        background: context.colors.primary,
       );
     } on ApiException catch (e) {
-      _failed(id, "Couldn't approve. ${e.userMessage}");
+      if (!mounted) return;
+      _failed(id, context.l10n.approvalsApproveFailed(e.userMessage));
     }
   }
 
   Future<void> _reject(Map<String, dynamic> m) async {
     final id = AdminFormat.memberId(m);
     if (id.isEmpty || _busy.contains(id)) return;
-    final name = m['name']?.toString() ?? 'this person';
+    final name = m['name']?.toString() ?? context.l10n.approvalsThisPerson;
     final ok = await AppBottomSheet.showConfirmation(
       context: context,
-      title: 'Reject this request?',
-      message: '$name will not be added to the Mahal. They would need to '
-          'register again to be reconsidered.',
-      confirmLabel: 'Reject request',
+      title: context.l10n.approvalsRejectTitle,
+      message: context.l10n.approvalsRejectMessage(name),
+      confirmLabel: context.l10n.approvalsRejectRequest,
       destructive: true,
     );
     if (ok != true || !mounted) return;
@@ -105,21 +100,83 @@ class _PendingApprovalsScreenState extends State<PendingApprovalsScreen> {
     try {
       await _api.rejectMemberOrThrow(id);
       if (!mounted) return;
-      _removeRow(id);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Request from $name rejected.')),
-      );
+      final index = _removeRow(id);
+      _showUndo(m, index, context.l10n.approvalsRejected(name));
     } on ApiException catch (e) {
-      _failed(id, "Couldn't reject. ${e.userMessage}");
+      if (!mounted) return;
+      _failed(id, context.l10n.approvalsRejectFailed(e.userMessage));
     }
   }
 
-  void _removeRow(String id) {
+  /// Removes the row and returns where it was, so an undo can put it back.
+  int _removeRow(String id) {
+    final index = _pending.indexWhere((p) => AdminFormat.memberId(p) == id);
     setState(() {
       _busy.remove(id);
       _pending.removeWhere((p) => AdminFormat.memberId(p) == id);
     });
     AdminContext.pendingCount.value = _pending.length;
+    return index;
+  }
+
+  /// Snackbar after an approve or reject, with Undo. The server allows the
+  /// revert for 10 minutes and only while the member has made no payment.
+  void _showUndo(
+    Map<String, dynamic> m,
+    int index,
+    String message, {
+    Color? background,
+  }) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: background,
+        duration: const Duration(seconds: 8),
+        action: SnackBarAction(
+          label: context.l10n.commonUndo,
+          textColor: background == null ? null : context.colors.onPrimary,
+          onPressed: () => _undo(m, index),
+        ),
+      ),
+    );
+  }
+
+  /// POST /admin/members/:id/revert-approval → back to PENDING_APPROVAL.
+  Future<void> _undo(Map<String, dynamic> m, int index) async {
+    final id = AdminFormat.memberId(m);
+    if (id.isEmpty || _busy.contains(id)) return;
+    try {
+      await _api.revertApprovalOrThrow(id);
+      if (!mounted) return;
+      AdminContext.invalidateMembers();
+      setState(() {
+        if (!_pending.any((p) => AdminFormat.memberId(p) == id)) {
+          final at = (index < 0 || index > _pending.length)
+              ? _pending.length
+              : index;
+          _pending.insert(at, {...m, 'status': 'PENDING_APPROVAL'});
+        }
+      });
+      AdminContext.pendingCount.value = _pending.length;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.l10n.approvalsUndone(
+              m['name']?.toString() ?? context.l10n.commonMember)),
+        ),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      // 409: too late, already paid, or not decided here — the server says
+      // which.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.l10n.approvalsUndoFailed(e.userMessage)),
+          backgroundColor: context.colors.error,
+        ),
+      );
+    }
   }
 
   void _failed(String id, String message) {
@@ -131,21 +188,18 @@ class _PendingApprovalsScreenState extends State<PendingApprovalsScreen> {
   }
 
   String get _subtitle {
-    if (_isLoading || _error != null) {
-      return 'New members waiting to join your Mahal.';
-    }
-    if (_pending.isEmpty) return 'Nobody is waiting right now.';
-    final n = _pending.length;
-    return n == 1
-        ? '1 person is waiting to join.'
-        : '$n people are waiting to join.';
+    final l10n = context.l10n;
+    if (_isLoading || _error != null) return l10n.approvalsSubtitleDefault;
+    if (_pending.isEmpty) return l10n.approvalsSubtitleNone;
+    return l10n.approvalsSubtitleCount(_pending.length);
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return AppPageScaffold(
-      title: 'Pending approvals',
-      eyebrow: 'Committee',
+      title: l10n.adminPendingApprovals,
+      eyebrow: l10n.adminCommitteeEyebrow,
       subtitle: _subtitle,
       onBack: () {
         final nav = Navigator.of(context);
@@ -160,7 +214,7 @@ class _PendingApprovalsScreenState extends State<PendingApprovalsScreen> {
         const SizedBox(height: AppSpacing.md),
         if (_isLoading)
           ShimmerLoading(
-            semanticsLabel: 'Loading requests',
+            semanticsLabel: l10n.approvalsLoading,
             child: Column(
               children: [
                 for (var i = 0; i < 3; i++)
@@ -170,7 +224,7 @@ class _PendingApprovalsScreenState extends State<PendingApprovalsScreen> {
           )
         else if (_error != null)
           AppErrorStateView(
-            title: "Couldn't load requests",
+            title: l10n.approvalsLoadError,
             description: _error!.userMessage,
             onRetry: () {
               setState(() => _isLoading = true);
@@ -178,10 +232,10 @@ class _PendingApprovalsScreenState extends State<PendingApprovalsScreen> {
             },
           )
         else if (_pending.isEmpty)
-          const EmptyStateView(
+          EmptyStateView(
             icon: Icons.verified_user_outlined,
-            title: 'No pending requests',
-            description: 'Everyone who asked to join has been reviewed.',
+            title: l10n.approvalsEmptyTitle,
+            description: l10n.approvalsEmptyBody,
           )
         else
           for (final m in _pending) _row(m),
@@ -227,7 +281,9 @@ class _PendingApprovalsScreenState extends State<PendingApprovalsScreen> {
                         style: context.text.small,
                       ),
                       if (requested.isNotEmpty)
-                        Text('Requested $requested',
+                        Text(context.l10n.approvalsRequested(requested),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: context.text.caption),
                     ],
                   ),
@@ -237,7 +293,7 @@ class _PendingApprovalsScreenState extends State<PendingApprovalsScreen> {
             if (id.isEmpty) ...[
               const SizedBox(height: AppSpacing.sm),
               Text(
-                'This request has no member ID and cannot be actioned here.',
+                context.l10n.approvalsNoId,
                 style: context.text.caption.copyWith(color: context.colors.error),
               ),
             ],
@@ -246,7 +302,7 @@ class _PendingApprovalsScreenState extends State<PendingApprovalsScreen> {
               children: [
                 Expanded(
                   child: AppSecondaryButton(
-                    label: 'Reject',
+                    label: context.l10n.approvalsReject,
                     color: context.colors.error,
                     height: AppSizes.minTouch,
                     onPressed: disabled ? null : () => _reject(m),
@@ -255,7 +311,7 @@ class _PendingApprovalsScreenState extends State<PendingApprovalsScreen> {
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: AppPrimaryButton(
-                    label: 'Approve',
+                    label: context.l10n.approvalsApprove,
                     icon: Icons.check_rounded,
                     height: AppSizes.minTouch,
                     isLoading: busy,

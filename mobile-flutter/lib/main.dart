@@ -8,10 +8,12 @@ import 'package:intl/date_symbol_data_local.dart';
 
 import 'core/navigation/app_routes.dart';
 import 'core/navigation/route_not_found_screen.dart';
+import 'core/network/api_service.dart';
 import 'core/services/push_notification_service.dart';
 import 'core/settings/app_settings.dart';
 import 'core/theme/app_theme.dart';
 import 'l10n/l10n.dart';
+import 'features/auth/auth_flow.dart';
 import 'features/auth/screens/splash_screen.dart';
 import 'features/auth/screens/onboarding_screen.dart';
 import 'features/auth/screens/login_screen.dart';
@@ -55,6 +57,12 @@ void main() async {
     final text = await rootBundle.loadString('assets/google_fonts/OFL.txt');
     yield LicenseEntryWithLineBreaks(const ['google_fonts'], text);
   });
+
+  // A 401 first tries a silent re-resolve with a fresh Firebase ID token;
+  // if that fails the user is sent back to sign-in.
+  AuthFlow.installSessionRefresh();
+  ApiService.onSessionExpired =
+      () => AuthFlow.handleSessionExpired(rootNavigatorKey.currentState);
 
   // Firebase (reads android/app/google-services.json). Guarded so a
   // misconfigured environment still opens the app.
@@ -136,6 +144,12 @@ class MahalFlowApp extends StatelessWidget {
         final name = args is String ? args : null;
         return page(
             AppRoutes.pendingApproval, (_) => PendingApprovalScreen(name: name),
+            arguments: name);
+
+      case AppRoutes.registrationRejected:
+        final name = args is String ? args : null;
+        return page(AppRoutes.registrationRejected,
+            (_) => PendingApprovalScreen(name: name, rejected: true),
             arguments: name);
 
       // Payment results describe a real payment, so they require

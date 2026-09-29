@@ -7,9 +7,12 @@ import '../../../core/widgets/app_bottom_sheet.dart';
 import '../../../core/widgets/app_buttons.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_text_field.dart';
+import '../../../l10n/l10n.dart';
 
-/// Broadcast composer (POST /admin/alerts). Resolves to true only when the
-/// server created the notice.
+/// Broadcast composer (POST /admin/alerts). The admin picks the audience and
+/// the notice type (ANNOUNCEMENT | DUES_REMINDER | EVENT | GENERAL —
+/// PAYMENT_RECEIVED is issued by the server itself). Resolves to true only
+/// when the server created the notice.
 class BroadcastSheet {
   BroadcastSheet._();
 
@@ -23,8 +26,8 @@ class BroadcastSheet {
   }) {
     return AppBottomSheet.show<bool>(
       context: context,
-      title: 'Broadcast a notice',
-      subtitle: 'Goes to member phones as an in-app notice',
+      title: context.l10n.broadcastTitle,
+      subtitle: context.l10n.broadcastSubtitle,
       icon: Icons.campaign_rounded,
       builder: (ctx, _) => _BroadcastForm(
         totalMembers: totalMembers,
@@ -36,10 +39,15 @@ class BroadcastSheet {
 
 class _Audience {
   final String value;
-  final String label;
+  final String Function(AppLocalizations l10n) label;
   final bool warning;
   const _Audience(this.value, this.label, this.warning);
 }
+
+String _audienceAll(AppLocalizations l) => l.broadcastAudienceAll;
+String _audienceOverdue(AppLocalizations l) => l.broadcastAudienceOverdue;
+String _audienceFamilyHeads(AppLocalizations l) =>
+    l.broadcastAudienceFamilyHeads;
 
 class _BroadcastForm extends StatefulWidget {
   final int? totalMembers;
@@ -52,21 +60,24 @@ class _BroadcastForm extends StatefulWidget {
 
 class _BroadcastFormState extends State<_BroadcastForm> {
   static const List<_Audience> _audiences = [
-    _Audience('ALL', 'All members', false),
-    _Audience('OVERDUE_ONLY', 'Pending dues', true),
-    _Audience('FAMILY_HEADS', 'Family heads', false),
+    _Audience('ALL', _audienceAll, false),
+    _Audience('OVERDUE_ONLY', _audienceOverdue, true),
+    _Audience('FAMILY_HEADS', _audienceFamilyHeads, false),
   ];
 
-  static const String _reminderTitle = 'Monthly dues reminder';
-  static const String _reminderBody =
-      'Respected member, our records show pending dues for your household. '
-      'You can pay in the MahalFlow app.';
+  String get _reminderTitle => context.l10n.broadcastReminderTitle;
+  String get _reminderBody => context.l10n.broadcastReminderBody;
 
   final ApiService _api = ApiService();
   final _title = TextEditingController();
   final _message = TextEditingController();
   String _audience = 'ALL';
   String _severity = 'INFO';
+
+  /// Follows the audience (OVERDUE_ONLY → DUES_REMINDER, else ANNOUNCEMENT,
+  /// as the server defaults) until the admin picks one.
+  String _type = 'ANNOUNCEMENT';
+  bool _typePicked = false;
   bool _sending = false;
   String? _titleError;
   String? _messageError;
@@ -82,6 +93,9 @@ class _BroadcastFormState extends State<_BroadcastForm> {
   void _selectAudience(String value) {
     setState(() {
       _audience = value;
+      if (!_typePicked) {
+        _type = value == 'OVERDUE_ONLY' ? 'DUES_REMINDER' : 'ANNOUNCEMENT';
+      }
       if (value == 'OVERDUE_ONLY') {
         _severity = 'WARNING';
         // Suggest reminder copy only into empty fields — never overwrite
@@ -97,19 +111,20 @@ class _BroadcastFormState extends State<_BroadcastForm> {
   }
 
   String get _recipientPhrase {
+    final l10n = context.l10n;
     switch (_audience) {
       case 'OVERDUE_ONLY':
         final n = widget.pendingMembers;
         return n == null
-            ? 'every household with pending dues'
-            : '$n ${n == 1 ? 'household' : 'households'} with pending dues';
+            ? l10n.broadcastRecipientsOverdueAll
+            : l10n.broadcastRecipientsOverdueCount(n);
       case 'FAMILY_HEADS':
-        return 'every family head';
+        return l10n.broadcastRecipientsFamilyHeads;
       default:
         final n = widget.totalMembers;
         return n == null
-            ? 'every member'
-            : 'all $n ${n == 1 ? 'household' : 'households'}';
+            ? l10n.broadcastRecipientsAll
+            : l10n.broadcastRecipientsAllCount(n);
     }
   }
 
@@ -117,18 +132,18 @@ class _BroadcastFormState extends State<_BroadcastForm> {
     FocusScope.of(context).unfocus();
     final title = _title.text.trim();
     final body = _message.text.trim();
+    final l10n = context.l10n;
     setState(() {
-      _titleError = title.isEmpty ? 'Add a title' : null;
-      _messageError = body.isEmpty ? 'Write the message' : null;
+      _titleError = title.isEmpty ? l10n.broadcastTitleRequired : null;
+      _messageError = body.isEmpty ? l10n.broadcastMessageRequired : null;
     });
     if (_titleError != null || _messageError != null) return;
 
     final ok = await AppBottomSheet.showConfirmation(
       context: context,
-      title: 'Send this notice?',
-      message: '"$title" goes to $_recipientPhrase as an in-app notice and a '
-          'push notification. It cannot be unsent.',
-      confirmLabel: 'Send notice',
+      title: l10n.broadcastConfirmTitle,
+      message: l10n.broadcastConfirmMessage(title, _recipientPhrase),
+      confirmLabel: l10n.broadcastSendNotice,
       icon: Icons.send_rounded,
     );
     if (ok != true || !mounted) return;
@@ -143,6 +158,7 @@ class _BroadcastFormState extends State<_BroadcastForm> {
         description: body,
         severity: _severity,
         audience: _audience,
+        type: _type,
       );
       if (!mounted) return;
       Navigator.of(context).pop(true);
@@ -157,10 +173,11 @@ class _BroadcastFormState extends State<_BroadcastForm> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('WHO SHOULD GET THIS', style: context.text.label),
+        Text(l10n.broadcastWhoHeading, style: context.text.label),
         const SizedBox(height: AppSpacing.sm),
         Wrap(
           spacing: AppSpacing.sm,
@@ -168,12 +185,13 @@ class _BroadcastFormState extends State<_BroadcastForm> {
           children: [for (final a in _audiences) _audienceChip(a)],
         ),
         const SizedBox(height: AppSpacing.xs),
-        Text('Sends to $_recipientPhrase.', style: context.text.caption),
+        Text(l10n.broadcastSendsTo(_recipientPhrase),
+            style: context.text.caption),
         const SizedBox(height: AppSpacing.md),
         AppTextField(
           controller: _title,
-          label: 'Notice title',
-          hint: 'e.g. Friday prayer timing change',
+          label: l10n.broadcastNoticeTitle,
+          hint: l10n.broadcastTitleHint,
           errorText: _titleError,
           maxLength: 80,
           textCapitalization: TextCapitalization.sentences,
@@ -184,8 +202,8 @@ class _BroadcastFormState extends State<_BroadcastForm> {
         const SizedBox(height: AppSpacing.md),
         AppTextField(
           controller: _message,
-          label: 'Message',
-          hint: 'Write the full announcement…',
+          label: l10n.broadcastMessage,
+          hint: l10n.broadcastMessageHint,
           errorText: _messageError,
           maxLines: 4,
           textCapitalization: TextCapitalization.sentences,
@@ -195,12 +213,43 @@ class _BroadcastFormState extends State<_BroadcastForm> {
         ),
         const SizedBox(height: AppSpacing.md),
         AppDropdownField<String>(
-          label: 'Priority',
+          label: l10n.broadcastType,
+          value: _type,
+          items: [
+            for (final (value, label) in [
+              ('ANNOUNCEMENT', l10n.alertTypeAnnouncement),
+              ('DUES_REMINDER', l10n.alertTypeDuesReminder),
+              ('EVENT', l10n.alertTypeEvent),
+              ('GENERAL', l10n.broadcastTypeGeneral),
+            ])
+              DropdownMenuItem(
+                value: value,
+                child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+          ],
+          onChanged: (v) {
+            if (v != null) {
+              setState(() {
+                _type = v;
+                _typePicked = true;
+              });
+            }
+          },
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppDropdownField<String>(
+          label: l10n.broadcastPriority,
           value: _severity,
-          items: const [
-            DropdownMenuItem(value: 'INFO', child: Text('Informational')),
-            DropdownMenuItem(value: 'WARNING', child: Text('Dues reminder')),
-            DropdownMenuItem(value: 'CRITICAL', child: Text('Critical')),
+          items: [
+            for (final (value, label) in [
+              ('INFO', l10n.broadcastPriorityInfo),
+              ('WARNING', l10n.broadcastPriorityReminder),
+              ('CRITICAL', l10n.broadcastPriorityCritical),
+            ])
+              DropdownMenuItem(
+                value: value,
+                child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
           ],
           onChanged: (v) {
             if (v != null) setState(() => _severity = v);
@@ -210,7 +259,7 @@ class _BroadcastFormState extends State<_BroadcastForm> {
           const SizedBox(height: AppSpacing.md),
           AppNoticeCard(
             icon: Icons.error_outline_rounded,
-            title: 'Notice not sent',
+            title: l10n.broadcastNotSent,
             message: _submitError!,
             color: context.colors.error,
             background: context.colors.errorBg,
@@ -218,7 +267,7 @@ class _BroadcastFormState extends State<_BroadcastForm> {
         ],
         const SizedBox(height: AppSpacing.lg),
         AppPrimaryButton(
-          label: 'Review & send',
+          label: l10n.broadcastReviewSend,
           icon: Icons.send_rounded,
           isLoading: _sending,
           onPressed: _sending ? null : _send,
@@ -229,13 +278,14 @@ class _BroadcastFormState extends State<_BroadcastForm> {
 
   Widget _audienceChip(_Audience a) {
     final selected = _audience == a.value;
+    final label = a.label(context.l10n);
     final fg = selected
         ? (a.warning ? context.colors.warning : context.colors.primary)
         : context.colors.textSecondary;
     return Semantics(
       selected: selected,
       button: true,
-      label: a.label,
+      label: label,
       excludeSemantics: true,
       child: InkWell(
         onTap: _sending ? null : () => _selectAudience(a.value),
@@ -261,8 +311,12 @@ class _BroadcastFormState extends State<_BroadcastForm> {
                 Icon(Icons.check_rounded, size: 16, color: fg),
                 const SizedBox(width: AppSpacing.xs),
               ],
-              Text(a.label,
-                  style: context.text.buttonSmall.copyWith(color: fg)),
+              Flexible(
+                child: Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.text.buttonSmall.copyWith(color: fg)),
+              ),
             ],
           ),
         ),

@@ -14,9 +14,12 @@ import '../utils/admin_format.dart';
 
 /// Numbers from GET /admin/dashboard.
 class AdminDashboardStats {
-  /// All-time sum of completed payments. The server field is named
-  /// `total_collected_mtd` but is not limited to the current month.
+  /// Completed payments this calendar month (`total_collected_mtd`,
+  /// month-to-date in the server's timezone, Asia/Kolkata).
   final double totalCollected;
+
+  /// All-time sum (`total_collected_all_time`); null on older servers.
+  final double? totalCollectedAllTime;
   final double pendingDues;
   final int paidMembers;
   final int pendingMembers;
@@ -25,6 +28,7 @@ class AdminDashboardStats {
 
   const AdminDashboardStats({
     required this.totalCollected,
+    this.totalCollectedAllTime,
     required this.pendingDues,
     required this.paidMembers,
     required this.pendingMembers,
@@ -37,6 +41,8 @@ class AdminDashboardStats {
     int i(String k) => (d[k] as num?)?.toInt() ?? 0;
     return AdminDashboardStats(
       totalCollected: dbl('total_collected_mtd'),
+      totalCollectedAllTime:
+          (d['total_collected_all_time'] as num?)?.toDouble(),
       pendingDues: dbl('total_pending_dues'),
       paidMembers: i('paid_members'),
       pendingMembers: i('pending_members'),
@@ -100,7 +106,7 @@ class CollectionCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  l10n.adminDashTotalCollectedCaps,
+                  l10n.adminDashCollectedMonthCaps,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: context.text.label,
@@ -130,10 +136,17 @@ class CollectionCard extends StatelessWidget {
             child: Text(
               Inr.format(s.totalCollected),
               semanticsLabel:
-                  l10n.adminDashTotalCollectedSpoken(Inr.spoken(s.totalCollected)),
+                  l10n.adminDashCollectedMonthSpoken(Inr.spoken(s.totalCollected)),
               style: context.text.amount.copyWith(color: context.colors.success),
             ),
           ),
+          if (s.totalCollectedAllTime != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              l10n.adminDashAllTime(Inr.format(s.totalCollectedAllTime!)),
+              style: context.text.small,
+            ),
+          ],
           const SizedBox(height: AppSpacing.xs),
           Text(
             l10n.adminDashOutstandingAcrossMahal(
@@ -216,7 +229,7 @@ class DashboardStatGrid extends StatelessWidget {
       children: [
         row(
           AppStatTile(
-            label: l10n.adminDashTotalCollected,
+            label: l10n.adminDashCollectedMonth,
             value: Inr.format(s.totalCollected),
             icon: Icons.trending_up_rounded,
             color: context.colors.success,

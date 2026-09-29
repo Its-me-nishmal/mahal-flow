@@ -10,11 +10,23 @@ import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/app_buttons.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_page_scaffold.dart';
+import '../../../l10n/l10n.dart';
 import '../utils/share_file.dart';
 
 /// Steps shared by the import flow so the indicator reads the same on every
 /// screen: choose → upload & validate → review → done.
-const List<String> kImportSteps = ['Choose', 'Validate', 'Review', 'Done'];
+List<String> importSteps(BuildContext context) {
+  final l10n = context.l10n;
+  return [
+    l10n.importStepChoose,
+    l10n.importStepValidate,
+    l10n.importStepReview,
+    l10n.importStepDone,
+  ];
+}
+
+/// Number of steps in [importSteps].
+const int kImportStepCount = 4;
 
 /// Arguments for [AppRoutes.adminImportPreview].
 class ImportPreviewArgs {
@@ -33,8 +45,10 @@ class BulkExcelImportStep1Screen extends StatefulWidget {
 
 class _BulkExcelImportStep1ScreenState
     extends State<BulkExcelImportStep1Screen> {
-  static const List<String> _extensions = ['xlsx', 'xls', 'csv'];
-  static const String _templateHeader = 'name,phone,house_name,monthly_dues';
+  // Legacy binary .xls is rejected by the server ("save as .xlsx or .csv").
+  static const List<String> _extensions = ['xlsx', 'csv'];
+  static const String _templateHeader =
+      'name,phone,house_name,monthly_dues,family_head,family_members_count,email';
 
   final ApiService _api = ApiService();
   PlatformFile? _file;
@@ -60,15 +74,17 @@ class _BulkExcelImportStep1ScreenState
       if (f != null) {
         final ext = f.name.split('.').last.toLowerCase();
         if (!_extensions.contains(ext)) {
-          setState(() => _error = 'Choose an .xlsx, .xls or .csv file.');
+          setState(() => _error = context.l10n.importErrorExtension);
         } else if (f.size == 0) {
-          setState(() => _error = 'That file is empty.');
+          setState(() => _error = context.l10n.importErrorEmpty);
         } else {
           setState(() => _file = f);
         }
       }
     } catch (e) {
-      if (mounted) setState(() => _error = "Couldn't open the file picker. $e");
+      if (mounted) {
+        setState(() => _error = context.l10n.importErrorPicker('$e'));
+      }
     } finally {
       if (mounted) setState(() => _picking = false);
     }
@@ -115,12 +131,12 @@ class _BulkExcelImportStep1ScreenState
         bytes: utf8.encode('$_templateHeader\n'),
         fileName: 'mahalflow_members_template.csv',
         mimeType: 'text/csv',
-        subject: 'MahalFlow member import template',
+        subject: context.l10n.importTemplateSubject,
       );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Couldn't create the template. $e")),
+          SnackBar(content: Text(context.l10n.importTemplateError('$e'))),
         );
       }
     } finally {
@@ -137,10 +153,11 @@ class _BulkExcelImportStep1ScreenState
   @override
   Widget build(BuildContext context) {
     final step = _uploading ? 1 : 0;
+    final l10n = context.l10n;
     return AppPageScaffold(
-      title: 'Import members',
-      eyebrow: 'Step ${step + 1} of ${kImportSteps.length}',
-      subtitle: 'Bring a whole directory in from a spreadsheet.',
+      title: l10n.importTitle,
+      eyebrow: l10n.importStepOf(step + 1, kImportStepCount),
+      subtitle: l10n.importSubtitle,
       onBack: () {
         final nav = Navigator.of(context);
         if (nav.canPop()) {
@@ -152,7 +169,7 @@ class _BulkExcelImportStep1ScreenState
       floatingChild: AppCard.floating(
         child: Column(
           children: [
-            AppStepIndicator(steps: kImportSteps, currentIndex: step),
+            AppStepIndicator(steps: importSteps(context), currentIndex: step),
             const SizedBox(height: AppSpacing.lg),
             _uploadArea(),
             if (_uploading) ...[
@@ -162,7 +179,7 @@ class _BulkExcelImportStep1ScreenState
                 child: LinearProgressIndicator(
                   value: _progress,
                   minHeight: AppSpacing.sm,
-                  semanticsLabel: 'Upload progress',
+                  semanticsLabel: l10n.importUploadProgress,
                   backgroundColor: context.colors.border,
                   valueColor:
                       AlwaysStoppedAnimation<Color>(context.colors.primary),
@@ -171,8 +188,8 @@ class _BulkExcelImportStep1ScreenState
               const SizedBox(height: AppSpacing.xs),
               Text(
                 _progress == null || _progress! >= 1
-                    ? 'Validating on the server…'
-                    : 'Uploading ${(_progress! * 100).round()}%',
+                    ? l10n.importValidating
+                    : l10n.importUploading((_progress! * 100).round()),
                 style: context.text.caption,
               ),
             ],
@@ -184,7 +201,7 @@ class _BulkExcelImportStep1ScreenState
         if (_error != null) ...[
           AppNoticeCard(
             icon: Icons.error_outline_rounded,
-            title: "Couldn't use this file",
+            title: l10n.importFileError,
             message: _error!,
             color: context.colors.error,
             background: context.colors.errorBg,
@@ -205,11 +222,10 @@ class _BulkExcelImportStep1ScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Get the template', style: context.text.listTitle),
+                    Text(l10n.importGetTemplate, style: context.text.listTitle),
                     const SizedBox(height: AppSpacing.xs / 2),
                     Text(
-                      'A CSV with name, phone, house_name and monthly_dues '
-                      'columns. Save or send it from the share sheet.',
+                      l10n.importTemplateDesc,
                       style: context.text.small,
                     ),
                   ],
@@ -230,10 +246,8 @@ class _BulkExcelImportStep1ScreenState
         const SizedBox(height: AppSpacing.md),
         AppNoticeCard(
           icon: Icons.info_outline_rounded,
-          title: 'Nothing is saved yet',
-          message:
-              'The server checks the file first. You review its results before '
-              'anything is written to the directory.',
+          title: l10n.importNothingSaved,
+          message: l10n.importNothingSavedDesc,
           color: context.colors.info,
           background: context.colors.infoBg,
         ),
@@ -241,7 +255,7 @@ class _BulkExcelImportStep1ScreenState
       bottomBar: AppBottomActionBar(
         children: [
           AppPrimaryButton(
-            label: 'Upload & validate',
+            label: l10n.importUploadValidate,
             icon: Icons.arrow_forward_rounded,
             isLoading: _uploading,
             onPressed: (_file != null && !_uploading) ? _upload : null,
@@ -254,11 +268,12 @@ class _BulkExcelImportStep1ScreenState
   Widget _uploadArea() {
     final f = _file;
     final selected = f != null;
+    final l10n = context.l10n;
     return Semantics(
       button: true,
       label: selected
-          ? 'Selected file ${f.name}. Tap to choose a different file.'
-          : 'Choose a spreadsheet',
+          ? l10n.importSelectedFileSemantics(f.name)
+          : l10n.importChooseSpreadsheet,
       excludeSemantics: true,
       child: InkWell(
         onTap: (_picking || _uploading) ? null : _pickFile,
@@ -304,7 +319,7 @@ class _BulkExcelImportStep1ScreenState
               ),
               const SizedBox(height: AppSpacing.ms),
               Text(
-                selected ? f.name : 'Choose a spreadsheet',
+                selected ? f.name : l10n.importChooseSpreadsheet,
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -312,13 +327,15 @@ class _BulkExcelImportStep1ScreenState
               ),
               const SizedBox(height: AppSpacing.xs),
               Text(
-                selected ? _size(f.size) : 'Accepts .xlsx, .xls and .csv files',
+                selected ? _size(f.size) : l10n.importAccepts,
+                textAlign: TextAlign.center,
                 style: context.text.small,
               ),
               if (selected && !_uploading) ...[
                 const SizedBox(height: AppSpacing.ms),
                 Text(
-                  'Tap to choose a different file',
+                  l10n.importTapToChange,
+                  textAlign: TextAlign.center,
                   style: context.text.buttonSmall
                       .copyWith(color: context.colors.primary),
                 ),

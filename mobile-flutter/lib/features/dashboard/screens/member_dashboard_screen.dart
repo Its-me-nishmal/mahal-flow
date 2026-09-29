@@ -181,6 +181,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
       context,
       mahalName: _data?.mahalName,
       officePhone: MemberHelpSheet.contactPhoneFrom(_data?.raw),
+      whatsApp: MemberHelpSheet.contactWhatsAppFrom(_data?.raw),
     );
   }
 

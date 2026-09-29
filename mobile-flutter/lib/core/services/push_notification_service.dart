@@ -244,8 +244,9 @@ class PushNotificationService {
     }
   }
 
-  // Structured fields only (type / audience / severity): a title such as
-  // "Payment received" must not turn into a "Pay Dues Now" prompt.
+  // Structured fields only (alert_type / audience / severity): a title such
+  // as "Payment received" must not turn into a "Pay Dues Now" prompt. The
+  // push's own `type` is the routing kind, so `alert_type` is read first.
   AlertType _alertTypeFor(Map<String, dynamic> data) => alertTypeFromApi(data);
 
   Map<String, dynamic> _decode(String? payload) {

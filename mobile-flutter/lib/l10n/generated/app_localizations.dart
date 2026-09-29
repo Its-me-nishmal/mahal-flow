@@ -302,24 +302,6 @@ abstract class AppLocalizations {
   /// **'Loading collection summary'**
   String get adminDashLoadingCollection;
 
-  /// No description provided for @adminDashTotalCollectedCaps.
-  ///
-  /// In en, this message translates to:
-  /// **'TOTAL COLLECTED'**
-  String get adminDashTotalCollectedCaps;
-
-  /// No description provided for @adminDashTotalCollected.
-  ///
-  /// In en, this message translates to:
-  /// **'Total collected'**
-  String get adminDashTotalCollected;
-
-  /// No description provided for @adminDashTotalCollectedSpoken.
-  ///
-  /// In en, this message translates to:
-  /// **'Total collected {amount}'**
-  String adminDashTotalCollectedSpoken(String amount);
-
   /// No description provided for @adminDashOutstandingAcrossMahal.
   ///
   /// In en, this message translates to:
@@ -1224,7 +1206,7 @@ abstract class AppLocalizations {
   /// No description provided for @approvalsRejectMessage.
   ///
   /// In en, this message translates to:
-  /// **'{name} will not be added to the Mahal. They would need to register again to be reconsidered.'**
+  /// **'{name} will not be added to the Mahal and cannot sign in. You can undo this for 10 minutes.'**
   String approvalsRejectMessage(String name);
 
   /// No description provided for @approvalsRejectRequest.
@@ -1659,12 +1641,6 @@ abstract class AppLocalizations {
   /// **'Contributions'**
   String get reportsContributions;
 
-  /// No description provided for @reportsPendingDues.
-  ///
-  /// In en, this message translates to:
-  /// **'Pending dues'**
-  String get reportsPendingDues;
-
   /// No description provided for @reportsTransactionsError.
   ///
   /// In en, this message translates to:
@@ -1746,7 +1722,7 @@ abstract class AppLocalizations {
   /// No description provided for @importErrorExtension.
   ///
   /// In en, this message translates to:
-  /// **'Choose an .xlsx, .xls or .csv file.'**
+  /// **'Choose an .xlsx or .csv file. Save older .xls files as .xlsx first.'**
   String get importErrorExtension;
 
   /// No description provided for @importErrorEmpty.
@@ -1824,7 +1800,7 @@ abstract class AppLocalizations {
   /// No description provided for @importTemplateDesc.
   ///
   /// In en, this message translates to:
-  /// **'A CSV with name, phone, house_name and monthly_dues columns. Save or send it from the share sheet.'**
+  /// **'A CSV with name, phone, house_name, monthly_dues, family_head, family_members_count and email columns. Save or send it from the share sheet.'**
   String get importTemplateDesc;
 
   /// No description provided for @importNothingSaved.
@@ -1860,7 +1836,7 @@ abstract class AppLocalizations {
   /// No description provided for @importAccepts.
   ///
   /// In en, this message translates to:
-  /// **'Accepts .xlsx, .xls and .csv files'**
+  /// **'Accepts .xlsx and .csv files'**
   String get importAccepts;
 
   /// No description provided for @importTapToChange.
@@ -2046,7 +2022,7 @@ abstract class AppLocalizations {
   /// No description provided for @importDuesPerMonth.
   ///
   /// In en, this message translates to:
-  /// **'₹{amount}/mo'**
+  /// **'{amount}/mo'**
   String importDuesPerMonth(String amount);
 
   /// No description provided for @importFinished.
@@ -2088,7 +2064,7 @@ abstract class AppLocalizations {
   /// No description provided for @gatewayKeyNotShown.
   ///
   /// In en, this message translates to:
-  /// **'Not shown in the app'**
+  /// **'Not set'**
   String get gatewayKeyNotShown;
 
   /// No description provided for @gatewayTitle.
@@ -2112,13 +2088,13 @@ abstract class AppLocalizations {
   /// No description provided for @gatewayManagedTitle.
   ///
   /// In en, this message translates to:
-  /// **'Managed from web admin'**
+  /// **'Managed from server config'**
   String get gatewayManagedTitle;
 
   /// No description provided for @gatewayManagedDesc.
   ///
   /// In en, this message translates to:
-  /// **'Gateway keys, webhook secrets and routing are set up in the MahalFlow web admin. This screen is read-only and never shows secrets.'**
+  /// **'Gateway credentials and routing are set in the MahalFlow server configuration. This screen is read-only and never shows secrets.'**
   String get gatewayManagedDesc;
 
   /// No description provided for @gatewayConfigured.
@@ -2148,7 +2124,7 @@ abstract class AppLocalizations {
   /// No description provided for @gatewayEmptyDesc.
   ///
   /// In en, this message translates to:
-  /// **'Set one up in the web admin to accept online payments.'**
+  /// **'Add gateway credentials to the server configuration to accept online payments.'**
   String get gatewayEmptyDesc;
 
   /// No description provided for @gatewayPrimaryHeading.
@@ -2196,7 +2172,7 @@ abstract class AppLocalizations {
   /// No description provided for @gatewayKeyId.
   ///
   /// In en, this message translates to:
-  /// **'Key ID'**
+  /// **'Merchant key'**
   String get gatewayKeyId;
 
   /// No description provided for @gatewayId.
@@ -3495,18 +3471,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'PIN code'**
   String get editProfilePincode;
-
-  /// No description provided for @editProfileOfficeKeepsTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'What the office keeps'**
-  String get editProfileOfficeKeepsTitle;
-
-  /// No description provided for @editProfileOfficeKeepsBody.
-  ///
-  /// In en, this message translates to:
-  /// **'Your name and house name are saved to your membership record. Email, street, city and PIN code are not kept by the office yet.'**
-  String get editProfileOfficeKeepsBody;
 
   /// No description provided for @editProfileSaving.
   ///
@@ -5973,6 +5937,330 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Receipt number'**
   String get payResultReceiptNumber;
+
+  /// No description provided for @statusNotConfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'Not configured'**
+  String get statusNotConfigured;
+
+  /// No description provided for @importRowNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Row {row}'**
+  String importRowNumber(int row);
+
+  /// No description provided for @importNoBatch.
+  ///
+  /// In en, this message translates to:
+  /// **'This preview has no batch ID from the server. Upload the file again.'**
+  String get importNoBatch;
+
+  /// No description provided for @importStatusAlreadyCommitted.
+  ///
+  /// In en, this message translates to:
+  /// **'Already imported'**
+  String get importStatusAlreadyCommitted;
+
+  /// No description provided for @importAlreadyCommittedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This file was already imported'**
+  String get importAlreadyCommittedTitle;
+
+  /// No description provided for @importAlreadyCommittedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'No new members were added. The counts below are from the first import.'**
+  String get importAlreadyCommittedBody;
+
+  /// No description provided for @gatewayMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Mode'**
+  String get gatewayMode;
+
+  /// No description provided for @gatewayModeLive.
+  ///
+  /// In en, this message translates to:
+  /// **'Live'**
+  String get gatewayModeLive;
+
+  /// No description provided for @gatewayModeTest.
+  ///
+  /// In en, this message translates to:
+  /// **'Test'**
+  String get gatewayModeTest;
+
+  /// No description provided for @gatewayModeSimulated.
+  ///
+  /// In en, this message translates to:
+  /// **'{mode} · simulated'**
+  String gatewayModeSimulated(String mode);
+
+  /// No description provided for @gatewaySimulatedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments are simulated'**
+  String get gatewaySimulatedTitle;
+
+  /// No description provided for @gatewaySimulatedDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'The server is in payment test mode: no real gateway calls are made and no money moves.'**
+  String get gatewaySimulatedDesc;
+
+  /// No description provided for @gatewayMethods.
+  ///
+  /// In en, this message translates to:
+  /// **'Methods'**
+  String get gatewayMethods;
+
+  /// No description provided for @gatewayAutoPay.
+  ///
+  /// In en, this message translates to:
+  /// **'AutoPay'**
+  String get gatewayAutoPay;
+
+  /// No description provided for @gatewayAutoPayOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled'**
+  String get gatewayAutoPayOn;
+
+  /// No description provided for @gatewayAutoPayOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Not enabled'**
+  String get gatewayAutoPayOff;
+
+  /// No description provided for @gatewayCashRoute.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded by the committee'**
+  String get gatewayCashRoute;
+
+  /// No description provided for @paymentMethodUpi.
+  ///
+  /// In en, this message translates to:
+  /// **'UPI'**
+  String get paymentMethodUpi;
+
+  /// No description provided for @paymentMethodCard.
+  ///
+  /// In en, this message translates to:
+  /// **'Card'**
+  String get paymentMethodCard;
+
+  /// No description provided for @paymentMethodNetbanking.
+  ///
+  /// In en, this message translates to:
+  /// **'Net banking'**
+  String get paymentMethodNetbanking;
+
+  /// No description provided for @paymentMethodWallet.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallet'**
+  String get paymentMethodWallet;
+
+  /// No description provided for @receiptMethodAutoPay.
+  ///
+  /// In en, this message translates to:
+  /// **'AutoPay'**
+  String get receiptMethodAutoPay;
+
+  /// No description provided for @receiptMethodAutoPayVia.
+  ///
+  /// In en, this message translates to:
+  /// **'AutoPay ({method})'**
+  String receiptMethodAutoPayVia(String method);
+
+  /// No description provided for @receiptRefundedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This payment was refunded'**
+  String get receiptRefundedTitle;
+
+  /// No description provided for @receiptRefundedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The amount was returned to the payer. This receipt is kept as a record and no longer counts as paid.'**
+  String get receiptRefundedBody;
+
+  /// No description provided for @receiptRefundedOnBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Refunded on {date}. This receipt is kept as a record and no longer counts as paid.'**
+  String receiptRefundedOnBody(String date);
+
+  /// No description provided for @receiptRefundedOnLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Refunded on'**
+  String get receiptRefundedOnLabel;
+
+  /// No description provided for @receiptNoteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Note'**
+  String get receiptNoteLabel;
+
+  /// No description provided for @receiptShareNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Note: {note}'**
+  String receiptShareNote(String note);
+
+  /// No description provided for @receiptSheetStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get receiptSheetStatus;
+
+  /// No description provided for @editProfileSaveRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save: {reason}'**
+  String editProfileSaveRejected(String reason);
+
+  /// No description provided for @memberDetailsReminderChooseSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send it in the app, or open WhatsApp or SMS with the text filled in'**
+  String get memberDetailsReminderChooseSubtitle;
+
+  /// No description provided for @memberDetailsSendInAppNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Send in-app notice'**
+  String get memberDetailsSendInAppNotice;
+
+  /// No description provided for @memberDetailsInAppNoticeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Only this member sees it, in their alerts and as a notification.'**
+  String get memberDetailsInAppNoticeHint;
+
+  /// No description provided for @memberDetailsNoticeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Dues reminder'**
+  String get memberDetailsNoticeTitle;
+
+  /// No description provided for @memberDetailsNoticeSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Reminder sent in the app'**
+  String get memberDetailsNoticeSent;
+
+  /// No description provided for @memberDetailsNoticeFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t send the reminder: {reason}'**
+  String memberDetailsNoticeFailed(String reason);
+
+  /// No description provided for @approvalsUndone.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is back in pending requests.'**
+  String approvalsUndone(String name);
+
+  /// No description provided for @approvalsUndoFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t undo. {reason}'**
+  String approvalsUndoFailed(String reason);
+
+  /// No description provided for @registrationRejectedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Registration not approved'**
+  String get registrationRejectedTitle;
+
+  /// No description provided for @registrationRejectedSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The committee did not approve this request.'**
+  String get registrationRejectedSubtitle;
+
+  /// No description provided for @registrationRejectedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You cannot sign in with this number right now. No payments or member details are available.'**
+  String get registrationRejectedBody;
+
+  /// No description provided for @registrationRejectedNoticeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Think this is a mistake?'**
+  String get registrationRejectedNoticeTitle;
+
+  /// No description provided for @registrationRejectedNoticeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact the Mahal office. If the committee changes its decision, check again here.'**
+  String get registrationRejectedNoticeBody;
+
+  /// No description provided for @registrationRejectedStill.
+  ///
+  /// In en, this message translates to:
+  /// **'Still not approved.'**
+  String get registrationRejectedStill;
+
+  /// No description provided for @adminDashCollectedMonthCaps.
+  ///
+  /// In en, this message translates to:
+  /// **'COLLECTED THIS MONTH'**
+  String get adminDashCollectedMonthCaps;
+
+  /// No description provided for @adminDashCollectedMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Collected this month'**
+  String get adminDashCollectedMonth;
+
+  /// No description provided for @adminDashCollectedMonthSpoken.
+  ///
+  /// In en, this message translates to:
+  /// **'Collected this month {amount}'**
+  String adminDashCollectedMonthSpoken(String amount);
+
+  /// No description provided for @adminDashAllTime.
+  ///
+  /// In en, this message translates to:
+  /// **'All time: {amount}'**
+  String adminDashAllTime(String amount);
+
+  /// No description provided for @reportsPendingDuesNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending dues (now)'**
+  String get reportsPendingDuesNow;
+
+  /// No description provided for @reportsPeriodAllTypes.
+  ///
+  /// In en, this message translates to:
+  /// **'{period} · all types'**
+  String reportsPeriodAllTypes(String period);
+
+  /// No description provided for @alertTypeEvent.
+  ///
+  /// In en, this message translates to:
+  /// **'Event'**
+  String get alertTypeEvent;
+
+  /// No description provided for @broadcastType.
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get broadcastType;
+
+  /// No description provided for @broadcastTypeGeneral.
+  ///
+  /// In en, this message translates to:
+  /// **'General notice'**
+  String get broadcastTypeGeneral;
 }
 
 class _AppLocalizationsDelegate

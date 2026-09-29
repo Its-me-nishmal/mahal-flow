@@ -136,6 +136,15 @@ func parseKey(p string) (*rsa.PrivateKey, error) {
 	return rk, nil
 }
 
+// ProjectID is the Firebase project of the loaded service account ("" when
+// disabled). Firebase ID-token verification checks tokens against it.
+func (c *Client) ProjectID() string {
+	if c == nil {
+		return ""
+	}
+	return c.projectID
+}
+
 // Enabled reports whether a service account is loaded.
 func (c *Client) Enabled() bool { return c != nil && c.key != nil }
 

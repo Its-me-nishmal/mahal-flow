@@ -163,3 +163,22 @@
   - Tap routing reads FCM `data.type` (ALERT | DUES_REMINDER | RECEIPT | PAYMENT_FAILED | AUTOPAY). Kind constants live in `service/push_service.go`. The backend copies title/body into `data`, because a tray tap only delivers `data`.
   - On a cold start the tap is held until a dashboard calls `markSessionReady()`. Splash → login would otherwise replace the routed screen.
   - Push is optional, like WhatsApp: without `FCM_SERVICE_ACCOUNT_FILE`/`FCM_SERVICE_ACCOUNT_JSON` the client is disabled and every send is a no-op. `paymentService` accepts only one receipt hook, so `main.go` fans out to every channel (WhatsApp, push) from a single hook. Never call `SetReceiptIssuedHook` twice.
+
+### Entry 030: [Flutter] Wiring to the 2026-09 backend contract — gotchas
+- **Context**: Mobile was wired to the new/changed API (excel import, gateways, profile fields, receipt status, per-member alerts, approve/reject undo, MTD dashboard, period reports, mahal contact, PayU hash txnid).
+- **Rules**:
+  - Push payloads have two "types": `data.type` is the tap-routing kind (ALERT | DUES_REMINDER | RECEIPT | …) and `data.alert_type` is the alert's own type (DUES_REMINDER | PAYMENT_RECEIVED | ANNOUNCEMENT | EVENT | GENERAL). `alertTypeFromApi` reads `alert_type` first. An explicit ANNOUNCEMENT/EVENT/GENERAL type beats the OVERDUE_ONLY audience inference.
+  - Entry 025 is obsolete: `/autopay/mandate/status` is real and the local AutoPay store is gone.
+  - Receipts: `status` (SUCCESS | REFUNDED), `gateway`, `payment_method`, `fund`, `note`, `refunded_at` are missing on old receipts — `ReceiptView` keeps fallbacks. REFUNDED uses `colors.info` (blue).
+  - A rejected registration resolves to `status: REJECTED` with no token → `ResolveStatus.rejected` → `/registration-rejected` (PendingApprovalScreen with `rejected: true`).
+  - Never build PayU checkout URLs client-side (they are signed server-side); always send `txnid` with `/payments/payu-generate-hash`.
+
+### Entry 031: [Backend-Go] 2026-09 gap fixes — rules that are easy to break
+- **Receipts stay immutable and their hash input is frozen**: `CalculateReceiptHash(number, mahal, member, paise, prev)` only. New receipt fields (`status`, `gateway`, `payment_method`, `fund`, `note`) are descriptive and NOT hashed. A refund never edits the receipt: reads overlay `status: REFUNDED` / `refunded_at` from the transaction (`api/receipts_view.go`). Never "fix" this by updating the stored receipt.
+- **One source for PayU checkout fields**: `checkoutParamsForTxn` / `checkoutParamsForMandate` (`api/payu_security.go`). The SDK data endpoint, the public checkout page and the hash-endpoint check all rebuild from them; if they drift, the SDK's payment hash is refused (403). Canonical PayU txnid is `"ORD"+txn.ID` (`orderIDForTxn`); `txnIDFromOrderID` accepts ORD / ORD_ / bare.
+- **`/payments/payu-generate-hash` is not a signing service**: only the caller's own payment hash, allowlisted SDK commands, and user-bound commands for `key:<own memberId>`. `post_salt` is appended after the merchant salt, never used instead of it.
+- **Public checkout page needs `?exp=&sig=`** (`signedCheckoutURL`, 30 min, HMAC with the JWT secret). Set `PUBLIC_BASE_URL` in each environment.
+- **Live vs simulated gateway**: `pgClient.Live()` = key+salt present and not `PAYMENT_TEST_MODE`. Every "trust the app?" decision (dues confirm, mandate confirm, status poll) keys off it: live → ask PayU `verify_payment`; simulated → accept.
+- **Unknown alert audiences fail closed** (400 on create, hidden on read). MEMBER audience alerts carry `member_ids`; auto-created per-member alerts use deterministic ids (`ALT_RCPT_<receipt>`, `ALT_DUES_<member>_<yyyymmdd>`) so repeats cannot duplicate.
+- **Fiber strings alias request buffers**: `c.Locals("tenant_id")`, `c.Params`, form filenames — `strings.Clone` anything kept past the handler (the import batch test caught a batch's `mahal_id` silently turning into another tenant's in the in-memory fake).
+- **MTD is Asia/Kolkata** (`api/reports.go`, `time/tzdata` embedded); transactions are dated by `completed_at`, falling back to `created_at`.

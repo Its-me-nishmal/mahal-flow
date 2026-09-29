@@ -9,6 +9,7 @@ import '../../../core/widgets/app_page_scaffold.dart';
 import '../../../core/widgets/empty_state_view.dart';
 import '../../../core/widgets/member_bottom_nav_bar.dart';
 import '../../../core/widgets/shimmer_loading.dart';
+import '../../../l10n/l10n.dart';
 import '../receipt_view.dart';
 import 'receipt_details_screen.dart';
 
@@ -21,7 +22,20 @@ class ReceiptsHistoryScreen extends StatefulWidget {
 
 class _ReceiptsHistoryScreenState extends State<ReceiptsHistoryScreen> {
   final ApiService _apiService = ApiService();
+  // Internal filter keys; [_filterLabel] gives the display text.
   static const List<String> _filters = ['All', 'Monthly', 'Contribution'];
+
+  String _filterLabel(String key) {
+    final l10n = context.l10n;
+    switch (key) {
+      case 'Monthly':
+        return l10n.receiptsFilterMonthly;
+      case 'Contribution':
+        return l10n.receiptsFilterContribution;
+      default:
+        return l10n.receiptsFilterAll;
+    }
+  }
 
   String _selectedFilter = 'All';
   List<ReceiptView> _receipts = [];
@@ -70,7 +84,9 @@ class _ReceiptsHistoryScreenState extends State<ReceiptsHistoryScreen> {
       } else {
         // Never blank out receipts the member is already looking at.
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Couldn't refresh. ${e.userMessage}")),
+          SnackBar(
+            content: Text(context.l10n.dashboardRefreshFailed(e.userMessage)),
+          ),
         );
       }
     }
@@ -87,10 +103,12 @@ class _ReceiptsHistoryScreenState extends State<ReceiptsHistoryScreen> {
     }
   }
 
+  /// Counts keyed by the chip's display label.
   Map<String, int> get _counts => {
-        'All': _receipts.length,
-        'Monthly': _receipts.where((r) => r.isDues).length,
-        'Contribution': _receipts.where((r) => !r.isDues).length,
+        _filterLabel('All'): _receipts.length,
+        _filterLabel('Monthly'): _receipts.where((r) => r.isDues).length,
+        _filterLabel('Contribution'):
+            _receipts.where((r) => !r.isDues).length,
       };
 
   void _openReceipt(ReceiptView receipt) {
@@ -125,7 +143,7 @@ class _ReceiptsHistoryScreenState extends State<ReceiptsHistoryScreen> {
       body = _skeleton();
     } else if (_error != null) {
       body = AppErrorStateView(
-        title: "Couldn't load receipts",
+        title: context.l10n.receiptsLoadError,
         description: _error!.userMessage,
         onRetry: _loadReceipts,
       );
@@ -175,15 +193,21 @@ class _ReceiptsHistoryScreenState extends State<ReceiptsHistoryScreen> {
     }
 
     return AppPageScaffold(
-      title: 'Receipts',
-      eyebrow: 'History',
-      subtitle: 'Every payment you have made, with a receipt for each.',
+      title: context.l10n.receiptsTitle,
+      eyebrow: context.l10n.receiptsEyebrow,
+      subtitle: context.l10n.receiptsSubtitle,
       onBack: () => AppNav.memberHome(context),
       headerChild: AppHeroFilterChips(
-        options: _filters,
-        selected: _selectedFilter,
+        // Chips show translated labels; state keeps the internal key.
+        options: [for (final f in _filters) _filterLabel(f)],
+        selected: _filterLabel(_selectedFilter),
         counts: (_isLoading || _error != null) ? null : _counts,
-        onSelected: (f) => setState(() => _selectedFilter = f),
+        onSelected: (label) => setState(() {
+          _selectedFilter = _filters.firstWhere(
+            (f) => _filterLabel(f) == label,
+            orElse: () => 'All',
+          );
+        }),
       ),
       expandedChild: RefreshIndicator(
         onRefresh: _loadReceipts,
@@ -196,15 +220,17 @@ class _ReceiptsHistoryScreenState extends State<ReceiptsHistoryScreen> {
   }
 
   Widget _empty() {
+    final l10n = context.l10n;
+    final all = _selectedFilter == 'All';
     return EmptyStateView(
       icon: Icons.receipt_long_outlined,
-      title: _selectedFilter == 'All'
-          ? 'No receipts yet'
-          : 'No $_selectedFilter receipts',
-      description: _selectedFilter == 'All'
-          ? 'Once you pay your dues or contribute, every receipt lands here.'
-          : 'Try a different filter, or pull down to refresh.',
-      actionLabel: _selectedFilter == 'All' ? 'Pay Dues' : null,
+      title: all
+          ? l10n.receiptsEmptyTitle
+          : _selectedFilter == 'Monthly'
+              ? l10n.receiptsEmptyMonthlyTitle
+              : l10n.receiptsEmptyContributionTitle,
+      description: all ? l10n.receiptsEmptyBody : l10n.receiptsEmptyFilteredBody,
+      actionLabel: all ? l10n.receiptsPayDues : null,
       onAction: _selectedFilter == 'All'
           ? () => AppNav.switchMemberTab(context, AppRoutes.memberPay)
           : null,
@@ -213,7 +239,7 @@ class _ReceiptsHistoryScreenState extends State<ReceiptsHistoryScreen> {
 
   Widget _skeleton() {
     return ShimmerLoading(
-      semanticsLabel: 'Loading receipts',
+      semanticsLabel: context.l10n.receiptsLoadingSemantics,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(

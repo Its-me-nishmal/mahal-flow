@@ -13,9 +13,11 @@ import '../../../core/widgets/app_page_scaffold.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../l10n/l10n.dart';
 
-/// Edits the signed-in member's contact details. Saving calls the API and
-/// only closes (returning the saved values) once the server accepted them;
-/// on failure the member stays here with their edits intact.
+/// Edits the signed-in member's contact details (PUT /members/profile/:id:
+/// name, house_name, email, address2, city, state, pincode — all stored by
+/// the server). Saving only closes (returning the saved values) once the
+/// server accepted them; on failure the member stays here with their edits
+/// intact and sees the server's reason (e.g. an invalid email or PIN code).
 class EditPersonalDetailsScreen extends StatefulWidget {
   final String name;
   final String email;
@@ -150,23 +152,34 @@ class _EditPersonalDetailsScreenState extends State<EditPersonalDetailsScreen> {
     }
 
     setState(() => _saving = true);
-    final ok = await _api.updateMemberProfile(
-      name: v['name']!,
-      email: email,
-      address: v['address1'],
-      address2: v['address2'],
-      city: v['city'],
-      state: v['state'],
-      pincode: pincode,
-    );
-    if (!mounted) return;
-    setState(() => _saving = false);
-
-    if (ok) {
+    try {
+      // Empty strings are sent on purpose: they clear the optional fields.
+      await _api.updateMemberProfileOrThrow(
+        name: v['name']!,
+        houseName: v['address1']!.isEmpty ? null : v['address1'],
+        email: email,
+        address2: v['address2'],
+        city: v['city'],
+        state: v['state'],
+        pincode: pincode,
+      );
+      if (!mounted) return;
+      setState(() => _saving = false);
       Navigator.pop(context, v);
-    } else {
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      // A 400 carries the server's validation reason; show it verbatim.
+      final reason = e.kind == ApiErrorKind.badRequest &&
+              (e.serverMessage?.trim().isNotEmpty ?? false)
+          ? e.serverMessage!.trim()
+          : null;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.editProfileSaveFailed)),
+        SnackBar(
+          content: Text(reason == null
+              ? l10n.editProfileSaveFailed
+              : l10n.editProfileSaveRejected(reason)),
+        ),
       );
     }
   }
@@ -323,14 +336,6 @@ class _EditPersonalDetailsScreenState extends State<EditPersonalDetailsScreen> {
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            AppNoticeCard(
-              icon: Icons.info_outline_rounded,
-              title: l10n.editProfileOfficeKeepsTitle,
-              message: l10n.editProfileOfficeKeepsBody,
-              color: context.colors.info,
-              background: context.colors.infoBg,
             ),
           ],
           bottomBar: AppBottomActionBar(

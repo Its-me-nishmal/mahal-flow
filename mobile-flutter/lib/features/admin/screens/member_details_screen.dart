@@ -16,6 +16,7 @@ import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_page_scaffold.dart';
 import '../../../core/widgets/empty_state_view.dart';
 import '../../../core/widgets/shimmer_loading.dart';
+import '../../../l10n/l10n.dart';
 import '../data/admin_context.dart';
 import '../utils/admin_format.dart';
 import '../widgets/receipt_sheet.dart';
@@ -160,12 +161,13 @@ class _MemberDetailsScreenState extends State<MemberDetailsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-            '${Inr.formatAny(receipt['amount'] ?? res['amount'])} recorded'),
+            context.l10n.memberDetailsRecorded(
+                Inr.formatAny(receipt['amount'] ?? res['amount']))),
         backgroundColor: context.colors.primary,
         action: number.isEmpty
             ? null
             : SnackBarAction(
-                label: 'Receipt',
+                label: context.l10n.adminReceiptAction,
                 textColor: context.colors.onPrimary,
                 onPressed: () => ReceiptSheet.show(context, number),
               ),
@@ -174,30 +176,38 @@ class _MemberDetailsScreenState extends State<MemberDetailsScreen> {
     _load();
   }
 
-  /// There is no per-member notice endpoint (POST /admin/alerts only targets
-  /// ALL / OVERDUE_ONLY / FAMILY_HEADS), so a personal reminder goes out
-  /// through the admin's own WhatsApp or SMS app with the text prefilled.
+  /// A dues reminder, sent either in the app (POST /admin/alerts with
+  /// audience MEMBER, so only this member sees it and gets the push) or
+  /// through the admin's own WhatsApp / SMS app with the text prefilled.
   Future<void> _sendReminder() async {
     final phone =
         PhoneFormat.nationalDigits(_member['phone']?.toString() ?? '');
-    if (phone.length != 10) {
-      _snack('This member has no valid mobile number on record.');
+    final hasPhone = phone.length == 10;
+    final canNotify = _id.isNotEmpty;
+    if (!hasPhone && !canNotify) {
+      _snack(context.l10n.memberDetailsNoValidPhone);
       return;
     }
-    final name = _member['name']?.toString() ?? 'member';
+    final l10n = context.l10n;
+    final name =
+        _member['name']?.toString() ?? l10n.memberDetailsReminderNameFallback;
     final outstanding = AdminFormat.outstanding(_member) ?? 0;
-    final mahal = AdminContext.mahalName ?? 'the Mahal committee';
-    final amountLine = outstanding > 0
-        ? ' Pending amount: ${Inr.format(outstanding).replaceAll('₹', 'Rs. ')}.'
-        : '';
-    final text = 'Assalamu alaikum $name, this is a reminder from $mahal that '
-        'your monthly dues are pending.$amountLine You can pay in the '
-        'MahalFlow app. Thank you.';
+    final mahal =
+        AdminContext.mahalName ?? l10n.memberDetailsReminderMahalFallback;
+    // SMS / WhatsApp text avoids "₹", which some SMS encodings mangle.
+    final text = outstanding > 0
+        ? l10n.memberDetailsReminderWithAmount(
+            name, mahal, Inr.format(outstanding).replaceAll('₹', 'Rs. '))
+        : l10n.memberDetailsReminderNoAmount(name, mahal);
+    final noticeText = outstanding > 0
+        ? l10n.memberDetailsReminderWithAmount(
+            name, mahal, Inr.format(outstanding))
+        : text;
 
     final channel = await AppBottomSheet.show<String>(
       context: context,
-      title: 'Send a dues reminder',
-      subtitle: 'Opens your messaging app with the text filled in',
+      title: l10n.memberDetailsReminderTitle,
+      subtitle: l10n.memberDetailsReminderChooseSubtitle,
       icon: Icons.sms_outlined,
       builder: (ctx, _) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -208,26 +218,45 @@ class _MemberDetailsScreenState extends State<MemberDetailsScreen> {
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            'To ${PhoneFormat.display(phone)}. Nothing is sent until you press '
-            'send in the other app.',
+            hasPhone
+                ? l10n.memberDetailsReminderTo(PhoneFormat.display(phone))
+                : l10n.memberDetailsNoValidPhone,
             style: context.text.caption,
           ),
           const SizedBox(height: AppSpacing.lg),
-          AppPrimaryButton(
-            label: 'Open WhatsApp',
-            icon: Icons.chat_outlined,
-            onPressed: () => Navigator.of(ctx).pop('whatsapp'),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          AppSecondaryButton(
-            label: 'Open SMS',
-            icon: Icons.sms_outlined,
-            onPressed: () => Navigator.of(ctx).pop('sms'),
-          ),
+          if (canNotify) ...[
+            AppPrimaryButton(
+              label: l10n.memberDetailsSendInAppNotice,
+              icon: Icons.notifications_active_outlined,
+              onPressed: () => Navigator.of(ctx).pop('app'),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(l10n.memberDetailsInAppNoticeHint,
+                style: context.text.caption),
+            if (hasPhone) const SizedBox(height: AppSpacing.sm),
+          ],
+          if (hasPhone) ...[
+            AppSecondaryButton(
+              label: l10n.memberDetailsOpenWhatsApp,
+              icon: Icons.chat_outlined,
+              onPressed: () => Navigator.of(ctx).pop('whatsapp'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            AppSecondaryButton(
+              label: l10n.memberDetailsOpenSms,
+              icon: Icons.sms_outlined,
+              onPressed: () => Navigator.of(ctx).pop('sms'),
+            ),
+          ],
         ],
       ),
     );
     if (channel == null || !mounted) return;
+
+    if (channel == 'app') {
+      await _sendInAppNotice(noticeText, overdue: outstanding > 0);
+      return;
+    }
 
     final uri = channel == 'whatsapp'
         ? Uri.parse('https://wa.me/91$phone?text=${Uri.encodeComponent(text)}')
@@ -244,8 +273,35 @@ class _MemberDetailsScreenState extends State<MemberDetailsScreen> {
     }
     if (!mounted || opened) return;
     _snack(channel == 'whatsapp'
-        ? "Couldn't open WhatsApp on this phone."
-        : "Couldn't open the SMS app on this phone.");
+        ? context.l10n.memberDetailsWhatsAppFailed
+        : context.l10n.memberDetailsSmsFailed);
+  }
+
+  bool _sendingNotice = false;
+
+  /// POST /admin/alerts {audience: MEMBER, member_ids: [id], type:
+  /// DUES_REMINDER} — visible and pushed to this member only.
+  Future<void> _sendInAppNotice(String message, {required bool overdue}) async {
+    if (_sendingNotice) return;
+    _sendingNotice = true;
+    final l10n = context.l10n;
+    try {
+      await _api.createAlertOrThrow(
+        title: l10n.memberDetailsNoticeTitle,
+        description: message,
+        severity: overdue ? 'WARNING' : 'INFO',
+        audience: 'MEMBER',
+        memberIds: [_id],
+        type: 'DUES_REMINDER',
+      );
+      if (!mounted) return;
+      _snack(context.l10n.memberDetailsNoticeSent);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      _snack(context.l10n.memberDetailsNoticeFailed(e.userMessage));
+    } finally {
+      _sendingNotice = false;
+    }
   }
 
   void _snack(String message) {
@@ -257,7 +313,8 @@ class _MemberDetailsScreenState extends State<MemberDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final name = _member['name']?.toString() ?? 'Member';
+    final l10n = context.l10n;
+    final name = _member['name']?.toString() ?? l10n.commonMember;
     final rawPhone = _member['phone']?.toString() ?? '';
     final code = _member['member_code']?.toString() ?? '';
     final missingId = _id.isEmpty;
@@ -269,18 +326,18 @@ class _MemberDetailsScreenState extends State<MemberDetailsScreen> {
       },
       child: AppPageScaffold(
         title: name,
-        eyebrow: 'Member',
+        eyebrow: l10n.commonMember,
         onRefresh: missingId ? null : _load,
         actions: [
           if (!missingId) ...[
             AppHeaderIconButton(
               icon: Icons.sms_outlined,
-              tooltip: 'Send dues reminder',
+              tooltip: l10n.memberDetailsSendReminderTooltip,
               onTap: _sendReminder,
             ),
             AppHeaderIconButton(
               icon: Icons.edit_outlined,
-              tooltip: 'Edit member',
+              tooltip: l10n.adminEditMember,
               onTap: _openEdit,
             ),
           ],
@@ -295,7 +352,7 @@ class _MemberDetailsScreenState extends State<MemberDetailsScreen> {
                 children: [
                   Text(
                     rawPhone.isEmpty
-                        ? 'No phone on record'
+                        ? l10n.memberDetailsNoPhone
                         : PhoneFormat.display(rawPhone),
                     style: context.text.body
                         .copyWith(color: AdminHeroColors.muted),
@@ -303,8 +360,10 @@ class _MemberDetailsScreenState extends State<MemberDetailsScreen> {
                   const SizedBox(height: AppSpacing.xs / 2),
                   Text(
                     code.isNotEmpty
-                        ? 'Member code $code'
-                        : 'ID ${_id.isEmpty ? '—' : _id}',
+                        ? l10n.memberDetailsMemberCode(code)
+                        : l10n.memberDetailsIdLabel(_id.isEmpty ? '—' : _id),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: context.text.small
                         .copyWith(color: AdminHeroColors.faint),
                   ),
@@ -319,11 +378,9 @@ class _MemberDetailsScreenState extends State<MemberDetailsScreen> {
           if (missingId)
             AppCard(
               child: AppErrorStateView(
-                title: 'This member record is incomplete',
-                description: 'It has no member ID, so its history cannot be '
-                    'loaded and no payment can be recorded. Go back and open '
-                    'the member again from the directory.',
-                actionLabel: 'Back to members',
+                title: l10n.memberDetailsIncompleteTitle,
+                description: l10n.memberDetailsIncompleteBody,
+                actionLabel: l10n.memberDetailsBackToMembers,
                 icon: Icons.person_off_outlined,
                 onRetry: () => Navigator.of(context).maybePop(),
               ),
@@ -331,8 +388,8 @@ class _MemberDetailsScreenState extends State<MemberDetailsScreen> {
           else ...[
             AppSectionHeader(
               title: _joinMonth != null && _history.length < _historyMonths
-                  ? 'Since joining'
-                  : 'Last six months',
+                  ? l10n.memberDetailsSinceJoining
+                  : l10n.memberDetailsLastSixMonths,
             ),
             _duesHistoryCard(),
           ],
@@ -345,7 +402,7 @@ class _MemberDetailsScreenState extends State<MemberDetailsScreen> {
                     children: [
                       Expanded(
                         child: AppSecondaryButton(
-                          label: 'Edit member',
+                          label: l10n.adminEditMember,
                           icon: Icons.edit_outlined,
                           height: AppSizes.minTouch,
                           onPressed: _openEdit,
@@ -354,7 +411,7 @@ class _MemberDetailsScreenState extends State<MemberDetailsScreen> {
                       const SizedBox(width: AppSpacing.ms),
                       Expanded(
                         child: AppPrimaryButton(
-                          label: 'Record payment',
+                          label: l10n.adminRecordPayment,
                           height: AppSizes.minTouch,
                           onPressed: AdminFormat.isSuspended(
                                   _member['status']?.toString())
@@ -371,6 +428,7 @@ class _MemberDetailsScreenState extends State<MemberDetailsScreen> {
   }
 
   Widget _summaryCard() {
+    final l10n = context.l10n;
     final status = AdminFormat.memberStatus(_member['status']?.toString());
     final dues = AdminFormat.monthlyDues(_member);
     final outstanding = AdminFormat.outstanding(_member);
@@ -387,11 +445,21 @@ class _MemberDetailsScreenState extends State<MemberDetailsScreen> {
         children: [
           Row(
             children: [
-              Expanded(child: Text('MONTHLY DUES', style: context.text.label)),
-              StatusPill(
-                label: status.label,
-                foreground: status.foreground(context),
-                background: status.background(context),
+              Expanded(
+                child: Text(
+                  l10n.memberDetailsMonthlyDuesCaps,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.text.label,
+                ),
+              ),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 160),
+                child: StatusPill(
+                  label: status.label,
+                  foreground: status.foreground(context),
+                  background: status.background(context),
+                ),
               ),
             ],
           ),
@@ -403,35 +471,36 @@ class _MemberDetailsScreenState extends State<MemberDetailsScreen> {
           const SizedBox(height: AppSpacing.xs),
           Text(
             _loading
-                ? 'Loading payment history…'
+                ? l10n.memberDetailsLoadingHistory
                 : _error != null
-                    ? 'Payment history unavailable.'
+                    ? l10n.memberDetailsHistoryUnavailable
                     : history.isEmpty
-                        ? 'No dues months yet.'
+                        ? l10n.memberDetailsNoDuesMonths
                         : unpaid == 0
-                            ? 'Paid every month shown below.'
-                            : '$unpaid of ${history.length} recent months unpaid.',
+                            ? l10n.memberDetailsAllPaid
+                            : l10n.memberDetailsUnpaidCount(
+                                unpaid, history.length),
             style: context.text.body.copyWith(color: context.colors.textSecondary),
           ),
           const SizedBox(height: AppSpacing.md),
           Divider(height: 1, color: context.colors.border),
           AppDetailRow(
-            label: 'Outstanding',
+            label: l10n.memberDetailsOutstanding,
             value: outstanding == null ? '—' : Inr.format(outstanding),
           ),
           Divider(height: 1, color: context.colors.border),
           AppDetailRow(
-            label: 'Paid up to',
+            label: l10n.memberDetailsPaidUpTo,
             value: lastPaid == null ? '—' : AppDate.formatMonthYear(lastPaid),
           ),
           Divider(height: 1, color: context.colors.border),
           AppDetailRow(
-            label: 'House',
-            value: house.isEmpty ? 'Not recorded' : house,
+            label: l10n.memberDetailsHouse,
+            value: house.isEmpty ? l10n.memberDetailsNotRecorded : house,
           ),
           Divider(height: 1, color: context.colors.border),
           AppDetailRow(
-            label: 'Member since',
+            label: l10n.memberDetailsMemberSince,
             value: AppDate.formatMonthYear(_member['created_at']),
           ),
         ],
@@ -441,15 +510,15 @@ class _MemberDetailsScreenState extends State<MemberDetailsScreen> {
 
   Widget _duesHistoryCard() {
     if (_loading) {
-      return const ShimmerLoading(
-        semanticsLabel: 'Loading dues history',
-        child: ShimmerCardSkeleton(height: 260),
+      return ShimmerLoading(
+        semanticsLabel: context.l10n.memberDetailsLoadingDues,
+        child: const ShimmerCardSkeleton(height: 260),
       );
     }
     if (_error != null) {
       return AppCard(
         child: AppErrorStateView(
-          title: "Couldn't load dues history",
+          title: context.l10n.memberDetailsDuesError,
           description: _error!.userMessage,
           onRetry: () {
             setState(() => _loading = true);
@@ -460,11 +529,11 @@ class _MemberDetailsScreenState extends State<MemberDetailsScreen> {
     }
     final history = _history;
     if (history.isEmpty) {
-      return const AppCard(
+      return AppCard(
         child: EmptyStateView(
           icon: Icons.event_available_outlined,
-          title: 'No dues yet',
-          description: 'Dues start from the month the member joined.',
+          title: context.l10n.memberDetailsNoDuesTitle,
+          description: context.l10n.memberDetailsNoDuesBody,
         ),
       );
     }
@@ -501,6 +570,11 @@ class _MemberDetailsScreenState extends State<MemberDetailsScreen> {
         icon = Icons.schedule_rounded;
     }
     final receipt = m.receiptNumber;
+    final statusLabel = switch (m.status) {
+      'Paid' => context.l10n.memberDetailsPaid,
+      'Overdue' => context.l10n.memberDetailsOverdue,
+      _ => context.l10n.memberDetailsDue,
+    };
 
     final row = Padding(
       padding: const EdgeInsets.symmetric(
@@ -519,7 +593,7 @@ class _MemberDetailsScreenState extends State<MemberDetailsScreen> {
                       context.text.body.copyWith(fontWeight: FontWeight.w500),
                 ),
                 if (receipt != null)
-                  Text('Receipt $receipt',
+                  Text(context.l10n.memberDetailsReceiptNumber(receipt),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: context.text.caption),
@@ -527,8 +601,11 @@ class _MemberDetailsScreenState extends State<MemberDetailsScreen> {
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
-          StatusPill(
-              label: m.status, foreground: fg, background: bg, icon: icon),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 140),
+            child: StatusPill(
+                label: statusLabel, foreground: fg, background: bg, icon: icon),
+          ),
           if (receipt != null) ...[
             const SizedBox(width: AppSpacing.xs),
             Icon(Icons.chevron_right_rounded,
@@ -541,7 +618,7 @@ class _MemberDetailsScreenState extends State<MemberDetailsScreen> {
     if (receipt == null) return row;
     return Semantics(
       button: true,
-      hint: 'Open receipt',
+      hint: context.l10n.memberDetailsOpenReceipt,
       child: InkWell(
         onTap: () => ReceiptSheet.show(context, receipt),
         child: row,

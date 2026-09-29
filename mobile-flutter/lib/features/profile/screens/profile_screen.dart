@@ -186,6 +186,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       mahalName: _mahalName,
       officePhone: MemberHelpSheet.contactPhoneFrom(_rawDashboard) ??
           MemberHelpSheet.contactPhoneFrom(_rawProfile),
+      whatsApp: MemberHelpSheet.contactWhatsAppFrom(_rawDashboard) ??
+          MemberHelpSheet.contactWhatsAppFrom(_rawProfile),
     );
   }
 

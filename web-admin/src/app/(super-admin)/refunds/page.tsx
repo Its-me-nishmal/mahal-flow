@@ -10,7 +10,7 @@ export default function RefundManagementPage() {
   const [loading, setLoading] = useState(true);
 
   const loadRefunds = () => {
-    ApiClient.getRefunds("MH_001_CALICUT")
+    ApiClient.getRefunds()
       .then((res) => {
         if (res && res.refunds) {
           setRefunds(res.refunds);
@@ -26,7 +26,7 @@ export default function RefundManagementPage() {
 
   const handleAction = async (id: string, action: "APPROVE" | "REJECT") => {
     try {
-      await ApiClient.processRefund(id, action, "MH_001_CALICUT");
+      await ApiClient.processRefund(id, action);
       loadRefunds();
     } catch (err) {
       console.error("Failed to process refund:", err);

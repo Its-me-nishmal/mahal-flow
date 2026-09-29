@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/navigation/app_routes.dart';
 import '../../../core/widgets/app_bottom_nav_bar.dart';
+import '../../../l10n/l10n.dart';
 
 class AdminBottomNavBar extends StatelessWidget {
   /// Index into [AppRoutes.adminTabs]; pass -1 on a screen that is not a tab
@@ -18,29 +19,30 @@ class AdminBottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return AppBottomNavBar(
       currentIndex: currentIndex,
       onTap: (index) => _onTap(context, index),
-      items: const [
+      items: [
         AppNavItem(
           icon: Icons.dashboard_outlined,
           activeIcon: Icons.dashboard_rounded,
-          label: 'Dashboard',
+          label: l10n.adminNavDashboard,
         ),
         AppNavItem(
           icon: Icons.people_outline_rounded,
           activeIcon: Icons.people_rounded,
-          label: 'Members',
+          label: l10n.adminNavMembers,
         ),
         AppNavItem(
           icon: Icons.assessment_outlined,
           activeIcon: Icons.assessment_rounded,
-          label: 'Reports',
+          label: l10n.adminNavReports,
         ),
         AppNavItem(
           icon: Icons.history_rounded,
           activeIcon: Icons.history_rounded,
-          label: 'Logs',
+          label: l10n.adminNavLogs,
         ),
       ],
     );

@@ -109,19 +109,96 @@ func (r *mongoAuditRepo) List(ctx context.Context, mahalID string, limit, skip i
 
 type AlertRepository interface {
 	Create(ctx context.Context, alert *domain.SystemAlert) error
+	// List returns the tenant's alerts plus global (no mahal_id) ones.
 	List(ctx context.Context, mahalID string) ([]domain.SystemAlert, error)
-	Acknowledge(ctx context.Context, alertID string) error
-	Dismiss(ctx context.Context, alertID string) error
+	// GetByID returns an alert visible to the tenant, or nil.
+	GetByID(ctx context.Context, mahalID, alertID string) (*domain.SystemAlert, error)
+	// Acknowledge / Dismiss change the shared alert (admin actions). Both are
+	// tenant-scoped and report false when no visible alert matched.
+	Acknowledge(ctx context.Context, mahalID, alertID string) (bool, error)
+	Dismiss(ctx context.Context, mahalID, alertID string) (bool, error)
 	ClearAll(ctx context.Context, mahalID string) error
 	MarkAllRead(ctx context.Context, mahalID string) error
+
+	// Per-member state for shared alerts (member actions never touch the
+	// shared document).
+	ListMemberStates(ctx context.Context, mahalID, memberID string) (map[string]domain.AlertMemberState, error)
+	MarkReadForMember(ctx context.Context, mahalID, memberID string, alertIDs []string) error
+	DismissForMember(ctx context.Context, mahalID, memberID string, alertIDs []string) error
 }
 
 type mongoAlertRepo struct {
-	coll *mongo.Collection
+	coll   *mongo.Collection
+	states *mongo.Collection
 }
 
 func NewAlertRepository(db *mongo.Database) AlertRepository {
-	return &mongoAlertRepo{coll: db.Collection("alerts")}
+	return &mongoAlertRepo{coll: db.Collection("alerts"), states: db.Collection("alert_member_states")}
+}
+
+// tenantVisible matches alerts a tenant can see: its own plus global ones.
+func tenantVisible(mahalID string) bson.M {
+	return bson.M{"$or": []bson.M{
+		{"mahal_id": mahalID},
+		{"mahal_id": bson.M{"$exists": false}},
+		{"mahal_id": ""},
+	}}
+}
+
+func (r *mongoAlertRepo) GetByID(ctx context.Context, mahalID, alertID string) (*domain.SystemAlert, error) {
+	filter := bson.M{"$and": []bson.M{{"_id": alertID}, tenantVisible(mahalID)}}
+	var a domain.SystemAlert
+	if err := r.coll.FindOne(ctx, filter).Decode(&a); err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &a, nil
+}
+
+func (r *mongoAlertRepo) ListMemberStates(ctx context.Context, mahalID, memberID string) (map[string]domain.AlertMemberState, error) {
+	cursor, err := r.states.Find(ctx, bson.M{"mahal_id": mahalID, "member_id": memberID})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var rows []domain.AlertMemberState
+	if err := cursor.All(ctx, &rows); err != nil {
+		return nil, err
+	}
+	out := make(map[string]domain.AlertMemberState, len(rows))
+	for _, s := range rows {
+		out[s.AlertID] = s
+	}
+	return out, nil
+}
+
+func (r *mongoAlertRepo) upsertMemberState(ctx context.Context, mahalID, memberID string, alertIDs []string, set bson.M) error {
+	if len(alertIDs) == 0 {
+		return nil
+	}
+	models := make([]mongo.WriteModel, 0, len(alertIDs))
+	for _, id := range alertIDs {
+		models = append(models, mongo.NewUpdateOneModel().
+			SetFilter(bson.M{"_id": id + ":" + memberID}).
+			SetUpdate(bson.M{
+				"$set":         set,
+				"$setOnInsert": bson.M{"alert_id": id, "mahal_id": mahalID, "member_id": memberID},
+			}).
+			SetUpsert(true))
+	}
+	_, err := r.states.BulkWrite(ctx, models)
+	return err
+}
+
+func (r *mongoAlertRepo) MarkReadForMember(ctx context.Context, mahalID, memberID string, alertIDs []string) error {
+	return r.upsertMemberState(ctx, mahalID, memberID, alertIDs, bson.M{"read_at": time.Now().UTC()})
+}
+
+func (r *mongoAlertRepo) DismissForMember(ctx context.Context, mahalID, memberID string, alertIDs []string) error {
+	now := time.Now().UTC()
+	return r.upsertMemberState(ctx, mahalID, memberID, alertIDs, bson.M{"read_at": now, "dismissed_at": now})
 }
 
 func (r *mongoAlertRepo) Create(ctx context.Context, alert *domain.SystemAlert) error {
@@ -164,21 +241,27 @@ func (r *mongoAlertRepo) List(ctx context.Context, mahalID string) ([]domain.Sys
 	return alerts, nil
 }
 
-func (r *mongoAlertRepo) Acknowledge(ctx context.Context, alertID string) error {
-	_, err := r.coll.UpdateOne(ctx, bson.M{"_id": alertID}, bson.M{
+func (r *mongoAlertRepo) Acknowledge(ctx context.Context, mahalID, alertID string) (bool, error) {
+	filter := bson.M{"$and": []bson.M{{"_id": alertID}, tenantVisible(mahalID)}}
+	res, err := r.coll.UpdateOne(ctx, filter, bson.M{
 		"$set": bson.M{"status": "ACKNOWLEDGED"},
 	})
-	return err
+	if err != nil {
+		return false, err
+	}
+	return res.MatchedCount > 0, nil
 }
 
-func (r *mongoAlertRepo) Dismiss(ctx context.Context, alertID string) error {
-	_, err := r.coll.DeleteOne(ctx, bson.M{
-		"$or": []bson.M{
-			{"_id": alertID},
-			{"id": alertID},
-		},
-	})
-	return err
+func (r *mongoAlertRepo) Dismiss(ctx context.Context, mahalID, alertID string) (bool, error) {
+	filter := bson.M{"$and": []bson.M{
+		{"$or": []bson.M{{"_id": alertID}, {"id": alertID}}},
+		tenantVisible(mahalID),
+	}}
+	res, err := r.coll.DeleteOne(ctx, filter)
+	if err != nil {
+		return false, err
+	}
+	return res.DeletedCount > 0, nil
 }
 
 func (r *mongoAlertRepo) ClearAll(ctx context.Context, mahalID string) error {

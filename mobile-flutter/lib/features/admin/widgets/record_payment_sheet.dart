@@ -13,6 +13,7 @@ import '../../../core/widgets/app_buttons.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_search_bar.dart';
 import '../../../core/widgets/shimmer_loading.dart';
+import '../../../l10n/l10n.dart';
 import '../data/admin_context.dart';
 import '../utils/admin_format.dart';
 
@@ -32,8 +33,8 @@ class RecordPaymentSheet {
   }) {
     return AppBottomSheet.show<RecordPaymentResult>(
       context: context,
-      title: 'Record a cash payment',
-      subtitle: 'Issues a signed receipt in the member\'s name',
+      title: context.l10n.recordPayTitle,
+      subtitle: context.l10n.recordPaySubtitle,
       icon: Icons.receipt_long_rounded,
       builder: (ctx, _) => _RecordPaymentBody(initialMember: member),
     );
@@ -141,16 +142,16 @@ class _RecordPaymentBodyState extends State<_RecordPaymentBody> {
     final months = _selectedMonths;
     final dues = _dues!;
     final total = dues * months.length;
-    final name = member['name']?.toString() ?? 'this member';
+    final l10n = context.l10n;
+    final name = member['name']?.toString() ?? l10n.recordPayThisMember;
     final period = DuesPeriod.paidMonthsLabel(months);
 
     final ok = await AppBottomSheet.showConfirmation(
       context: context,
-      title: 'Record ${Inr.format(total)}?',
-      message: '${Inr.format(total)} in cash from $name for $period '
-          '(${AdminFormat.months(months.length)}). A signed receipt is issued '
-          'and cannot be edited afterwards.',
-      confirmLabel: 'Record payment',
+      title: l10n.recordPayConfirmTitle(Inr.format(total)),
+      message: l10n.recordPayConfirmMessage(Inr.format(total), name, period,
+          AdminFormat.months(months.length)),
+      confirmLabel: l10n.recordPayConfirm,
       icon: Icons.receipt_long_rounded,
     );
     if (ok != true || !mounted) return;
@@ -189,11 +190,12 @@ class _RecordPaymentBodyState extends State<_RecordPaymentBody> {
   // -------------------------------------------------------------------------
 
   Widget _picker() {
+    final l10n = context.l10n;
     Widget body;
     if (_loadingMembers) {
-      body = const ShimmerLoading(
-        semanticsLabel: 'Loading members',
-        child: Column(
+      body = ShimmerLoading(
+        semanticsLabel: l10n.recordPayLoadingMembers,
+        child: const Column(
           children: [
             ShimmerCardSkeleton(height: 56),
             ShimmerCardSkeleton(height: 56),
@@ -207,14 +209,14 @@ class _RecordPaymentBodyState extends State<_RecordPaymentBody> {
         children: [
           AppNoticeCard(
             icon: Icons.cloud_off_rounded,
-            title: "Couldn't load members",
+            title: l10n.recordPayMembersError,
             message: _membersError!.userMessage,
             color: context.colors.error,
             background: context.colors.errorBg,
           ),
           const SizedBox(height: AppSpacing.md),
           AppSecondaryButton(
-            label: 'Try again',
+            label: l10n.recordPayTryAgain,
             icon: Icons.refresh_rounded,
             onPressed: _loadMembers,
           ),
@@ -227,8 +229,8 @@ class _RecordPaymentBodyState extends State<_RecordPaymentBody> {
               padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
               child: Text(
                 (_members ?? const []).isEmpty
-                    ? 'No members in the directory yet.'
-                    : 'No member matches "$_query".',
+                    ? l10n.recordPayNoMembers
+                    : l10n.recordPayNoMatch(_query),
                 textAlign: TextAlign.center,
                 style:
                     context.text.body.copyWith(color: context.colors.textSecondary),
@@ -241,8 +243,7 @@ class _RecordPaymentBodyState extends State<_RecordPaymentBody> {
                   Padding(
                     padding: const EdgeInsets.only(top: AppSpacing.sm),
                     child: Text(
-                      'Showing ${matches.length} of ${_members!.length}. '
-                      'Search to narrow down.',
+                      l10n.recordPayShowing(matches.length, _members!.length),
                       style: context.text.caption,
                     ),
                   ),
@@ -253,11 +254,11 @@ class _RecordPaymentBodyState extends State<_RecordPaymentBody> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('MEMBER', style: context.text.label),
+        Text(l10n.recordPayMemberHeading, style: context.text.label),
         const SizedBox(height: AppSpacing.sm),
         AppSearchBar(
           controller: _search,
-          hintText: 'Search name, phone or house…',
+          hintText: l10n.recordPaySearchHint,
           onChanged: _onSearch,
         ),
         const SizedBox(height: AppSpacing.ms),
@@ -302,10 +303,13 @@ class _RecordPaymentBodyState extends State<_RecordPaymentBody> {
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
-            StatusPill(
-              label: status.label,
-              foreground: status.foreground(context),
-              background: status.background(context),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 140),
+              child: StatusPill(
+                label: status.label,
+                foreground: status.foreground(context),
+                background: status.background(context),
+              ),
             ),
           ],
         ),
@@ -323,21 +327,20 @@ class _RecordPaymentBodyState extends State<_RecordPaymentBody> {
     final dues = _dues;
     final months = _selectedMonths;
     final hasAnchor = months.isNotEmpty;
+    final l10n = context.l10n;
     final blocked = AdminFormat.memberId(m).isEmpty
-        ? 'This member record has no ID, so a payment cannot be recorded.'
+        ? l10n.recordPayNoId
         : dues == null
-            ? 'No monthly dues amount is set for this member. Edit the member '
-                'first.'
+            ? l10n.recordPayNoDues
             : !hasAnchor
-                ? 'This member has no last-paid month on record, so the next '
-                    'due month is unknown.'
+                ? l10n.recordPayNoAnchor
                 : null;
     final total = (dues ?? 0) * months.length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('MEMBER', style: context.text.label),
+        Text(l10n.recordPayMemberHeading, style: context.text.label),
         const SizedBox(height: AppSpacing.sm),
         Row(
           children: [
@@ -353,8 +356,8 @@ class _RecordPaymentBodyState extends State<_RecordPaymentBody> {
                       style: context.text.listTitle),
                   Text(
                     dues == null
-                        ? 'Monthly dues not set'
-                        : '${Inr.format(dues)} a month',
+                        ? l10n.recordPayDuesNotSet
+                        : l10n.recordPayPerMonth(Inr.format(dues)),
                     style: context.text.small,
                   ),
                 ],
@@ -362,7 +365,7 @@ class _RecordPaymentBodyState extends State<_RecordPaymentBody> {
             ),
             if (widget.initialMember == null)
               AppTextActionButton(
-                label: 'Change',
+                label: l10n.recordPayChange,
                 onPressed: _saving
                     ? null
                     : () => setState(() {
@@ -376,13 +379,13 @@ class _RecordPaymentBodyState extends State<_RecordPaymentBody> {
         if (blocked != null)
           AppNoticeCard(
             icon: Icons.info_outline_rounded,
-            title: "Can't record yet",
+            title: l10n.recordPayCantRecord,
             message: blocked,
             color: context.colors.warning,
             background: context.colors.warningBg,
           )
         else ...[
-          Text('HOW MANY MONTHS', style: context.text.label),
+          Text(l10n.recordPayMonthsHeading, style: context.text.label),
           const SizedBox(height: AppSpacing.sm),
           Row(
             children: [
@@ -394,16 +397,14 @@ class _RecordPaymentBodyState extends State<_RecordPaymentBody> {
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            'Covers ${DuesPeriod.paidMonthsLabel(months)} — dues are paid in '
-            'order, starting after the last paid month.',
+            l10n.recordPayCovers(DuesPeriod.paidMonthsLabel(months)),
             style: context.text.caption,
           ),
           const SizedBox(height: AppSpacing.md),
-          Text('PAYMENT METHOD', style: context.text.label),
+          Text(l10n.recordPayMethodHeading, style: context.text.label),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'Cash collected by the committee. Online payments are recorded '
-            'automatically when members pay in the app.',
+            l10n.recordPayMethodDesc,
             style: context.text.small,
           ),
           const SizedBox(height: AppSpacing.md),
@@ -417,7 +418,7 @@ class _RecordPaymentBodyState extends State<_RecordPaymentBody> {
               children: [
                 Expanded(
                   child: Text(
-                    'Total to record',
+                    l10n.recordPayTotal,
                     style: context.text.body
                         .copyWith(fontWeight: FontWeight.w600),
                   ),
@@ -435,7 +436,7 @@ class _RecordPaymentBodyState extends State<_RecordPaymentBody> {
           const SizedBox(height: AppSpacing.md),
           AppNoticeCard(
             icon: Icons.error_outline_rounded,
-            title: 'Payment not recorded',
+            title: l10n.recordPayNotRecorded,
             message: _submitError!,
             color: context.colors.error,
             background: context.colors.errorBg,
@@ -443,7 +444,7 @@ class _RecordPaymentBodyState extends State<_RecordPaymentBody> {
         ],
         const SizedBox(height: AppSpacing.lg),
         AppPrimaryButton(
-          label: 'Review & record',
+          label: l10n.recordPayReview,
           isLoading: _saving,
           onPressed: (blocked != null || _saving) ? null : _submit,
         ),
@@ -471,11 +472,18 @@ class _RecordPaymentBodyState extends State<_RecordPaymentBody> {
               color: selected ? context.colors.primary : context.colors.border,
             ),
           ),
-          child: Text(
-            AdminFormat.months(count),
-            textAlign: TextAlign.center,
-            style: context.text.buttonSmall.copyWith(
-              color: selected ? context.colors.primary : context.colors.textSecondary,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              AdminFormat.months(count),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              style: context.text.buttonSmall.copyWith(
+                color: selected
+                    ? context.colors.primary
+                    : context.colors.textSecondary,
+              ),
             ),
           ),
         ),

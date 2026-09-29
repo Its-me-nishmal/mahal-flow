@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/navigation/app_routes.dart';
@@ -9,7 +10,19 @@ import '../../core/storage/app_prefs.dart';
 import '../../l10n/l10n.dart';
 
 /// Outcome of resolving an OTP-verified phone against the backend.
-enum ResolveStatus { allowed, pending, unregistered, networkError }
+///
+/// [signedOut] means there is no usable Firebase sign-in (no current user, or
+/// the server rejected its ID token): the user has to verify their phone
+/// again. [rejected] means the committee declined the registration: the
+/// server issues no token, so there is no session.
+enum ResolveStatus {
+  allowed,
+  pending,
+  rejected,
+  unregistered,
+  networkError,
+  signedOut,
+}
 
 class ResolveResult {
   final ResolveStatus status;
@@ -36,15 +49,71 @@ class AuthFlow {
 
   static final ApiService _api = ApiService();
 
+  /// The signed-in Firebase user's ID token, or null when nobody is signed in
+  /// (or Firebase is unavailable). The backend verifies it and takes the
+  /// phone number from it — it is the only proof of phone ownership.
+  static Future<String?> idToken({bool forceRefresh = false}) async {
+    try {
+      return await FirebaseAuth.instance.currentUser?.getIdToken(forceRefresh);
+    } catch (e) {
+      debugPrint('[AUTH] getIdToken failed: $e');
+      return null;
+    }
+  }
+
+  /// Wire [ApiService]'s 401 recovery to Firebase: a fresh ID token is
+  /// exchanged for a new session JWT. Called once from main().
+  static void installSessionRefresh() {
+    ApiService.reauthenticate = () async {
+      final token = await idToken(forceRefresh: true);
+      if (token == null) return false;
+      try {
+        final res = await _api.resolveLoginOrThrow(idToken: token);
+        return res['status'] == 'ALLOWED' && ApiService.authToken != null;
+      } on ApiException {
+        return false;
+      }
+    };
+  }
+
+  /// Resolve the Firebase-signed-in user. [phone] is only echoed back for
+  /// routing (registration prefill); the server uses the ID token's phone.
   static Future<ResolveResult> resolve(String phone) async {
-    final resolved = await _api.resolveLogin(phone);
-    if (resolved == null) {
-      return ResolveResult(status: ResolveStatus.networkError, phone: phone);
+    final token = await idToken();
+    if (token == null) {
+      return ResolveResult(status: ResolveStatus.signedOut, phone: phone);
+    }
+    return _resolveWith(phone, () => _api.resolveLoginOrThrow(idToken: token));
+  }
+
+  /// Debug builds only: sign in as a seeded phone without OTP. Works solely
+  /// against a local server started with AUTH_DEV_BYPASS=true.
+  static Future<ResolveResult> resolveDemo(String phone) {
+    assert(kDebugMode);
+    return _resolveWith(
+        phone, () => _api.resolveLoginOrThrow(devPhone: phone));
+  }
+
+  static Future<ResolveResult> _resolveWith(
+    String phone,
+    Future<Map<String, dynamic>> Function() call,
+  ) async {
+    final Map<String, dynamic> resolved;
+    try {
+      resolved = await call();
+    } on ApiException catch (e) {
+      debugPrint('[AUTH] resolve failed: $e');
+      // 401: the ID token was refused — the phone must be verified again.
+      final status = e.kind == ApiErrorKind.unauthorized
+          ? ResolveStatus.signedOut
+          : ResolveStatus.networkError;
+      return ResolveResult(status: status, phone: phone);
     }
     final name = resolved['name']?.toString();
     switch (resolved['status']?.toString()) {
       case 'ALLOWED':
-        final isAdmin = resolved['role']?.toString() == 'MAHAL_ADMIN';
+        final role = resolved['role']?.toString();
+        final isAdmin = role == 'MAHAL_ADMIN' || role == 'SUPER_ADMIN';
         await AppPrefs.setLastRole(isAdmin ? 'admin' : 'member');
         return ResolveResult(
           status: ResolveStatus.allowed,
@@ -55,6 +124,12 @@ class AuthFlow {
       case 'PENDING':
         return ResolveResult(
           status: ResolveStatus.pending,
+          phone: phone,
+          name: name,
+        );
+      case 'REJECTED':
+        return ResolveResult(
+          status: ResolveStatus.rejected,
           phone: phone,
           name: name,
         );
@@ -78,16 +153,42 @@ class AuthFlow {
           (_) => false,
           arguments: result.name,
         );
+      case ResolveStatus.rejected:
+        nav.pushNamedAndRemoveUntil(
+          AppRoutes.registrationRejected,
+          (_) => false,
+          arguments: result.name,
+        );
       case ResolveStatus.unregistered:
         nav.pushNamedAndRemoveUntil(
           AppRoutes.register,
           (_) => false,
           arguments: result.phone,
         );
+      case ResolveStatus.signedOut:
+        nav.pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
       case ResolveStatus.networkError:
         break;
     }
   }
+
+  /// Leave the app for sign-in after an unrecoverable 401. Clears the local
+  /// session (the Firebase user is kept so the next OTP-free resolve can
+  /// still work if the server recovers).
+  static Future<void> handleSessionExpired(NavigatorState? nav) async {
+    // Several in-flight requests can fail together; navigate once.
+    if (_expiring) return;
+    _expiring = true;
+    try {
+      await ApiService.logout();
+      if (nav == null || !nav.mounted) return;
+      nav.pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
+    } finally {
+      _expiring = false;
+    }
+  }
+
+  static bool _expiring = false;
 
   /// [resolve] then [route]. Returns the result so the caller can show an
   /// error on [ResolveStatus.networkError].

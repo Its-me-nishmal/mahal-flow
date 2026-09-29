@@ -37,12 +37,25 @@ func getTenantLedgerLock(mahalID string) *sync.Mutex {
 
 type PaymentService interface {
 	InitializeDuesPayment(ctx context.Context, mahalID, memberID string, months []string, gateway, idempotencyKey string) (*domain.Transaction, error)
-	InitializeContribution(ctx context.Context, mahalID, memberID string, amount float64, gateway, idempotencyKey string) (*domain.Transaction, error)
+	InitializeContribution(ctx context.Context, mahalID, memberID string, amount float64, gateway, idempotencyKey string, details ContributionDetails) (*domain.Transaction, error)
 	CommitSuccessfulPayment(ctx context.Context, txnID string) (*domain.Receipt, error)
 	// SetReceiptIssuedHook registers an optional post-commit side effect
 	// (e.g. sending the member their receipt). Safe to leave unset.
 	SetReceiptIssuedHook(hook func(receipt *domain.Receipt))
 }
+
+// ContributionDetails is the optional description of a contribution, carried
+// from the transaction onto its receipt.
+type ContributionDetails struct {
+	Purpose string // fund, e.g. ZAKAT, BUILDING_FUND (receipt.fund)
+	Note    string // member's free-text message
+}
+
+// Limits for ContributionDetails.
+const (
+	MaxPurposeLength = 64
+	MaxNoteLength    = 280
+)
 
 type paymentService struct {
 	mongoClient *mongo.Client
@@ -197,7 +210,16 @@ func (s *paymentService) InitializeContribution(
 	mahalID, memberID string,
 	amount float64,
 	gateway, idempotencyKey string,
+	details ContributionDetails,
 ) (*domain.Transaction, error) {
+	details.Purpose = strings.TrimSpace(details.Purpose)
+	details.Note = strings.TrimSpace(details.Note)
+	if len([]rune(details.Purpose)) > MaxPurposeLength {
+		return nil, fmt.Errorf("purpose must be at most %d characters", MaxPurposeLength)
+	}
+	if len([]rune(details.Note)) > MaxNoteLength {
+		return nil, fmt.Errorf("note must be at most %d characters", MaxNoteLength)
+	}
 	if amount <= 0 {
 		return nil, errors.New("contribution amount must be strictly greater than zero")
 	}
@@ -222,6 +244,8 @@ func (s *paymentService) InitializeContribution(
 		Amount:         exactAmount,
 		Currency:       "INR",
 		Gateway:        gateway,
+		Purpose:        details.Purpose,
+		Note:           details.Note,
 		Status:         domain.TxnPending,
 		CreatedAt:      time.Now().UTC(),
 	}
@@ -359,6 +383,12 @@ func (s *paymentService) executeCommit(ctx context.Context, txnID string) (*doma
 		PreviousReceiptHash: prevHash,
 		ReceiptHash:         receiptHash,
 		CreatedAt:           time.Now().UTC(),
+		// Descriptive only: not part of the hash above.
+		Status:        domain.ReceiptStatusSuccess,
+		Gateway:       ReceiptGateway(txn),
+		PaymentMethod: ReceiptPaymentMethod(txn),
+		Fund:          txn.Purpose,
+		Note:          txn.Note,
 	}
 
 	if err := s.receiptRepo.Insert(ctx, receipt); err != nil {
@@ -383,4 +413,28 @@ func (s *paymentService) executeCommit(ctx context.Context, txnID string) (*doma
 	}
 
 	return receipt, nil
+}
+
+// ReceiptGateway names how a transaction was collected: CASH, PAYU_SI for an
+// AutoPay installment, PAYU for any other online payment.
+func ReceiptGateway(txn *domain.Transaction) string {
+	switch {
+	case strings.EqualFold(txn.Gateway, "CASH"):
+		return "CASH"
+	case strings.HasPrefix(txn.IdempotencyKey, "SI_"):
+		return "PAYU_SI"
+	case txn.Gateway == "":
+		return ""
+	default:
+		return "PAYU"
+	}
+}
+
+// ReceiptPaymentMethod is the instrument used: CASH for cash, else the mode
+// the gateway reported (UPI / CARD / NETBANKING / WALLET), empty if unknown.
+func ReceiptPaymentMethod(txn *domain.Transaction) string {
+	if strings.EqualFold(txn.Gateway, "CASH") {
+		return "CASH"
+	}
+	return domain.NormalizePaymentMode(txn.PaymentMode)
 }

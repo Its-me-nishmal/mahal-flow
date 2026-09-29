@@ -8,9 +8,11 @@ import '../../../core/widgets/app_bottom_sheet.dart';
 import '../../../core/widgets/app_buttons.dart';
 import '../../../l10n/l10n.dart';
 
-/// Help & support for members. Offers Call / WhatsApp when the API gives us
-/// the Mahal office number; otherwise explains who to contact. Never shows a
-/// made-up number.
+/// Help & support for members. Offers Call when the API gives us the Mahal
+/// office number (`mahal_contact.phone` on /member/dashboard and the
+/// profile) and WhatsApp when it gives a WhatsApp number
+/// (`mahal_contact.whatsapp`); otherwise explains who to contact. Never
+/// shows a made-up number.
 class MemberHelpSheet {
   MemberHelpSheet._();
 
@@ -18,35 +20,59 @@ class MemberHelpSheet {
   /// (`mahal_phone`, `contact_phone`, `mahal_contact.phone`, `contact.phone`).
   static String? contactPhoneFrom(Map<String, dynamic>? data) {
     if (data == null) return null;
-    String? read(dynamic v) {
-      final s = v?.toString().trim();
-      return (s == null || s.isEmpty) ? null : s;
-    }
-
     final direct = read(data['mahal_phone']) ??
         read(data['office_phone']) ??
         read(data['contact_phone']);
     if (direct != null) return direct;
+    return _nested(data, 'phone');
+  }
+
+  /// The office WhatsApp number (`mahal_contact.whatsapp`), or null.
+  static String? contactWhatsAppFrom(Map<String, dynamic>? data) {
+    if (data == null) return null;
+    return read(data['mahal_whatsapp']) ?? _nested(data, 'whatsapp');
+  }
+
+  static String? read(dynamic v) {
+    final s = v?.toString().trim();
+    return (s == null || s.isEmpty) ? null : s;
+  }
+
+  static String? _nested(Map<String, dynamic> data, String field) {
     for (final key in ['mahal_contact', 'contact']) {
       final nested = data[key];
       if (nested is Map) {
-        final p = read(nested['phone']);
+        final p = read(nested[field]);
         if (p != null) return p;
       }
     }
     return null;
   }
 
+  /// Digits for tel: / wa.me: a 10-digit Indian number gets +91, anything
+  /// longer is taken as already carrying its country code.
+  static String _intlDigits(String raw) {
+    final digits = raw.replaceAll(RegExp(r'\D'), '');
+    if (digits.length == 10) return '91$digits';
+    if (digits.length == 11 && digits.startsWith('0')) {
+      return '91${digits.substring(1)}';
+    }
+    return digits;
+  }
+
   static Future<void> show(
     BuildContext context, {
     String? mahalName,
     String? officePhone,
+    String? whatsApp,
     String? extraNote,
   }) {
     final l10n = context.l10n;
-    final digits =
-        officePhone == null ? '' : PhoneFormat.nationalDigits(officePhone);
-    final hasPhone = digits.length >= 10;
+    final phoneDigits = officePhone == null ? '' : _intlDigits(officePhone);
+    final hasPhone = phoneDigits.length >= 10;
+    final waDigits = whatsApp == null ? '' : _intlDigits(whatsApp);
+    final hasWhatsApp = waDigits.length >= 10;
+    final hasContact = hasPhone || hasWhatsApp;
 
     Future<void> launch(Uri uri) async {
       final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -59,15 +85,21 @@ class MemberHelpSheet {
 
     final named = mahalName?.trim() ?? '';
     final contactText = named.isEmpty
-        ? (hasPhone ? l10n.helpContactGeneric : l10n.helpContactGenericNoPhone)
-        : (hasPhone
+        ? (hasContact
+            ? l10n.helpContactGeneric
+            : l10n.helpContactGenericNoPhone)
+        : (hasContact
             ? l10n.helpContactNamed(named)
             : l10n.helpContactNamedNoPhone(named));
 
     return AppBottomSheet.show(
       context: context,
       title: l10n.helpTitle,
-      subtitle: hasPhone ? PhoneFormat.display(officePhone!) : null,
+      subtitle: hasPhone
+          ? PhoneFormat.display(officePhone!)
+          : hasWhatsApp
+              ? PhoneFormat.display(whatsApp!)
+              : null,
       icon: Icons.support_agent_rounded,
       builder: (ctx, _) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -104,20 +136,24 @@ class MemberHelpSheet {
             ),
         ],
       ),
-      actions: hasPhone
+      actions: hasContact
           ? [
-              AppSecondaryButton(
-                label: l10n.helpWhatsApp,
-                icon: Icons.chat_outlined,
-                height: AppSizes.buttonHeightCompact,
-                onPressed: () => launch(Uri.parse('https://wa.me/91$digits')),
-              ),
-              AppPrimaryButton(
-                label: l10n.helpCall,
-                icon: Icons.call_rounded,
-                height: AppSizes.buttonHeightCompact,
-                onPressed: () => launch(Uri(scheme: 'tel', path: '+91$digits')),
-              ),
+              if (hasWhatsApp)
+                AppSecondaryButton(
+                  label: l10n.helpWhatsApp,
+                  icon: Icons.chat_outlined,
+                  height: AppSizes.buttonHeightCompact,
+                  onPressed: () =>
+                      launch(Uri.parse('https://wa.me/$waDigits')),
+                ),
+              if (hasPhone)
+                AppPrimaryButton(
+                  label: l10n.helpCall,
+                  icon: Icons.call_rounded,
+                  height: AppSizes.buttonHeightCompact,
+                  onPressed: () =>
+                      launch(Uri(scheme: 'tel', path: '+$phoneDigits')),
+                ),
             ]
           : null,
     );

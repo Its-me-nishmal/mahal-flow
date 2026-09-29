@@ -1,5 +1,4 @@
 {
-  "@@locale": "en",
   "adminCommitteeEyebrow": "Committee",
   "adminMenu": "Menu",
   "adminTryAgain": "Try again",
@@ -55,16 +54,6 @@
     }
   },
   "adminDashLoadingCollection": "Loading collection summary",
-  "adminDashTotalCollectedCaps": "TOTAL COLLECTED",
-  "adminDashTotalCollected": "Total collected",
-  "adminDashTotalCollectedSpoken": "Total collected {amount}",
-  "@adminDashTotalCollectedSpoken": {
-    "placeholders": {
-      "amount": {
-        "type": "String"
-      }
-    }
-  },
   "adminDashOutstandingAcrossMahal": "{amount} still outstanding across the Mahal.",
   "@adminDashOutstandingAcrossMahal": {
     "placeholders": {
@@ -479,7 +468,7 @@
   },
   "approvalsThisPerson": "this person",
   "approvalsRejectTitle": "Reject this request?",
-  "approvalsRejectMessage": "{name} will not be added to the Mahal. They would need to register again to be reconsidered.",
+  "approvalsRejectMessage": "{name} will not be added to the Mahal and cannot sign in. You can undo this for 10 minutes.",
   "@approvalsRejectMessage": {
     "placeholders": {
       "name": {
@@ -641,7 +630,6 @@
   "reportsLoadingTotals": "Loading totals",
   "reportsDues": "Dues",
   "reportsContributions": "Contributions",
-  "reportsPendingDues": "Pending dues",
   "reportsTransactionsError": "Couldn't load transactions",
   "reportsLoadingPeriod": "Loading period totals",
   "reportsSuccessfulPayments": "{count, plural, =1{1 successful payment} other{{count} successful payments}}",
@@ -686,7 +674,7 @@
   "importStepValidate": "Validate",
   "importStepReview": "Review",
   "importStepDone": "Done",
-  "importErrorExtension": "Choose an .xlsx, .xls or .csv file.",
+  "importErrorExtension": "Choose an .xlsx or .csv file. Save older .xls files as .xlsx first.",
   "importErrorEmpty": "That file is empty.",
   "importErrorPicker": "Couldn't open the file picker. {error}",
   "@importErrorPicker": {
@@ -730,7 +718,7 @@
   },
   "importFileError": "Couldn't use this file",
   "importGetTemplate": "Get the template",
-  "importTemplateDesc": "A CSV with name, phone, house_name and monthly_dues columns. Save or send it from the share sheet.",
+  "importTemplateDesc": "A CSV with name, phone, house_name, monthly_dues, family_head, family_members_count and email columns. Save or send it from the share sheet.",
   "importNothingSaved": "Nothing is saved yet",
   "importNothingSavedDesc": "The server checks the file first. You review its results before anything is written to the directory.",
   "importUploadValidate": "Upload & validate",
@@ -743,7 +731,7 @@
     }
   },
   "importChooseSpreadsheet": "Choose a spreadsheet",
-  "importAccepts": "Accepts .xlsx, .xls and .csv files",
+  "importAccepts": "Accepts .xlsx and .csv files",
   "importTapToChange": "Tap to choose a different file",
   "importConfirmTitle": "{count, plural, =1{Import 1 member?} other{Import {count} members?}}",
   "@importConfirmTitle": {
@@ -822,7 +810,7 @@
   },
   "importChooseAnother": "Choose another file",
   "importNoPhone": "No phone",
-  "importDuesPerMonth": "₹{amount}/mo",
+  "importDuesPerMonth": "{amount}/mo",
   "@importDuesPerMonth": {
     "placeholders": {
       "amount": {
@@ -836,17 +824,17 @@
   "importDetailStatus": "Status",
   "importDetailBatch": "Batch",
   "importGoToMembers": "Go to members",
-  "gatewayKeyNotShown": "Not shown in the app",
+  "gatewayKeyNotShown": "Not set",
   "gatewayTitle": "Gateways",
   "gatewayEyebrow": "Payments",
   "gatewaySubtitle": "Where member payments are processed.",
-  "gatewayManagedTitle": "Managed from web admin",
-  "gatewayManagedDesc": "Gateway keys, webhook secrets and routing are set up in the MahalFlow web admin. This screen is read-only and never shows secrets.",
+  "gatewayManagedTitle": "Managed from server config",
+  "gatewayManagedDesc": "Gateway credentials and routing are set in the MahalFlow server configuration. This screen is read-only and never shows secrets.",
   "gatewayConfigured": "Configured gateways",
   "gatewayLoading": "Loading gateways",
   "gatewayLoadError": "Couldn't load gateways",
   "gatewayEmptyTitle": "No gateways configured",
-  "gatewayEmptyDesc": "Set one up in the web admin to accept online payments.",
+  "gatewayEmptyDesc": "Add gateway credentials to the server configuration to accept online payments.",
   "gatewayPrimaryHeading": "PRIMARY GATEWAY",
   "gatewayActiveCount": "{active} of {total} active",
   "@gatewayActiveCount": {
@@ -864,7 +852,7 @@
   "gatewayRoutedHere": "Member payments are routed here first.",
   "gatewayPrimaryRoute": "Primary route",
   "gatewayFallbackRoute": "Fallback route",
-  "gatewayKeyId": "Key ID",
+  "gatewayKeyId": "Merchant key",
   "gatewayId": "Gateway ID",
   "broadcastTitle": "Broadcast a notice",
   "broadcastSubtitle": "Goes to member phones as an in-app notice",
@@ -1218,8 +1206,6 @@
   "editProfileCity": "City",
   "editProfileState": "State",
   "editProfilePincode": "PIN code",
-  "editProfileOfficeKeepsTitle": "What the office keeps",
-  "editProfileOfficeKeepsBody": "Your name and house name are saved to your membership record. Email, street, city and PIN code are not kept by the office yet.",
   "editProfileSaving": "Saving…",
   "editProfileSave": "Save Changes",
   "helpOpenFailed": "Couldn't open that app.",
@@ -2058,5 +2044,143 @@
   "payResultContributionReceivedMessage": "Your contribution was received. A receipt has been issued in your name.",
   "payResultViewReceipt": "View Receipt",
   "payResultPaidOn": "Paid on",
-  "payResultReceiptNumber": "Receipt number"
+  "payResultReceiptNumber": "Receipt number",
+  "statusNotConfigured": "Not configured",
+  "importRowNumber": "Row {row}",
+  "@importRowNumber": {
+    "placeholders": {
+      "row": {
+        "type": "int"
+      }
+    }
+  },
+  "importNoBatch": "This preview has no batch ID from the server. Upload the file again.",
+  "importStatusAlreadyCommitted": "Already imported",
+  "importAlreadyCommittedTitle": "This file was already imported",
+  "importAlreadyCommittedBody": "No new members were added. The counts below are from the first import.",
+  "gatewayMode": "Mode",
+  "gatewayModeLive": "Live",
+  "gatewayModeTest": "Test",
+  "gatewayModeSimulated": "{mode} · simulated",
+  "@gatewayModeSimulated": {
+    "placeholders": {
+      "mode": {
+        "type": "String"
+      }
+    }
+  },
+  "gatewaySimulatedTitle": "Payments are simulated",
+  "gatewaySimulatedDesc": "The server is in payment test mode: no real gateway calls are made and no money moves.",
+  "gatewayMethods": "Methods",
+  "gatewayAutoPay": "AutoPay",
+  "gatewayAutoPayOn": "Enabled",
+  "gatewayAutoPayOff": "Not enabled",
+  "gatewayCashRoute": "Recorded by the committee",
+  "paymentMethodUpi": "UPI",
+  "paymentMethodCard": "Card",
+  "paymentMethodNetbanking": "Net banking",
+  "paymentMethodWallet": "Wallet",
+  "receiptMethodAutoPay": "AutoPay",
+  "receiptMethodAutoPayVia": "AutoPay ({method})",
+  "@receiptMethodAutoPayVia": {
+    "placeholders": {
+      "method": {
+        "type": "String"
+      }
+    }
+  },
+  "receiptRefundedTitle": "This payment was refunded",
+  "receiptRefundedBody": "The amount was returned to the payer. This receipt is kept as a record and no longer counts as paid.",
+  "receiptRefundedOnBody": "Refunded on {date}. This receipt is kept as a record and no longer counts as paid.",
+  "@receiptRefundedOnBody": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "receiptRefundedOnLabel": "Refunded on",
+  "receiptNoteLabel": "Note",
+  "receiptShareNote": "Note: {note}",
+  "@receiptShareNote": {
+    "placeholders": {
+      "note": {
+        "type": "String"
+      }
+    }
+  },
+  "receiptSheetStatus": "Status",
+  "editProfileSaveRejected": "Couldn't save: {reason}",
+  "@editProfileSaveRejected": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "memberDetailsReminderChooseSubtitle": "Send it in the app, or open WhatsApp or SMS with the text filled in",
+  "memberDetailsSendInAppNotice": "Send in-app notice",
+  "memberDetailsInAppNoticeHint": "Only this member sees it, in their alerts and as a notification.",
+  "memberDetailsNoticeTitle": "Dues reminder",
+  "memberDetailsNoticeSent": "Reminder sent in the app",
+  "memberDetailsNoticeFailed": "Couldn't send the reminder: {reason}",
+  "@memberDetailsNoticeFailed": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "approvalsUndone": "{name} is back in pending requests.",
+  "@approvalsUndone": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "approvalsUndoFailed": "Couldn't undo. {reason}",
+  "@approvalsUndoFailed": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "registrationRejectedTitle": "Registration not approved",
+  "registrationRejectedSubtitle": "The committee did not approve this request.",
+  "registrationRejectedBody": "You cannot sign in with this number right now. No payments or member details are available.",
+  "registrationRejectedNoticeTitle": "Think this is a mistake?",
+  "registrationRejectedNoticeBody": "Contact the Mahal office. If the committee changes its decision, check again here.",
+  "registrationRejectedStill": "Still not approved.",
+  "adminDashCollectedMonthCaps": "COLLECTED THIS MONTH",
+  "adminDashCollectedMonth": "Collected this month",
+  "adminDashCollectedMonthSpoken": "Collected this month {amount}",
+  "@adminDashCollectedMonthSpoken": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "adminDashAllTime": "All time: {amount}",
+  "@adminDashAllTime": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "reportsPendingDuesNow": "Pending dues (now)",
+  "reportsPeriodAllTypes": "{period} · all types",
+  "@reportsPeriodAllTypes": {
+    "placeholders": {
+      "period": {
+        "type": "String"
+      }
+    }
+  },
+  "alertTypeEvent": "Event",
+  "broadcastType": "Type",
+  "broadcastTypeGeneral": "General notice"
 }

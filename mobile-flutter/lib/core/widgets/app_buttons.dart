@@ -167,12 +167,16 @@ class AppTextActionButton extends StatelessWidget {
         minimumSize: const Size(0, 44),
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.ms),
       ),
+      // Long labels (Malayalam, large text) wrap instead of overflowing.
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            label,
-            style: context.text.buttonMedium.copyWith(color: color),
+          Flexible(
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: context.text.buttonMedium.copyWith(color: color),
+            ),
           ),
           if (icon != null) ...[
             const SizedBox(width: AppSpacing.xs + 2),

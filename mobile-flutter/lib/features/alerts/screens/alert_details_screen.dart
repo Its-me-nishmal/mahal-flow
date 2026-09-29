@@ -6,6 +6,7 @@ import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/app_buttons.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_page_scaffold.dart';
+import '../../../l10n/l10n.dart';
 
 /// Kind of notice. Only [overdue] asks the member to pay.
 ///
@@ -14,16 +15,26 @@ import '../../../core/widgets/app_page_scaffold.dart';
 /// * [success]   — payment received / receipt issued.
 /// * [important] — urgent committee notice (WARNING / CRITICAL).
 /// * [system]    — announcement.
-enum AlertType { payment, overdue, success, system, default_, important }
+/// * [event]     — a Mahal event.
+/// * [default_]  — general notice.
+enum AlertType { payment, overdue, success, system, default_, important, event }
 
 /// Classifies an alert from the API's structured fields — never from words
 /// in its title ("Payment received" must not become a pay prompt).
 ///
-/// Uses `type` / `category` / `kind` when the server sends one (DUES_REMINDER,
-/// OVERDUE, PAYMENT_FAILED, RECEIPT, …), then `audience` (OVERDUE_ONLY is by
-/// definition a dues reminder), then `severity`.
+/// The server's alert `type` is one of DUES_REMINDER | PAYMENT_RECEIVED |
+/// ANNOUNCEMENT | EVENT | GENERAL (always present now; derived for old
+/// rows). A push payload carries it as `alert_type`, because its own `type`
+/// is the tap-routing kind (ALERT, RECEIPT, …). Older kinds (OVERDUE,
+/// PAYMENT_FAILED, RECEIPT, …) and, without any type, `audience`
+/// (OVERDUE_ONLY is by definition a dues reminder) are still understood.
+/// Announcements / events / general notices marked WARNING or CRITICAL show
+/// as important.
 AlertType alertTypeFromApi(Map<String, dynamic> alert) {
-  final kind = (alert['type'] ?? alert['category'] ?? alert['kind'])
+  final kind = (alert['alert_type'] ??
+              alert['type'] ??
+              alert['category'] ??
+              alert['kind'])
           ?.toString()
           .toUpperCase() ??
       '';
@@ -44,17 +55,22 @@ AlertType alertTypeFromApi(Map<String, dynamic> alert) {
     case 'AUTOPAY_FAILED':
       return AlertType.payment;
   }
+  final severity = alert['severity']?.toString().toUpperCase();
+  final urgent =
+      severity == 'CRITICAL' || severity == 'WARNING' || severity == 'ERROR';
+  switch (kind) {
+    case 'ANNOUNCEMENT':
+      return urgent ? AlertType.important : AlertType.system;
+    case 'EVENT':
+      return urgent ? AlertType.important : AlertType.event;
+    case 'GENERAL':
+      return urgent ? AlertType.important : AlertType.default_;
+  }
   if (alert['audience']?.toString().toUpperCase() == 'OVERDUE_ONLY') {
     return AlertType.overdue;
   }
-  switch (alert['severity']?.toString().toUpperCase()) {
-    case 'SUCCESS':
-      return AlertType.success;
-    case 'CRITICAL':
-    case 'WARNING':
-    case 'ERROR':
-      return AlertType.important;
-  }
+  if (severity == 'SUCCESS') return AlertType.success;
+  if (urgent) return AlertType.important;
   return AlertType.system;
 }
 
@@ -68,27 +84,31 @@ class AlertVisual {
   const AlertVisual(this.label, this.icon, this.color, this.background);
 
   static AlertVisual of(BuildContext context, AlertType type) {
+    final l10n = context.l10n;
     switch (type) {
       case AlertType.payment:
-        return AlertVisual('Payment', Icons.payments_outlined,
+        return AlertVisual(l10n.alertTypePayment, Icons.payments_outlined,
             context.colors.info, context.colors.infoBg);
       case AlertType.overdue:
-        return AlertVisual('Dues reminder', Icons.error_outline_rounded,
+        return AlertVisual(l10n.alertTypeDuesReminder, Icons.error_outline_rounded,
             context.colors.error, context.colors.errorBg);
       case AlertType.success:
         return AlertVisual(
-            'Confirmed',
+            l10n.alertTypeConfirmed,
             Icons.check_circle_outline_rounded,
             context.colors.success,
             context.colors.successBg);
       case AlertType.important:
-        return AlertVisual('Important', Icons.priority_high_rounded,
+        return AlertVisual(l10n.alertTypeImportant, Icons.priority_high_rounded,
             context.colors.warning, context.colors.warningBg);
       case AlertType.system:
-        return AlertVisual('Announcement', Icons.campaign_outlined,
+        return AlertVisual(l10n.alertTypeAnnouncement, Icons.campaign_outlined,
             context.colors.primary, context.colors.primaryLight);
+      case AlertType.event:
+        return AlertVisual(l10n.alertTypeEvent, Icons.event_outlined,
+            context.colors.info, context.colors.infoBg);
       case AlertType.default_:
-        return AlertVisual('Notice', Icons.info_outline_rounded,
+        return AlertVisual(l10n.alertTypeNotice, Icons.info_outline_rounded,
             context.colors.textSecondary, context.colors.neutralBg);
     }
   }
@@ -102,9 +122,10 @@ class AlertDetailsScreen extends StatelessWidget {
   final String time;
   final AlertType type;
 
+  /// Empty [title] shows the generic "Notice" heading.
   const AlertDetailsScreen({
     super.key,
-    this.title = "Notice",
+    this.title = "",
     this.body = "",
     this.time = "",
     this.type = AlertType.system,
@@ -114,10 +135,11 @@ class AlertDetailsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final visual = AlertVisual.of(context, type);
 
     return AppPageScaffold(
-      title: 'Notice',
+      title: l10n.alertNotice,
       eyebrow: visual.label,
       onBack: () {
         if (Navigator.of(context).canPop()) {
@@ -138,17 +160,22 @@ class AlertDetailsScreen extends StatelessWidget {
                   background: visual.background,
                 ),
                 const SizedBox(width: AppSpacing.ms),
-                StatusPill(
-                  label: visual.label,
-                  foreground: visual.color,
-                  background: visual.background,
+                Flexible(
+                  child: StatusPill(
+                    label: visual.label,
+                    foreground: visual.color,
+                    background: visual.background,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: AppSpacing.md),
             Semantics(
               header: true,
-              child: Text(title, style: context.text.sectionTitle),
+              child: Text(
+                title.isEmpty ? l10n.alertNotice : title,
+                style: context.text.sectionTitle,
+              ),
             ),
             if (time.isNotEmpty) ...[
               const SizedBox(height: AppSpacing.xs),
@@ -161,7 +188,7 @@ class AlertDetailsScreen extends StatelessWidget {
             Divider(height: 1, color: context.colors.border),
             const SizedBox(height: AppSpacing.md),
             Text(
-              body.isEmpty ? 'No further details were provided.' : body,
+              body.isEmpty ? l10n.alertNoDetails : body,
               style: context.text.body.copyWith(
                 color: context.colors.textSecondary,
                 height: 22 / 14,
@@ -175,8 +202,8 @@ class AlertDetailsScreen extends StatelessWidget {
         if (_needsPayment)
           AppNoticeCard(
             icon: Icons.info_outline_rounded,
-            title: 'Why you got this',
-            message: 'Your account shows dues that are not yet cleared.',
+            title: l10n.alertWhyTitle,
+            message: l10n.alertWhyBody,
             color: context.colors.info,
             background: context.colors.infoBg,
           ),
@@ -185,14 +212,14 @@ class AlertDetailsScreen extends StatelessWidget {
         children: [
           if (_needsPayment)
             AppPrimaryButton(
-              label: 'Pay Dues Now',
+              label: l10n.homePayDuesNow,
               icon: Icons.arrow_forward_rounded,
               onPressed: () =>
                   AppNav.switchMemberTab(context, AppRoutes.memberPay),
             )
           else
             AppSecondaryButton(
-              label: 'Close',
+              label: l10n.commonClose,
               onPressed: () => Navigator.of(context).maybePop(),
             ),
         ],

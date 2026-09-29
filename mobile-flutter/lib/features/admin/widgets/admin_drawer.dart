@@ -35,10 +35,9 @@ class AdminDrawer extends StatelessWidget {
   static Future<void> confirmSignOut(BuildContext context) async {
     final ok = await AppBottomSheet.showConfirmation(
       context: context,
-      title: 'Sign out?',
-      message: 'You will need to verify your phone number again to open the '
-          'committee portal.',
-      confirmLabel: 'Sign out',
+      title: context.l10n.drawerSignOutTitle,
+      message: context.l10n.drawerSignOutMessage,
+      confirmLabel: context.l10n.drawerSignOut,
       icon: Icons.logout_rounded,
       destructive: true,
     );
@@ -62,6 +61,7 @@ class AdminDrawer extends StatelessWidget {
       }
     }
 
+    final l10n = context.l10n;
     return Drawer(
       backgroundColor: context.colors.surface,
       child: Column(
@@ -73,31 +73,31 @@ class AdminDrawer extends StatelessWidget {
               children: [
                 _tile(context, 
                   icon: Icons.dashboard_outlined,
-                  title: 'Dashboard',
+                  title: l10n.adminNavDashboard,
                   onTap: () => Navigator.pop(context),
                 ),
                 _tile(context, 
                   icon: Icons.people_outline_rounded,
-                  title: 'Members',
+                  title: l10n.adminNavMembers,
                   onTap: () => go(AppRoutes.adminMembers, tab: true),
                 ),
                 ValueListenableBuilder<int?>(
                   valueListenable: AdminContext.pendingCount,
                   builder: (context, count, _) => _tile(context, 
                     icon: Icons.how_to_reg_outlined,
-                    title: 'Pending approvals',
+                    title: l10n.adminPendingApprovals,
                     badge: count,
                     onTap: () => go(AppRoutes.adminPendingApprovals),
                   ),
                 ),
                 _tile(context, 
                   icon: Icons.assessment_outlined,
-                  title: 'Financial reports',
+                  title: l10n.drawerFinancialReports,
                   onTap: () => go(AppRoutes.adminReports, tab: true),
                 ),
                 _tile(context, 
                   icon: Icons.campaign_outlined,
-                  title: 'Broadcast a notice',
+                  title: l10n.adminBroadcastNotice,
                   color: context.colors.primary,
                   onTap: () {
                     Navigator.pop(context);
@@ -106,24 +106,24 @@ class AdminDrawer extends StatelessWidget {
                 ),
                 _tile(context, 
                   icon: Icons.upload_file_outlined,
-                  title: 'Bulk import',
+                  title: l10n.adminBulkImport,
                   onTap: () => go(AppRoutes.adminImportStep1),
                 ),
                 _tile(context, 
                   icon: Icons.account_balance_outlined,
-                  title: 'Payment gateways',
+                  title: l10n.drawerPaymentGateways,
                   onTap: () => go(AppRoutes.adminGateways),
                 ),
                 _tile(context, 
                   icon: Icons.history_rounded,
-                  title: 'Audit log',
+                  title: l10n.drawerAuditLog,
                   onTap: () => go(AppRoutes.adminAuditLogs, tab: true),
                 ),
                 Divider(color: context.colors.border, height: AppSpacing.lg),
                 _tile(
                   context,
                   icon: Icons.tune_rounded,
-                  title: context.l10n.settingsRowTitle,
+                  title: l10n.settingsRowTitle,
                   onTap: () {
                     // The drawer's context goes away as it closes; open the
                     // sheet from the navigator's instead.
@@ -135,7 +135,7 @@ class AdminDrawer extends StatelessWidget {
                 if (canSwitchToMemberView)
                   _tile(context, 
                     icon: Icons.swap_horiz_rounded,
-                    title: 'Switch to member view',
+                    title: l10n.drawerSwitchToMember,
                     color: context.colors.info,
                     onTap: () {
                       Navigator.pop(context);
@@ -147,7 +147,7 @@ class AdminDrawer extends StatelessWidget {
                   ),
                 _tile(context, 
                   icon: Icons.logout_rounded,
-                  title: 'Sign out',
+                  title: l10n.drawerSignOut,
                   color: context.colors.error,
                   onTap: () {
                     Navigator.pop(context);
@@ -195,12 +195,18 @@ class AdminDrawer extends StatelessWidget {
               const SizedBox(height: AppSpacing.ms),
               Text(
                 name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: context.text.cardTitle
                     .copyWith(color: AdminHeroColors.text),
               ),
               const SizedBox(height: AppSpacing.xs),
               Text(
-                reg == null ? 'Committee portal' : 'Committee portal · $reg',
+                reg == null
+                    ? context.l10n.drawerCommitteePortal
+                    : context.l10n.drawerCommitteePortalReg(reg),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style:
                     context.text.small.copyWith(color: AdminHeroColors.muted),
               ),
@@ -223,6 +229,8 @@ class AdminDrawer extends StatelessWidget {
       leading: Icon(icon, color: itemColor, size: 22),
       title: Text(
         title,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
         style: context.text.body.copyWith(
           fontWeight: FontWeight.w500,
           color: itemColor,
@@ -230,7 +238,7 @@ class AdminDrawer extends StatelessWidget {
       ),
       trailing: (badge != null && badge > 0)
           ? Semantics(
-              label: '$badge waiting',
+              label: context.l10n.drawerBadgeWaiting(badge),
               excludeSemantics: true,
               child: Container(
                 padding: const EdgeInsets.symmetric(

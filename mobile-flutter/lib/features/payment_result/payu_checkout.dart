@@ -3,6 +3,7 @@ import 'package:payu_checkoutpro_flutter/PayUConstantKeys.dart';
 import 'package:payu_checkoutpro_flutter/payu_checkoutpro_flutter.dart';
 
 import '../../core/network/api_service.dart';
+import '../../l10n/l10n.dart';
 
 /// Shared PayU CheckoutPro plumbing for dues, contributions and AutoPay.
 ///
@@ -106,11 +107,18 @@ class PayUCheckout {
 
   /// Answers the SDK's hash request from the backend, falling back to the
   /// pre-signed payment hash in [checkout].
+  ///
+  /// [txnid] is the PayU txnid being paid (the "ORD…" order id, or the
+  /// mandate id for AutoPay). The server only signs hashes for the caller's
+  /// own transaction / mandate and an allowlist of SDK read commands, so it
+  /// is sent with every request; anything else answers 403, and a payment
+  /// hash then falls back to the pre-signed one.
   static Future<void> respondToHashRequest({
     required ApiService api,
     required PayUCheckoutProFlutter checkoutPro,
     required Map response,
     Map<String, dynamic>? checkout,
+    String? txnid,
   }) async {
     final hashName = response[PayUHashConstantsKeys.hashName]?.toString() ?? "";
     final hashString =
@@ -125,6 +133,8 @@ class PayUCheckout {
           hashString: hashString,
           hashType: hashType,
           postSalt: postSalt,
+          txnid: txnid ??
+              (checkout == null ? null : _value(checkout, 'txnid')),
         );
         if (generated != null && generated.isNotEmpty) {
           checkoutPro.hashGenerated(hash: {hashName: generated});
@@ -164,6 +174,6 @@ class PayUCheckout {
       final nested = pick(response['payuResponse']);
       if (nested != null) return nested;
     }
-    return 'The payment could not be completed.';
+    return L10n.current.payuCouldNotComplete;
   }
 }

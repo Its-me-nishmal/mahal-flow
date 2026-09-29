@@ -14,6 +14,7 @@ import '../../../core/widgets/app_page_scaffold.dart';
 import '../../../core/widgets/app_search_bar.dart';
 import '../../../core/widgets/empty_state_view.dart';
 import '../../../core/widgets/shimmer_loading.dart';
+import '../../../l10n/l10n.dart';
 import '../utils/admin_format.dart';
 import '../widgets/add_member_sheet.dart';
 import '../widgets/admin_bottom_nav_bar.dart';
@@ -155,6 +156,18 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
     setState(() => _query = '');
   }
 
+  /// Filter keys stay English internally; this is what the chip shows.
+  String _filterLabel(String key) {
+    final l10n = context.l10n;
+    return switch (key) {
+      'Active' => l10n.membersFilterActive,
+      'Grace Period' => l10n.membersFilterGrace,
+      'Suspended' => l10n.membersFilterSuspended,
+      'Pending' => l10n.membersFilterPending,
+      _ => l10n.membersFilterAll,
+    };
+  }
+
   bool get _isFiltering => _query.isNotEmpty || _selectedStatusFilter != 'All';
 
   List<Map<String, dynamic>> get _filteredMembers {
@@ -195,7 +208,8 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
     if (created == null || !mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('${created['name'] ?? 'Member'} was registered.'),
+        content: Text(context.l10n.adminMemberRegistered(
+            created['name']?.toString() ?? context.l10n.commonMember)),
         backgroundColor: context.colors.primary,
       ),
     );
@@ -215,28 +229,32 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
   }
 
   String get _subtitle {
-    if (_isLoading) return 'Loading the directory…';
-    if (_error != null) return 'Directory unavailable';
+    final l10n = context.l10n;
+    if (_isLoading) return l10n.membersLoadingDirectory;
+    if (_error != null) return l10n.membersDirectoryUnavailable;
     final shown = _filteredMembers.length;
     if (!_isFiltering) {
-      return 'Showing ${_members.length} of $_total households';
+      return l10n.membersShowingOf(_members.length, _total);
     }
     return _hasMore
-        ? '$shown matches in ${_members.length} of $_total loaded'
-        : '$shown of $_total households match';
+        ? l10n.membersMatchesLoaded(shown, _members.length, _total)
+        : l10n.membersMatchCount(shown, _total);
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final filterLabels = [for (final f in _filters) _filterLabel(f)];
+    final counts = _statusCounts;
     return AppPageScaffold(
-      title: 'Members',
-      eyebrow: 'Directory',
+      title: l10n.membersTitle,
+      eyebrow: l10n.membersEyebrow,
       subtitle: _subtitle,
       onBack: () => AppNav.adminHome(context),
       actions: [
         AppHeaderIconButton(
           icon: Icons.upload_file_rounded,
-          tooltip: 'Bulk import',
+          tooltip: l10n.adminBulkImport,
           onTap: () async {
             await Navigator.of(context).pushNamed(AppRoutes.adminImportStep1);
             if (mounted) _refresh();
@@ -247,17 +265,24 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
         children: [
           AppSearchBar(
             controller: _searchController,
-            hintText: 'Search name, phone, house or code…',
+            hintText: l10n.membersSearchHint,
             onChanged: _onSearchChanged,
             onClear: _clearSearch,
           ),
           const SizedBox(height: AppSpacing.ms),
           AppHeroFilterChips(
-            options: _filters,
-            selected: _selectedStatusFilter,
-            counts: _statusCounts,
-            onSelected: (val) {
-              setState(() => _selectedStatusFilter = val);
+            options: filterLabels,
+            selected: _filterLabel(_selectedStatusFilter),
+            counts: counts == null
+                ? null
+                : {
+                    for (var i = 0; i < _filters.length; i++)
+                      filterLabels[i]: counts[_filters[i]] ?? 0,
+                  },
+            onSelected: (label) {
+              final i = filterLabels.indexOf(label);
+              setState(
+                  () => _selectedStatusFilter = i < 0 ? 'All' : _filters[i]);
               _maybeFillViewport();
             },
           ),
@@ -269,7 +294,7 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
         foregroundColor: context.colors.onPrimary,
         icon: const Icon(Icons.person_add_rounded, size: 20),
         label: Text(
-          'Add member',
+          l10n.adminAddMember,
           style: context.text.buttonSmall.copyWith(color: context.colors.onPrimary),
         ),
       ),
@@ -287,7 +312,7 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
     if (_isLoading) return _skeleton();
     if (_error != null) {
       return AppErrorStateView(
-        title: "Couldn't load members",
+        title: context.l10n.membersLoadError,
         description: _error!.userMessage,
         onRetry: _refresh,
       );
@@ -317,11 +342,11 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
     if (_moreError != null) {
       return AppNoticeCard(
         icon: Icons.cloud_off_rounded,
-        title: "Couldn't load more members",
+        title: context.l10n.membersLoadMoreError,
         message: _moreError!.userMessage,
         color: context.colors.error,
         background: context.colors.errorBg,
-        actionLabel: 'Try again',
+        actionLabel: context.l10n.adminTryAgain,
         onAction: _loadMore,
       );
     }
@@ -334,8 +359,7 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
               Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                 child: Text(
-                  'No matches in the ${_members.length} loaded so far — '
-                  'searching the rest…',
+                  context.l10n.membersNoMatchesYet(_members.length),
                   textAlign: TextAlign.center,
                   style: context.text.small,
                 ),
@@ -354,7 +378,7 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
       child: Text(
-        'All $_total households loaded',
+        context.l10n.membersAllLoaded(_total),
         textAlign: TextAlign.center,
         style: context.text.caption,
       ),
@@ -402,7 +426,9 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  dues == null ? '—' : '${Inr.format(dues)}/mo',
+                  dues == null
+                      ? '—'
+                      : context.l10n.membersDuesPerMonth(Inr.format(dues)),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: context.text.listTitle,
@@ -426,22 +452,23 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
 
   Widget _empty() {
     final hasQuery = _query.isNotEmpty;
+    final l10n = context.l10n;
     if (_members.isEmpty) {
       return EmptyStateView(
         icon: Icons.groups_outlined,
-        title: 'No members yet',
-        description: 'Register households one by one or import a spreadsheet.',
-        actionLabel: 'Register a member',
+        title: l10n.membersEmptyTitle,
+        description: l10n.membersEmptyBody,
+        actionLabel: l10n.addMemberTitle,
         onAction: _openAddMember,
       );
     }
     return EmptyStateView(
       icon: Icons.person_search_rounded,
-      title: 'No members found',
+      title: l10n.membersNotFound,
       description: hasQuery
-          ? "Nothing matches '${_searchController.text.trim()}'."
-          : "No households are in '$_selectedStatusFilter' status.",
-      actionLabel: hasQuery ? 'Clear search' : 'Show all',
+          ? l10n.membersNothingMatches(_searchController.text.trim())
+          : l10n.membersNoneInStatus(_filterLabel(_selectedStatusFilter)),
+      actionLabel: hasQuery ? l10n.commonClearSearch : l10n.membersShowAll,
       onAction: hasQuery
           ? _clearSearch
           : () => setState(() => _selectedStatusFilter = 'All'),
@@ -459,7 +486,7 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
       ),
       children: [
         ShimmerLoading(
-          semanticsLabel: 'Loading members',
+          semanticsLabel: context.l10n.membersLoading,
           child: Column(
             children: [
               for (var i = 0; i < 6; i++) const ShimmerCardSkeleton(height: 76),

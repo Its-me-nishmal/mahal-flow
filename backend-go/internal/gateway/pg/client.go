@@ -27,6 +27,9 @@ type Client struct {
 	ReturnURL    string
 	HTTPClient   *http.Client
 	TestMode     bool
+	// InfoBaseURL is the Merchant Web Service host for postservice commands
+	// (verify_payment, refunds, SI). Empty = derived from BaseURL.
+	InfoBaseURL string
 }
 
 // Config parameters to initialize PG client
@@ -39,6 +42,8 @@ type Config struct {
 	ReturnURL    string
 	TestMode     bool
 	Timeout      time.Duration
+	// InfoBaseURL overrides the postservice host (PG_INFO_API_URL).
+	InfoBaseURL string
 }
 
 // NewClient creates a new PG client instance
@@ -63,8 +68,36 @@ func NewClient(cfg Config) *Client {
 		HTTPClient: &http.Client{
 			Timeout: timeout,
 		},
-		TestMode: cfg.TestMode,
+		TestMode:    cfg.TestMode,
+		InfoBaseURL: strings.TrimRight(cfg.InfoBaseURL, "/"),
 	}
+}
+
+// Configured reports whether merchant credentials are present.
+func (c *Client) Configured() bool { return c != nil && c.APIKey != "" && c.Salt != "" }
+
+// Live reports whether calls actually reach PayU (credentials present and
+// not in PAYMENT_TEST_MODE).
+func (c *Client) Live() bool { return c.Configured() && !c.TestMode }
+
+// Mode is TEST for PayU's sandbox host, LIVE otherwise.
+func (c *Client) Mode() string {
+	if strings.Contains(c.BaseURL, "test.payu.in") || strings.Contains(c.InfoBaseURL, "test.payu.in") {
+		return "TEST"
+	}
+	return "LIVE"
+}
+
+// MaskedKey is the merchant key reduced to its last four characters.
+func (c *Client) MaskedKey() string {
+	k := c.APIKey
+	if k == "" {
+		return ""
+	}
+	if len(k) <= 4 {
+		return "••••"
+	}
+	return "••••" + k[len(k)-4:]
 }
 
 // ----------------------------------------------------------------------
@@ -82,23 +115,22 @@ func GeneratePayUHash(key, txnid, amount, productinfo, firstname, email, udf1, u
 }
 
 // GenerateDynamicHash computes hashes requested dynamically by PayU SDK
-// For V1: sha512(hashString + salt)
+// For V1: sha512(hashString + salt [+ postSalt])
 // For V2: HMAC-SHA256(key=salt, data=hashString)
+//
+// It signs whatever it is given: callers must restrict hashString first
+// (see api.GeneratePayUDynamicHash). postSalt is PayU's post-salt suffix and
+// is appended after the merchant salt, never used instead of it.
 func (c *Client) GenerateDynamicHash(hashName, hashString, hashType, postSalt string) string {
-	saltToUse := c.Salt
-	if postSalt != "" {
-		saltToUse = postSalt
-	}
-
 	if strings.EqualFold(hashType, "V2") {
-		mac := hmac.New(sha256.New, []byte(saltToUse))
+		mac := hmac.New(sha256.New, []byte(c.Salt))
 		mac.Write([]byte(hashString))
 		return strings.ToLower(hex.EncodeToString(mac.Sum(nil)))
 	}
 
-	// Standard V1: sha512(hashString + salt)
+	// Standard V1: sha512(hashString + salt + postSalt)
 	hasher := sha512.New()
-	hasher.Write([]byte(hashString + saltToUse))
+	hasher.Write([]byte(hashString + c.Salt + postSalt))
 	return strings.ToLower(hex.EncodeToString(hasher.Sum(nil)))
 }
 
@@ -235,19 +267,19 @@ type IntentURLResponse struct {
 }
 
 type PaymentStatusResponse struct {
-	TransactionID    string  `json:"transaction_id"`
-	OrderID          string  `json:"order_id"`
-	BankCode         string  `json:"bank_code"`
-	PaymentMode      string  `json:"payment_mode"`
-	PaymentChannel   string  `json:"payment_channel"`
-	PaymentDatetime  string  `json:"payment_datetime"`
-	ResponseCode     int     `json:"response_code"`
-	ResponseMessage  string  `json:"response_message"`
-	Amount           string  `json:"amount"`
-	Currency         string  `json:"currency"`
-	ErrorDesc        *string `json:"error_desc"`
+	TransactionID       string  `json:"transaction_id"`
+	OrderID             string  `json:"order_id"`
+	BankCode            string  `json:"bank_code"`
+	PaymentMode         string  `json:"payment_mode"`
+	PaymentChannel      string  `json:"payment_channel"`
+	PaymentDatetime     string  `json:"payment_datetime"`
+	ResponseCode        int     `json:"response_code"`
+	ResponseMessage     string  `json:"response_message"`
+	Amount              string  `json:"amount"`
+	Currency            string  `json:"currency"`
+	ErrorDesc           *string `json:"error_desc"`
 	AuthorizationStatus *string `json:"authorization_staus"`
-	Hash             string  `json:"hash"`
+	Hash                string  `json:"hash"`
 }
 
 type RefundParams struct {
@@ -267,15 +299,15 @@ type RefundResponse struct {
 }
 
 type QRStandeeInfo struct {
-	MahalID          string  `json:"mahal_id"`
-	MahalName        string  `json:"mahal_name"`
-	VPA              string  `json:"vpa"`
-	Amount           float64 `json:"amount,omitempty"`
-	Purpose          string  `json:"purpose"`
-	UPIPayload       string  `json:"upi_payload"`
-	BharatQRPayload  string  `json:"bharat_qr_payload"`
-	CategoryCode     string  `json:"category_code"`
-	CounterLocation  string  `json:"counter_location"`
+	MahalID         string  `json:"mahal_id"`
+	MahalName       string  `json:"mahal_name"`
+	VPA             string  `json:"vpa"`
+	Amount          float64 `json:"amount,omitempty"`
+	Purpose         string  `json:"purpose"`
+	UPIPayload      string  `json:"upi_payload"`
+	BharatQRPayload string  `json:"bharat_qr_payload"`
+	CategoryCode    string  `json:"category_code"`
+	CounterLocation string  `json:"counter_location"`
 }
 
 // ----------------------------------------------------------------------
@@ -312,16 +344,16 @@ func (c *Client) GeneratePayUCheckoutParams(p PaymentRequestParams) PayUCheckout
 	hash := GeneratePayUHash(c.APIKey, p.OrderID, p.Amount, productInfo, firstName, email, p.UDF1, p.UDF2, p.UDF3, p.UDF4, p.UDF5, c.Salt)
 
 	params := map[string]string{
-		"key":          c.APIKey,
-		"txnid":        p.OrderID,
-		"amount":       p.Amount,
-		"productinfo":  productInfo,
-		"firstname":    firstName,
-		"email":        email,
-		"phone":        phone,
-		"surl":         surl,
-		"furl":         furl,
-		"hash":         hash,
+		"key":              c.APIKey,
+		"txnid":            p.OrderID,
+		"amount":           p.Amount,
+		"productinfo":      productInfo,
+		"firstname":        firstName,
+		"email":            email,
+		"phone":            phone,
+		"surl":             surl,
+		"furl":             furl,
+		"hash":             hash,
 		"service_provider": "payu_paisa",
 	}
 	if p.UDF1 != "" {
@@ -469,8 +501,8 @@ func (c *Client) GetPaymentStatus(ctx context.Context, orderID, transactionID st
 	}
 
 	var res struct {
-		Data []PaymentStatusResponse `json:"data"`
-		Hash string                  `json:"hash"`
+		Data  []PaymentStatusResponse `json:"data"`
+		Hash  string                  `json:"hash"`
 		Error *struct {
 			Code    interface{} `json:"code"`
 			Message string      `json:"message"`
@@ -497,6 +529,9 @@ func (c *Client) GetPaymentStatus(ctx context.Context, orderID, transactionID st
 // verify_payment / cancel_refund_transaction. This is a DIFFERENT host from the
 // checkout _payment URL: prod = https://info.payu.in, test = https://test.payu.in.
 func (c *Client) postServiceBaseURL() string {
+	if c.InfoBaseURL != "" {
+		return c.InfoBaseURL
+	}
 	if strings.Contains(c.BaseURL, "test.payu.in") {
 		return "https://test.payu.in"
 	}
@@ -511,12 +546,36 @@ func (c *Client) commandHash(command, var1 string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// PaymentDetail is what verify_payment reports for one merchant txnid.
+type PaymentDetail struct {
+	MihPayID string
+	Status   string // PayU status: success | failure | pending | ... ("Not Found" when unknown)
+	Mode     string // PayU mode: UPI | CC | DC | NB | PPI | ...
+	Amount   string
+}
+
 // VerifyPayment resolves a merchant txnid to PayU's mihpayid (and confirms the
 // gateway-side status) via the verify_payment command. txnid is the ORD... order
 // id that was sent to PayU as the transaction id.
 func (c *Client) VerifyPayment(ctx context.Context, txnid string) (mihpayid string, status string, err error) {
+	d, err := c.VerifyPaymentDetail(ctx, txnid)
+	if d != nil {
+		status = d.Status
+	}
+	if err != nil {
+		return "", status, err
+	}
+	if d.MihPayID == "" || d.MihPayID == "Not Found" {
+		return "", status, fmt.Errorf("verify_payment: no mihpayid for %s (status %s)", txnid, status)
+	}
+	return d.MihPayID, status, nil
+}
+
+// VerifyPaymentDetail runs verify_payment for txnid. A transaction PayU has
+// never seen comes back with Status "Not Found" and no error.
+func (c *Client) VerifyPaymentDetail(ctx context.Context, txnid string) (*PaymentDetail, error) {
 	if c.APIKey == "" || c.TestMode {
-		return "", "", errors.New("verify_payment unavailable: PG not configured or in test mode")
+		return nil, errors.New("verify_payment unavailable: PG not configured or in test mode")
 	}
 
 	params := map[string]string{
@@ -528,28 +587,37 @@ func (c *Client) VerifyPayment(ctx context.Context, txnid string) (mihpayid stri
 
 	respBody, err := c.postForm(ctx, c.postServiceBaseURL()+"/merchant/postservice?form=2", params)
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
+	return parseVerifyPayment(respBody, txnid)
+}
 
+func parseVerifyPayment(respBody []byte, txnid string) (*PaymentDetail, error) {
 	var res struct {
 		Status             interface{}                       `json:"status"`
 		Msg                string                            `json:"msg"`
 		TransactionDetails map[string]map[string]interface{} `json:"transaction_details"`
 	}
 	if err := json.Unmarshal(respBody, &res); err != nil {
-		return "", "", fmt.Errorf("failed to parse verify_payment response: %w", err)
+		return nil, fmt.Errorf("failed to parse verify_payment response: %w", err)
 	}
-
 	detail, ok := res.TransactionDetails[txnid]
 	if !ok {
-		return "", "", fmt.Errorf("verify_payment: transaction %s not found at gateway", txnid)
+		return &PaymentDetail{Status: "Not Found"}, nil
 	}
-	mihpayid = fmt.Sprintf("%v", detail["mihpayid"])
-	status = fmt.Sprintf("%v", detail["status"])
-	if mihpayid == "" || mihpayid == "Not Found" {
-		return "", status, fmt.Errorf("verify_payment: no mihpayid for %s (status %s)", txnid, status)
+	str := func(k string) string {
+		v, ok := detail[k]
+		if !ok || v == nil {
+			return ""
+		}
+		return fmt.Sprintf("%v", v)
 	}
-	return mihpayid, status, nil
+	return &PaymentDetail{
+		MihPayID: str("mihpayid"),
+		Status:   str("status"),
+		Mode:     str("mode"),
+		Amount:   str("amt"),
+	}, nil
 }
 
 // SIResult is the outcome of a recurring standing-instruction debit.
@@ -652,9 +720,9 @@ func (c *Client) RequestRefund(ctx context.Context, p RefundParams) (*RefundResp
 	params := map[string]string{
 		"key":     c.APIKey,
 		"command": "cancel_refund_transaction",
-		"var1":    p.MihPayID,          // PayU payment id
-		"var2":    p.MerchantRefundID,  // unique merchant refund token
-		"var3":    p.Amount,            // refund amount
+		"var1":    p.MihPayID,         // PayU payment id
+		"var2":    p.MerchantRefundID, // unique merchant refund token
+		"var3":    p.Amount,           // refund amount
 		"hash":    c.commandHash("cancel_refund_transaction", p.MihPayID),
 	}
 
@@ -727,7 +795,7 @@ func (c *Client) GenerateQRStandee(mahalID, mahalName string, amount float64, pu
 	}
 	bharatQRPayload := fmt.Sprintf("0002010102%s26%02d0010A00000052401%02d%s5204869953033565802IN59%02d%s6007CALICUT",
 		initMethod,
-		len("0010A00000052401") + 2 + len(vpa),
+		len("0010A00000052401")+2+len(vpa),
 		len(vpa), vpa,
 		len(mahalName), mahalName,
 	)

@@ -60,8 +60,9 @@ class _FinancialReportsScreenState extends State<FinancialReportsScreen> {
     _loadData();
   }
 
-  /// Fetches the server summary and the tenant's transactions once; the type
-  /// and period filters then work in memory.
+  /// Fetches the server summary (for the selected period) and the tenant's
+  /// transactions once; the type filter and the transaction list then work
+  /// in memory. Changing the period re-fetches only the summary.
   Future<void> _loadData() async {
     setState(() {
       _summaryError = null;
@@ -71,16 +72,33 @@ class _FinancialReportsScreenState extends State<FinancialReportsScreen> {
     if (mounted) setState(() => _isLoading = false);
   }
 
+  /// GET /admin/reports/financial?month=YYYY-MM (none = all time), so the
+  /// server totals cover the same period as the filter. `pending_dues` is
+  /// always the current snapshot.
   Future<void> _loadSummary() async {
+    final period = _period;
     try {
-      final r = await _api.getFinancialReportOrThrow();
-      if (!mounted) return;
+      final r = await _api.getFinancialReportOrThrow(
+        month: period == _allTime ? null : period,
+      );
+      // A newer period was picked while this one loaded.
+      if (!mounted || period != _period) return;
       setState(() => _summary = r['summary'] is Map
           ? Map<String, dynamic>.from(r['summary'] as Map)
           : const {});
     } on ApiException catch (e) {
-      if (mounted) setState(() => _summaryError = e);
+      if (mounted && period == _period) setState(() => _summaryError = e);
     }
+  }
+
+  void _setPeriod(String period) {
+    if (period == _period) return;
+    setState(() {
+      _period = period;
+      _summary = null;
+      _summaryError = null;
+    });
+    _loadSummary();
   }
 
   Future<void> _loadPayments() async {
@@ -260,7 +278,9 @@ class _FinancialReportsScreenState extends State<FinancialReportsScreen> {
           ('Transactions', '${list.length}'),
           if (_summary != null) ...[
             (
-              'All-time collected (server)',
+              _period == _allTime
+                  ? 'All-time collected (server)'
+                  : 'Collected in period (server)',
               Inr.formatAny(_summary!['total_collected'])
             ),
             (
@@ -354,7 +374,7 @@ class _FinancialReportsScreenState extends State<FinancialReportsScreen> {
                 DropdownMenuItem(value: m, child: Text(_periodLabel(m))),
             ],
             onChanged: (v) {
-              if (v != null) setState(() => _period = v);
+              if (v != null) _setPeriod(v);
             },
           ),
           const SizedBox(height: AppSpacing.md),
@@ -380,7 +400,7 @@ class _FinancialReportsScreenState extends State<FinancialReportsScreen> {
     );
   }
 
-  /// Server totals (all time, all types — the endpoint takes no filters).
+  /// Server totals for the selected period, all types.
   Widget _summaryCard() {
     final s = _summary;
     final l = context.l10n;
@@ -402,7 +422,9 @@ class _FinancialReportsScreenState extends State<FinancialReportsScreen> {
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerRight,
                   child: StatusPill(
-                    label: l.reportsAllTimeAllTypes,
+                    label: _period == _allTime
+                        ? l.reportsAllTimeAllTypes
+                        : l.reportsPeriodAllTypes(_periodLabel(_period)),
                     foreground: context.colors.primary,
                     background: context.colors.primaryLight,
                   ),
@@ -452,7 +474,7 @@ class _FinancialReportsScreenState extends State<FinancialReportsScreen> {
                       Inr.formatAny(s['donations']), context.colors.info),
                 ),
                 Expanded(
-                  child: _miniStat(l.reportsPendingDues,
+                  child: _miniStat(l.reportsPendingDuesNow,
                       Inr.formatAny(s['pending_dues']), context.colors.warning),
                 ),
               ],
@@ -621,7 +643,7 @@ class _FinancialReportsScreenState extends State<FinancialReportsScreen> {
 
   Widget _monthRow(({String month, double total, int count}) m) {
     return InkWell(
-      onTap: () => setState(() => _period = m.month),
+      onTap: () => _setPeriod(m.month),
       child: Padding(
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.md,

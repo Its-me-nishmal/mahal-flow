@@ -10,6 +10,8 @@ import '../../../core/widgets/app_bottom_sheet.dart';
 import '../../../core/widgets/app_buttons.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/shimmer_loading.dart';
+import '../../../l10n/l10n.dart';
+import '../../receipts/receipt_view.dart';
 import '../utils/admin_format.dart';
 
 /// Receipt details for the committee, loaded from GET /receipts/:number, with
@@ -20,8 +22,8 @@ class ReceiptSheet {
   static Future<void> show(BuildContext context, String receiptNumber) {
     return AppBottomSheet.show(
       context: context,
-      title: 'Receipt',
-      subtitle: 'Signed entry in the Mahal ledger',
+      title: context.l10n.receiptSheetTitle,
+      subtitle: context.l10n.receiptSheetSubtitle,
       icon: Icons.verified_outlined,
       builder: (ctx, _) => _ReceiptBody(receiptNumber: receiptNumber),
     );
@@ -97,10 +99,11 @@ class _ReceiptBodyState extends State<_ReceiptBody> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     if (_loading) {
-      return const ShimmerLoading(
-        semanticsLabel: 'Loading receipt',
-        child: Column(
+      return ShimmerLoading(
+        semanticsLabel: l10n.receiptSheetLoading,
+        child: const Column(
           children: [
             ShimmerCardSkeleton(height: 44),
             ShimmerCardSkeleton(height: 44),
@@ -115,14 +118,14 @@ class _ReceiptBodyState extends State<_ReceiptBody> {
         children: [
           AppNoticeCard(
             icon: Icons.cloud_off_rounded,
-            title: "Couldn't load this receipt",
+            title: l10n.receiptSheetLoadError,
             message: _loadError!.userMessage,
             color: context.colors.error,
             background: context.colors.errorBg,
           ),
           const SizedBox(height: AppSpacing.md),
           AppSecondaryButton(
-            label: 'Try again',
+            label: l10n.receiptSheetTryAgain,
             icon: Icons.refresh_rounded,
             onPressed: _load,
           ),
@@ -135,39 +138,72 @@ class _ReceiptBodyState extends State<_ReceiptBody> {
         ? (r['paid_months'] as List).map((e) => e.toString()).toList()
         : const <String>[];
     final coverage = DuesPeriod.paidMonthsLabel(months);
+    // Status / gateway / method / fund / note, with fallbacks for receipts
+    // issued before the server stored them.
+    final view = ReceiptView.fromJson(r);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         AppDetailRow(
-          label: 'Receipt number',
+          label: l10n.receiptSheetNumber,
           value: r['receipt_number']?.toString() ?? widget.receiptNumber,
           emphasize: true,
         ),
         Divider(height: 1, color: context.colors.border),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(l10n.receiptSheetStatus,
+                    style: context.text.small),
+              ),
+              StatusPill.forStatus(context, view.status),
+            ],
+          ),
+        ),
+        if (view.isRefunded && view.refundedAt != null) ...[
+          Divider(height: 1, color: context.colors.border),
+          AppDetailRow(
+            label: l10n.receiptRefundedOnLabel,
+            value: AppDate.formatDateTime(view.refundedAt),
+          ),
+        ],
+        Divider(height: 1, color: context.colors.border),
         AppDetailRow(
-          label: 'Payer',
+          label: l10n.receiptSheetPayer,
           value: _orDash(r['member_name']),
         ),
         Divider(height: 1, color: context.colors.border),
-        AppDetailRow(label: 'Amount', value: Inr.formatAny(r['amount'])),
+        AppDetailRow(label: l10n.receiptSheetAmount, value: Inr.formatAny(r['amount'])),
         Divider(height: 1, color: context.colors.border),
         AppDetailRow(
-          label: 'Type',
+          label: l10n.receiptSheetType,
           value: AdminFormat.paymentType(r['payment_type']?.toString()),
         ),
         if (coverage.isNotEmpty) ...[
           Divider(height: 1, color: context.colors.border),
-          AppDetailRow(label: 'Months', value: coverage),
+          AppDetailRow(label: l10n.receiptSheetMonths, value: coverage),
+        ],
+        if (!view.isDues && view.fund != null) ...[
+          Divider(height: 1, color: context.colors.border),
+          AppDetailRow(label: l10n.receiptFundLabel, value: view.fund!),
+        ],
+        Divider(height: 1, color: context.colors.border),
+        AppDetailRow(label: l10n.receiptPaidViaLabel, value: view.methodLabel),
+        if (view.note != null) ...[
+          Divider(height: 1, color: context.colors.border),
+          AppDetailRow(label: l10n.receiptNoteLabel, value: view.note!),
         ],
         Divider(height: 1, color: context.colors.border),
         AppDetailRow(
-          label: 'Date',
+          label: l10n.receiptSheetDate,
           value: AppDate.formatDateTime(r['created_at']),
         ),
         Divider(height: 1, color: context.colors.border),
         AppDetailRow(
-          label: 'Ledger hash',
+          label: l10n.receiptSheetHash,
           value: AdminFormat.shortHash(r['receipt_hash']?.toString()),
         ),
         const SizedBox(height: AppSpacing.md),
@@ -175,8 +211,8 @@ class _ReceiptBodyState extends State<_ReceiptBody> {
         const SizedBox(height: AppSpacing.md),
         AppPrimaryButton(
           label: _verify == _VerifyState.idle
-              ? 'Verify on ledger'
-              : 'Verify again',
+              ? l10n.receiptSheetVerify
+              : l10n.receiptSheetVerifyAgain,
           icon: Icons.verified_rounded,
           isLoading: _verify == _VerifyState.checking,
           onPressed: _verify == _VerifyState.checking ? null : _runVerify,
@@ -186,6 +222,7 @@ class _ReceiptBodyState extends State<_ReceiptBody> {
   }
 
   Widget _verifyResult() {
+    final l10n = context.l10n;
     switch (_verify) {
       case _VerifyState.idle:
       case _VerifyState.checking:
@@ -193,26 +230,24 @@ class _ReceiptBodyState extends State<_ReceiptBody> {
       case _VerifyState.valid:
         return AppNoticeCard(
           icon: Icons.verified_rounded,
-          title: 'Signature valid',
-          message: 'The recomputed hash matches — this receipt has not been '
-              'altered.',
+          title: l10n.receiptSheetValid,
+          message: l10n.receiptSheetValidDesc,
           color: context.colors.success,
           background: context.colors.successBg,
         );
       case _VerifyState.mismatch:
         return AppNoticeCard(
           icon: Icons.gpp_bad_rounded,
-          title: 'Signature mismatch',
-          message: 'The stored hash does not match the receipt contents. '
-              'Report this to the committee before relying on it.',
+          title: l10n.receiptSheetMismatch,
+          message: l10n.receiptSheetMismatchDesc,
           color: context.colors.error,
           background: context.colors.errorBg,
         );
       case _VerifyState.failed:
         return AppNoticeCard(
           icon: Icons.cloud_off_rounded,
-          title: "Couldn't verify",
-          message: _verifyError ?? 'Try again.',
+          title: l10n.receiptSheetVerifyFailed,
+          message: _verifyError ?? l10n.receiptSheetTryAgainDot,
           color: context.colors.warning,
           background: context.colors.warningBg,
         );

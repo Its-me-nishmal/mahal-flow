@@ -19,8 +19,11 @@ type MemberRepository interface {
 	GetMemberStats(ctx context.Context, mahalID string) (totalMembers int64, paidCount int64, pendingCount int64, totalPendingAmount float64, err error)
 	UpdateProfile(ctx context.Context, mahalID, memberID string, updates bson.M) error
 	UpdateStatus(ctx context.Context, mahalID, memberID, status string) error
-	Delete(ctx context.Context, mahalID, memberID string) error
+	// Delete removes one member of the tenant; false when nothing matched.
+	Delete(ctx context.Context, mahalID, memberID string) (bool, error)
 	GetOverdueMembers(ctx context.Context, mahalID string) ([]domain.Member, error)
+	// ListPhones returns every phone registered in the tenant (any status).
+	ListPhones(ctx context.Context, mahalID string) (map[string]bool, error)
 }
 
 type mongoMemberRepo struct {
@@ -157,9 +160,12 @@ func (r *mongoMemberRepo) UpdateStatus(ctx context.Context, mahalID, memberID, s
 	return err
 }
 
-func (r *mongoMemberRepo) Delete(ctx context.Context, mahalID, memberID string) error {
-	_, err := r.coll.DeleteOne(ctx, bson.M{"_id": memberID, "mahal_id": mahalID})
-	return err
+func (r *mongoMemberRepo) Delete(ctx context.Context, mahalID, memberID string) (bool, error) {
+	res, err := r.coll.DeleteOne(ctx, bson.M{"_id": memberID, "mahal_id": mahalID})
+	if err != nil {
+		return false, err
+	}
+	return res.DeletedCount > 0, nil
 }
 
 func (r *mongoMemberRepo) GetOverdueMembers(ctx context.Context, mahalID string) ([]domain.Member, error) {
@@ -180,4 +186,21 @@ func (r *mongoMemberRepo) GetOverdueMembers(ctx context.Context, mahalID string)
 	return members, nil
 }
 
-
+func (r *mongoMemberRepo) ListPhones(ctx context.Context, mahalID string) (map[string]bool, error) {
+	opts := options.Find().SetProjection(bson.M{"phone": 1})
+	cursor, err := r.coll.Find(ctx, bson.M{"mahal_id": mahalID}, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	out := map[string]bool{}
+	for cursor.Next(ctx) {
+		var row struct {
+			Phone string `bson:"phone"`
+		}
+		if err := cursor.Decode(&row); err == nil && row.Phone != "" {
+			out[row.Phone] = true
+		}
+	}
+	return out, cursor.Err()
+}

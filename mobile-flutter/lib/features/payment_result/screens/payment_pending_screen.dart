@@ -9,6 +9,7 @@ import '../../../core/theme/app_tokens.dart';
 import '../../../core/utils/app_date.dart';
 import '../../../core/utils/currency_format.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../l10n/l10n.dart';
 import '../payment_result_args.dart';
 import '../widgets/payment_result_view.dart';
 import 'payment_failed_screen.dart';
@@ -82,6 +83,7 @@ class _PaymentPendingScreenState extends State<PaymentPendingScreen> {
 
     Map<String, dynamic>? receipt;
     String? status;
+    String? failureReason;
     try {
       // PayU said the payment succeeded: ask the server to commit it again
       // (idempotent — a committed transaction returns its receipt).
@@ -93,9 +95,16 @@ class _PaymentPendingScreenState extends State<PaymentPendingScreen> {
         if (confirm?['status'] == 'SUCCESS') receipt = _receiptOf(confirm);
       }
       if (receipt == null) {
+        // {status: SUCCESS | PENDING | FAILED, gateway_status,
+        //  transaction_id, pg_transaction_id, receipt (SUCCESS only)}.
         final res = await _api.checkPaymentStatusOrThrow(txnId);
-        status = res['status']?.toString();
+        status = res['status']?.toString().toUpperCase();
         if (status == 'SUCCESS') receipt = _receiptOf(res);
+        final reason =
+            (res['failure_reason'] ?? res['gateway_status'])?.toString();
+        if (reason != null && reason.trim().isNotEmpty) {
+          failureReason = reason.trim();
+        }
       }
       _lastError = null;
     } on ApiException catch (e) {
@@ -119,11 +128,15 @@ class _PaymentPendingScreenState extends State<PaymentPendingScreen> {
       return;
     }
 
-    // Only an explicit gateway failure ends the wait; anything else (an
-    // unknown message, a network error) keeps the payment pending.
-    final upper = status?.toUpperCase() ?? '';
-    if (!_args.gatewayReportedSuccess &&
-        (upper.contains('FAIL') || upper.contains('DECLINED'))) {
+    // Only an explicit failure ends the wait: the server's verified FAILED,
+    // or (for older servers) a failure-like status when the SDK did not
+    // report success. PENDING, SUCCESS without a receipt yet, an unknown
+    // message or a network error all keep the payment pending.
+    final upper = status ?? '';
+    final failed = upper == 'FAILED' ||
+        (!_args.gatewayReportedSuccess &&
+            (upper.contains('FAIL') || upper.contains('DECLINED')));
+    if (failed) {
       Navigator.of(context).pushReplacement(MaterialPageRoute(
         settings: const RouteSettings(name: AppRoutes.memberPaymentFailed),
         builder: (_) => PaymentFailedScreen(
@@ -133,7 +146,7 @@ class _PaymentPendingScreenState extends State<PaymentPendingScreen> {
             amount: _args.amount,
             coverage: _args.coverage,
             transactionId: txnId,
-            reason: status,
+            reason: failureReason ?? status,
           ),
         ),
       ));
@@ -156,6 +169,7 @@ class _PaymentPendingScreenState extends State<PaymentPendingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final canCheck = _args.transactionId != null;
     return PopScope(
       canPop: false,
@@ -163,40 +177,45 @@ class _PaymentPendingScreenState extends State<PaymentPendingScreen> {
         if (!didPop) AppNav.memberHome(context);
       },
       child: PaymentResultView(
-        headline: 'Payment pending',
+        headline: l10n.payResultPendingTitle,
         // Telling the member not to retry is the whole point of this screen:
         // a second attempt while the first settles creates a double charge.
-        message: 'Your bank is still confirming this. Do not pay again — we '
-            'will update your ${_args.kind == PaymentKind.dues ? 'dues' : 'receipts'} '
-            'as soon as it clears.',
+        message: _args.kind == PaymentKind.dues
+            ? l10n.payResultPendingMessageDues
+            : l10n.payResultPendingMessageContribution,
         amount: Inr.formatAny(_args.amount),
         icon: Icons.schedule_rounded,
         color: context.colors.warning,
         background: context.colors.warningBg,
-        statusLabel: 'Pending',
-        primaryLabel: canCheck ? 'Check Again' : 'Back to Home',
+        statusLabel: l10n.statusPending,
+        primaryLabel:
+            canCheck ? l10n.payResultCheckAgain : l10n.payResultBackHome,
         primaryIcon: canCheck ? Icons.refresh_rounded : Icons.home_rounded,
         primaryLoading: _checking,
         onPrimary: canCheck ? _checkNow : () => AppNav.memberHome(context),
-        secondaryLabel: canCheck ? 'Back to Home' : 'View Receipts',
+        secondaryLabel:
+            canCheck ? l10n.payResultBackHome : l10n.payResultViewReceipts,
         onSecondary: canCheck
             ? () => AppNav.memberHome(context)
             : () => AppNav.switchMemberTab(context, AppRoutes.memberReceipts),
         details: [
           if (_args.coverage != null) ...[
             AppDetailRow(
-              label: _args.kind == PaymentKind.dues ? 'Covers' : 'Fund',
+              label: _args.kind == PaymentKind.dues
+                  ? l10n.payResultCovers
+                  : l10n.payResultFund,
               value: _args.coverage!,
             ),
             Divider(height: 1, color: context.colors.border),
           ],
           AppDetailRow(
-              label: 'Started', value: AppDate.formatDateTime(_args.at)),
+              label: l10n.payResultStarted,
+              value: AppDate.formatDateTime(_args.at)),
           Divider(height: 1, color: context.colors.border),
           AppDetailRow(
-            label: 'Last checked',
+            label: l10n.payResultLastChecked,
             value: _checking
-                ? 'Checking…'
+                ? l10n.payResultChecking
                 : AppDate.formatTime(_lastChecked, fallback: '—'),
           ),
         ],
@@ -206,7 +225,7 @@ class _PaymentPendingScreenState extends State<PaymentPendingScreen> {
               padding: const EdgeInsets.only(bottom: AppSpacing.md),
               child: AppNoticeCard(
                 icon: Icons.cloud_off_rounded,
-                title: "Couldn't check the status",
+                title: l10n.payResultCheckFailedTitle,
                 message: _lastError!,
                 color: context.colors.error,
                 background: context.colors.errorBg,
@@ -214,10 +233,8 @@ class _PaymentPendingScreenState extends State<PaymentPendingScreen> {
             ),
           AppNoticeCard(
             icon: Icons.info_outline_rounded,
-            title: 'What happens next',
-            message: 'Most payments clear within a few minutes. If money left '
-                'your account and this does not clear, your bank reverses it '
-                'or the office can confirm it from the receipt list.',
+            title: l10n.payResultNextTitle,
+            message: l10n.payResultNextMessage,
             color: context.colors.info,
             background: context.colors.infoBg,
           ),

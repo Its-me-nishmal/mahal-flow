@@ -5,6 +5,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/app_buttons.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../l10n/l10n.dart';
 
 /// Shared layout for the three payment outcomes. One widget means success,
 /// failure and pending cannot drift apart visually — only the colour, the
@@ -126,7 +127,7 @@ class PaymentResultView extends StatelessWidget {
                               children: [
                                 Expanded(
                                   child: Text(
-                                    'AMOUNT',
+                                    context.l10n.payResultAmountLabel,
                                     style: context.text.label,
                                   ),
                                 ),

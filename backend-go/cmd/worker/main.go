@@ -72,6 +72,9 @@ func main() {
 			log.Warn().Msg("WhatsApp not configured — dunning reminders will be computed and logged but not delivered")
 		}
 
+		// In-app DUES_REMINDER notices, one per member per day.
+		service.SubscribeDunningAlerts(eventBus, repository.NewAlertRepository(mongoDB.DB))
+
 		agents = append(agents, agent.NewDunningAgent(memberRepo, mahalRepo, memoryStore, eventBus))
 	}
 

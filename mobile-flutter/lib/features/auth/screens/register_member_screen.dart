@@ -12,6 +12,7 @@ import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_page_scaffold.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../l10n/l10n.dart';
+import '../auth_flow.dart';
 
 /// Shown when an OTP-verified phone is not yet a member. The person confirms
 /// their identity (Mahal ID + name); this creates a PENDING_APPROVAL member an
@@ -60,8 +61,16 @@ class _RegisterMemberScreenState extends State<RegisterMemberScreen> {
     FocusScope.of(context).unfocus();
     setState(() => _isSubmitting = true);
 
+    // The server takes the phone from the Firebase ID token, not the form.
+    final idToken = await AuthFlow.idToken();
+    if (!mounted) return;
+    if (idToken == null) {
+      setState(() => _isSubmitting = false);
+      await _backToLogin();
+      return;
+    }
     final res = await _apiService.registerSelf(
-      phone: widget.phone,
+      idToken: idToken,
       mahalId: mahalId,
       name: name,
     );
@@ -77,8 +86,11 @@ class _RegisterMemberScreenState extends State<RegisterMemberScreen> {
       return;
     }
 
+    // An existing phone whose registration was declined answers REJECTED
+    // (no token): show that instead of a waiting room.
+    final rejected = res['status']?.toString() == 'REJECTED';
     Navigator.of(context).pushNamedAndRemoveUntil(
-      AppRoutes.pendingApproval,
+      rejected ? AppRoutes.registrationRejected : AppRoutes.pendingApproval,
       (route) => false,
       arguments: name,
     );
