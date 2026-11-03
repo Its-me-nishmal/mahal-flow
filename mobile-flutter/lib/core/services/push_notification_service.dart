@@ -204,13 +204,43 @@ class PushNotificationService {
     _route(data);
   }
 
+  static const Set<String> _memberRoutes = {
+    '/member/pay',
+    '/member/receipts',
+    '/member/alerts',
+    '/member/setup-autopay',
+    '/member/profile',
+    '/member/contribution',
+    '/member/dashboard',
+  };
+  static const Set<String> _adminRoutes = {
+    '/admin/dashboard',
+    '/admin/pending-approvals',
+    '/admin/members',
+    '/admin/reports',
+  };
+
+  /// Committee sessions carry no member id (see resolveLoginOrThrow).
+  bool get _isAdminSession =>
+      (ApiService.authToken?.isNotEmpty ?? false) &&
+      ApiService.sessionMemberId == null;
+
+  bool _isAllowedRoute(String route) =>
+      _memberRoutes.contains(route) ||
+      (_isAdminSession && _adminRoutes.contains(route));
+
   void _route(Map<String, dynamic> data) {
     final nav = rootNavigatorKey.currentState;
     if (nav == null) return;
 
     final explicit = data['route']?.toString();
-    if (explicit != null && explicit.startsWith('/')) {
-      nav.pushNamed(explicit);
+    if (explicit != null && explicit.isNotEmpty) {
+      // Allowlist only: unknown or role-inappropriate routes are ignored.
+      if (_isAllowedRoute(explicit)) {
+        nav.pushNamed(explicit);
+        return;
+      }
+      debugPrint('[FCM] ignored disallowed route: $explicit');
       return;
     }
 

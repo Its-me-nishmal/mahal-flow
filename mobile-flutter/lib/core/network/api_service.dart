@@ -73,18 +73,45 @@ class ApiService {
     return '$key:$member';
   }
 
-  // Support both Physical Device via ADB / localhost and Emulator (10.0.2.2)
-  static const List<String> candidateBaseUrls = [
-    "http://localhost:8080/api/v1",
-    "http://127.0.0.1:8080/api/v1",
-    "http://10.0.2.2:8080/api/v1",
-  ];
+  /// Compile-time config: `--dart-define=API_BASE_URL=https://host/api/v1`.
+  /// Release builds require an https URL; debug builds fall back to local
+  /// dev hosts (physical device via adb reverse, emulator via 10.0.2.2).
+  static const String _envBaseUrl = String.fromEnvironment('API_BASE_URL');
+
+  static List<String> _resolveBaseUrls() {
+    if (_envBaseUrl.isNotEmpty) {
+      if (kReleaseMode && !_envBaseUrl.startsWith('https://')) {
+        throw StateError(
+          'API_BASE_URL must be an https URL in release builds. '
+          'Pass --dart-define=API_BASE_URL=https://your-host/api/v1',
+        );
+      }
+      return [_envBaseUrl];
+    }
+    if (kReleaseMode) {
+      throw StateError(
+        'API_BASE_URL is not set. Release builds require '
+        '--dart-define=API_BASE_URL=https://your-host/api/v1',
+      );
+    }
+    return const [
+      "http://localhost:8080/api/v1",
+      "http://127.0.0.1:8080/api/v1",
+      "http://10.0.2.2:8080/api/v1",
+    ];
+  }
+
+  static final List<String> candidateBaseUrls = _resolveBaseUrls();
 
   static String activeBaseUrl = candidateBaseUrls.first;
-  /// The Mahal this build serves, sent as X-Tenant-ID. It only routes the
-  /// request: access comes from the session JWT, which the server binds to
-  /// its own tenant and rejects (403) for any other.
-  static const String defaultTenant = "MH_001_CALICUT";
+
+  /// The Mahal this build serves, sent as X-Tenant-ID. Set with
+  /// `--dart-define=TENANT_ID=...`. It only routes the request: access comes
+  /// from the session JWT, which the server binds to its own tenant and
+  /// rejects (403) for any other. The login response carries no tenant, so
+  /// there is no runtime override.
+  static const String defaultTenant =
+      String.fromEnvironment('TENANT_ID', defaultValue: 'MH_001_CALICUT');
 
   // Runtime cache of the signed-in member, filled from API responses. Empty
   // until then — never seeded with sample data.
@@ -97,8 +124,8 @@ class ApiService {
     final dio = Dio(
       BaseOptions(
         baseUrl: baseUrl,
-        connectTimeout: const Duration(seconds: 4),
-        receiveTimeout: const Duration(seconds: 4),
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 30),
         headers: {
           "Content-Type": "application/json",
           "X-Tenant-ID": defaultTenant,
@@ -107,15 +134,9 @@ class ApiService {
         },
       ),
     );
-    dio.interceptors.add(LogInterceptor(
-      request: true,
-      requestHeader: true,
-      requestBody: true,
-      responseHeader: true,
-      responseBody: true,
-      error: true,
-      logPrint: (obj) => debugPrint("[DIO_API] $obj"),
-    ));
+    if (kDebugMode) {
+      dio.interceptors.add(_RedactingLogInterceptor());
+    }
     return dio;
   }
 
@@ -1331,5 +1352,52 @@ class ApiService {
       }),
     );
     return _asMap(response.data);
+  }
+}
+
+
+/// Debug-only request/response logger that never prints credentials:
+/// the Authorization header and any token-like body field are masked.
+class _RedactingLogInterceptor extends Interceptor {
+  static const _sensitive = {
+    'token', 'id_token', 'access_token', 'refresh_token', 'authorization',
+    'password', 'otp', 'hash', 'salt', 'secret', 'key',
+  };
+
+  static dynamic _redact(dynamic v) {
+    if (v is Map) {
+      return {
+        for (final e in v.entries)
+          e.key: _sensitive.contains(e.key.toString().toLowerCase())
+              ? '***'
+              : _redact(e.value),
+      };
+    }
+    if (v is List) return v.map(_redact).toList();
+    return v;
+  }
+
+  static void _log(String m) => debugPrint('[DIO_API] $m');
+
+  @override
+  void onRequest(RequestOptions o, RequestInterceptorHandler h) {
+    _log('--> ${o.method} ${o.uri}');
+    _log('headers: ${_redact(Map<String, dynamic>.from(o.headers))}');
+    if (o.data != null) _log('body: ${_redact(o.data)}');
+    h.next(o);
+  }
+
+  @override
+  void onResponse(Response r, ResponseInterceptorHandler h) {
+    _log('<-- ${r.statusCode} ${r.requestOptions.uri}');
+    _log('body: ${_redact(r.data)}');
+    h.next(r);
+  }
+
+  @override
+  void onError(DioException e, ErrorInterceptorHandler h) {
+    _log('<-- ERR ${e.type} ${e.requestOptions.uri} ${e.response?.statusCode ?? ''}');
+    if (e.response?.data != null) _log('body: ${_redact(e.response!.data)}');
+    h.next(e);
   }
 }
