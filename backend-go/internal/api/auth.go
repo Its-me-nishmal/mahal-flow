@@ -295,10 +295,16 @@ func (h *Handler) RegisterSelf(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Name, phone and Mahal ID are required"})
 	}
 
-	// Confirm the Mahal exists (identity check the user does at registration).
+	// Confirm the Mahal exists (identity check the user does at registration)
+	// and take its configured monthly dues as the member's rate.
+	duesRate := 500.0 // historical default, only when the Mahal has none configured
 	if h.mahalRepo != nil {
-		if mh, mErr := h.mahalRepo.GetByID(c.Context(), mahalID); mErr != nil || mh == nil {
+		mh, mErr := h.mahalRepo.GetByID(c.Context(), mahalID)
+		if mErr != nil || mh == nil {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "No Mahal found for that ID"})
+		}
+		if mh.Settings.DefaultMonthlyDues > 0 {
+			duesRate = mh.Settings.DefaultMonthlyDues
 		}
 	}
 
@@ -322,7 +328,7 @@ func (h *Handler) RegisterSelf(c *fiber.Ctx) error {
 		MemberCode:              "M-" + strconv.FormatInt(now.Unix()%100000, 10),
 		Name:                    name,
 		Phone:                   phone,
-		MonthlyDuesCustomAmount: 500,
+		MonthlyDuesCustomAmount: duesRate,
 		Status:                  MemberStatusPending,
 		LastPaidMonth:           now.AddDate(0, -1, 0).Format("2006-01"),
 		OutstandingBalance:      0,

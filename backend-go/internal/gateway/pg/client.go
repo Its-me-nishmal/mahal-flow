@@ -698,6 +698,53 @@ func (c *Client) PreDebitNotify(ctx context.Context, authPayUID, txnid, amount s
 	return err
 }
 
+// SICancelResult is the outcome of revoking a standing instruction at PayU.
+type SICancelResult struct {
+	Cancelled bool
+	Simulated bool
+	Message   string
+}
+
+// CancelStandingInstruction revokes the SI (AutoPay mandate) identified by
+// authPayUID at PayU so no further debits can be raised against it.
+//
+// UNVERIFIED: the command name and payload below follow PayU's UPI AutoPay
+// revoke API as best known and have NOT been exercised against PayU's sandbox
+// from this codebase. Treat a failure as "ask PayU / revoke from the PayU
+// dashboard"; callers record the outcome on the mandate instead of assuming it.
+func (c *Client) CancelStandingInstruction(ctx context.Context, authPayUID string) (*SICancelResult, error) {
+	if c.APIKey == "" || c.TestMode {
+		return &SICancelResult{Cancelled: true, Simulated: true, Message: "simulated"}, nil
+	}
+	if authPayUID == "" {
+		return nil, errors.New("cancel standing instruction requires authpayuid")
+	}
+	var1 := fmt.Sprintf(`{"authPayuId":"%s"}`, authPayUID)
+	params := map[string]string{
+		"key":     c.APIKey,
+		"command": "upi_mandate_revoke",
+		"var1":    var1,
+		"hash":    c.commandHash("upi_mandate_revoke", var1),
+	}
+	respBody, err := c.postForm(ctx, c.postServiceBaseURL()+"/merchant/postservice?form=2", params)
+	if err != nil {
+		return nil, err
+	}
+	var res struct {
+		Status interface{} `json:"status"`
+		Msg    string      `json:"msg"`
+	}
+	if err := json.Unmarshal(respBody, &res); err != nil {
+		return nil, fmt.Errorf("failed to parse mandate revoke response: %w", err)
+	}
+	st := fmt.Sprintf("%v", res.Status)
+	ok := st == "1" || strings.EqualFold(st, "success")
+	if !ok {
+		return &SICancelResult{Message: res.Msg}, fmt.Errorf("PG mandate revoke rejected [%s]: %s", st, res.Msg)
+	}
+	return &SICancelResult{Cancelled: true, Message: res.Msg}, nil
+}
+
 // RequestRefund issues a real PayU refund via the cancel_refund_transaction
 // command. It requires the mihpayid (PayU payment id); callers resolve it with
 // VerifyPayment when it was not persisted at capture time.

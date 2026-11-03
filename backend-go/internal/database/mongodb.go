@@ -2,6 +2,8 @@ package database
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"time"
 
 	"github.com/mahalflow/backend-go/internal/logger"
@@ -46,12 +48,45 @@ func Connect(uri, dbName string) (*MongoDB, error) {
 	return mongoDB, nil
 }
 
+// txnIdempotencyIndex is the name of the per-tenant idempotency index.
+const txnIdempotencyIndex = "mahal_id_1_idempotency_key_1"
+
+// createIndexes creates the indexes and logs (rather than discards) failures.
+// It reports whether every index was created.
+func (m *MongoDB) createIndexes(ctx context.Context, collection string, models []mongo.IndexModel) bool {
+	if _, err := m.DB.Collection(collection).Indexes().CreateMany(ctx, models); err != nil {
+		logger.Log.Error().Err(err).Str("collection", collection).Msg("MongoDB index creation failed")
+		return false
+	}
+	return true
+}
+
+// dropLegacyIndex removes an obsolete index. "Index not found" (code 27) is
+// the normal already-migrated case and is not an error.
+func (m *MongoDB) dropLegacyIndex(ctx context.Context, collection, name string) {
+	err := m.DB.Collection(collection).Indexes().DropOne(ctx, name)
+	if err == nil {
+		logger.Log.Warn().Str("collection", collection).Str("index", name).Msg("Dropped legacy MongoDB index")
+		return
+	}
+	var cmdErr mongo.CommandError
+	if errors.As(err, &cmdErr) && (cmdErr.Code == 27 || cmdErr.Code == 26) {
+		return
+	}
+	if strings.Contains(err.Error(), "index not found") || strings.Contains(err.Error(), "ns not found") {
+		return
+	}
+	logger.Log.Error().Err(err).Str("collection", collection).Str("index", name).Msg("Could not drop legacy MongoDB index; drop it manually")
+}
+
 func (m *MongoDB) ensureIndexes(ctx context.Context) error {
 	// 1. Transactions Collection
 	txnIndexes := []mongo.IndexModel{
 		{
-			Keys:    bson.D{{Key: "idempotency_key", Value: 1}},
-			Options: options.Index().SetUnique(true),
+			// Idempotency is per tenant: the same client key in two Mahals
+			// must never collide (or resolve to another tenant's transaction).
+			Keys:    bson.D{{Key: "mahal_id", Value: 1}, {Key: "idempotency_key", Value: 1}},
+			Options: options.Index().SetUnique(true).SetName(txnIdempotencyIndex),
 		},
 		{
 			Keys: bson.D{{Key: "mahal_id", Value: 1}, {Key: "status", Value: 1}, {Key: "created_at", Value: -1}},
@@ -66,7 +101,12 @@ func (m *MongoDB) ensureIndexes(ctx context.Context) error {
 			Keys: bson.D{{Key: "status", Value: 1}, {Key: "created_at", Value: 1}},
 		},
 	}
-	_, _ = m.DB.Collection("transactions").Indexes().CreateMany(ctx, txnIndexes)
+	if m.createIndexes(ctx, "transactions", txnIndexes) {
+		// Only once the per-tenant index exists is it safe to drop the old
+		// global unique index (which also let one tenant's key block, or
+		// resolve to, another tenant's transaction).
+		m.dropLegacyIndex(ctx, "transactions", "idempotency_key_1")
+	}
 
 	// 2. Receipts Collection
 	receiptIndexes := []mongo.IndexModel{
@@ -88,7 +128,7 @@ func (m *MongoDB) ensureIndexes(ctx context.Context) error {
 			Keys: bson.D{{Key: "member_id", Value: 1}, {Key: "created_at", Value: -1}},
 		},
 	}
-	_, _ = m.DB.Collection("receipts").Indexes().CreateMany(ctx, receiptIndexes)
+	m.createIndexes(ctx, "receipts", receiptIndexes)
 
 	// 3. Members Collection
 	memberIndexes := []mongo.IndexModel{
@@ -106,7 +146,7 @@ func (m *MongoDB) ensureIndexes(ctx context.Context) error {
 			Keys: bson.D{{Key: "mahal_id", Value: 1}, {Key: "created_at", Value: -1}},
 		},
 	}
-	_, _ = m.DB.Collection("members").Indexes().CreateMany(ctx, memberIndexes)
+	m.createIndexes(ctx, "members", memberIndexes)
 
 	// 4. Audit Logs Collection
 	auditIndexes := []mongo.IndexModel{
@@ -117,7 +157,7 @@ func (m *MongoDB) ensureIndexes(ctx context.Context) error {
 			Keys: bson.D{{Key: "action", Value: 1}, {Key: "timestamp", Value: -1}},
 		},
 	}
-	_, _ = m.DB.Collection("audit_logs").Indexes().CreateMany(ctx, auditIndexes)
+	m.createIndexes(ctx, "audit_logs", auditIndexes)
 
 	// 5. Alerts Collection
 	alertIndexes := []mongo.IndexModel{
@@ -125,7 +165,7 @@ func (m *MongoDB) ensureIndexes(ctx context.Context) error {
 			Keys: bson.D{{Key: "mahal_id", Value: 1}, {Key: "is_read", Value: 1}, {Key: "created_at", Value: -1}},
 		},
 	}
-	_, _ = m.DB.Collection("alerts").Indexes().CreateMany(ctx, alertIndexes)
+	m.createIndexes(ctx, "alerts", alertIndexes)
 
 	// 6. Counters Collection (Atomic Monotonic Sequences)
 	counterIndexes := []mongo.IndexModel{
@@ -134,7 +174,7 @@ func (m *MongoDB) ensureIndexes(ctx context.Context) error {
 			Options: options.Index().SetUnique(true),
 		},
 	}
-	_, _ = m.DB.Collection("counters").Indexes().CreateMany(ctx, counterIndexes)
+	m.createIndexes(ctx, "counters", counterIndexes)
 
 	// 7. Notification Log Collection (Outbound Message Idempotency)
 	// The unique (mahal_id, dedupe_key) index is load-bearing: the dunning
@@ -153,7 +193,7 @@ func (m *MongoDB) ensureIndexes(ctx context.Context) error {
 			Keys: bson.D{{Key: "mahal_id", Value: 1}, {Key: "member_id", Value: 1}, {Key: "created_at", Value: -1}},
 		},
 	}
-	_, _ = m.DB.Collection("notification_log").Indexes().CreateMany(ctx, notificationIndexes)
+	m.createIndexes(ctx, "notification_log", notificationIndexes)
 
 	return nil
 }

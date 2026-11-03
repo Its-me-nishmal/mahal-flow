@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/mahalflow/backend-go/internal/domain"
@@ -15,7 +16,16 @@ type MemberRepository interface {
 	GetByID(ctx context.Context, mahalID, memberID string) (*domain.Member, error)
 	GetByPhone(ctx context.Context, mahalID, phone string) (*domain.Member, error)
 	ListByMahal(ctx context.Context, mahalID string, limit, skip int64) ([]domain.Member, int64, error)
+	// ApplyPaidMonths books a dues payment idempotently: only months after the
+	// member's current last_paid_month count, and the outstanding balance is
+	// reduced by that share of amount only. Re-applying months that are already
+	// covered (e.g. two PENDING transactions for the same months) is a no-op.
 	ApplyPaidMonths(ctx context.Context, memberID string, paidMonths []string, amount float64) error
+	// ReverseDuesPayment gives refunded dues back: outstanding_balance rises by
+	// amount and, when rollbackTo is set, last_paid_month moves back to it but
+	// only if it still equals lastMonth (a later payment depends on it
+	// otherwise). Reports whether last_paid_month was rolled back.
+	ReverseDuesPayment(ctx context.Context, mahalID, memberID string, amount float64, lastMonth, rollbackTo string) (rolledBack bool, err error)
 	GetMemberStats(ctx context.Context, mahalID string) (totalMembers int64, paidCount int64, pendingCount int64, totalPendingAmount float64, err error)
 	UpdateProfile(ctx context.Context, mahalID, memberID string, updates bson.M) error
 	UpdateStatus(ctx context.Context, mahalID, memberID, status string) error
@@ -76,25 +86,86 @@ func (r *mongoMemberRepo) ListByMahal(ctx context.Context, mahalID string, limit
 	return members, total, nil
 }
 
+// NewlyCoveredDues reports how many of paidMonths lie after lastPaidMonth and
+// the share of amount (split evenly per month, in paise) that pays for them.
+// It is what makes booking idempotent: months an earlier payment already
+// covered contribute nothing, so the balance cannot be decremented twice.
+func NewlyCoveredDues(lastPaidMonth string, paidMonths []string, amount float64) (newly int, applied float64) {
+	if len(paidMonths) == 0 {
+		return 0, 0
+	}
+	for _, m := range paidMonths {
+		if m > lastPaidMonth { // YYYY-MM sorts lexicographically
+			newly++
+		}
+	}
+	perMonth := domain.ToPaise(amount) / domain.MoneyPaise(len(paidMonths))
+	return newly, (perMonth * domain.MoneyPaise(newly)).ToRupees()
+}
+
 func (r *mongoMemberRepo) ApplyPaidMonths(ctx context.Context, memberID string, paidMonths []string, amount float64) error {
 	if len(paidMonths) == 0 {
 		return nil
 	}
 	lastPaid := paidMonths[len(paidMonths)-1]
 
-	update := bson.M{
-		"$set": bson.M{
-			"last_paid_month": lastPaid,
-			"updated_at":      time.Now().UTC(),
-		},
-		"$inc": bson.M{
-			"outstanding_balance": -amount,
-			"version":             1,
-		},
+	// Optimistic loop: read last_paid_month, compute what is newly covered,
+	// and write only if last_paid_month is still what we read.
+	for attempt := 0; attempt < 5; attempt++ {
+		var cur struct {
+			LastPaidMonth string `bson:"last_paid_month"`
+		}
+		if err := r.coll.FindOne(ctx, bson.M{"_id": memberID}).Decode(&cur); err != nil {
+			return err
+		}
+		newly, applied := NewlyCoveredDues(cur.LastPaidMonth, paidMonths, amount)
+		if newly == 0 {
+			return nil // already covered by an earlier payment
+		}
+		newLast := lastPaid
+		if cur.LastPaidMonth > newLast {
+			newLast = cur.LastPaidMonth
+		}
+		guard := bson.M{"_id": memberID}
+		if cur.LastPaidMonth == "" {
+			guard["$or"] = bson.A{bson.M{"last_paid_month": ""}, bson.M{"last_paid_month": bson.M{"$exists": false}}}
+		} else {
+			guard["last_paid_month"] = cur.LastPaidMonth
+		}
+		res, err := r.coll.UpdateOne(ctx, guard, bson.M{
+			"$set": bson.M{"last_paid_month": newLast, "updated_at": time.Now().UTC()},
+			"$inc": bson.M{"outstanding_balance": -applied, "version": 1},
+		})
+		if err != nil {
+			return err
+		}
+		if res.MatchedCount == 1 {
+			return nil
+		}
 	}
+	return errors.New("apply paid months: concurrent updates, giving up")
+}
 
-	_, err := r.coll.UpdateOne(ctx, bson.M{"_id": memberID}, update)
-	return err
+func (r *mongoMemberRepo) ReverseDuesPayment(ctx context.Context, mahalID, memberID string, amount float64, lastMonth, rollbackTo string) (bool, error) {
+	res, err := r.coll.UpdateOne(ctx, bson.M{"_id": memberID, "mahal_id": mahalID}, bson.M{
+		"$set": bson.M{"updated_at": time.Now().UTC()},
+		"$inc": bson.M{"outstanding_balance": amount, "version": 1},
+	})
+	if err != nil {
+		return false, err
+	}
+	if res.MatchedCount == 0 {
+		return false, mongo.ErrNoDocuments
+	}
+	if rollbackTo == "" || lastMonth == "" {
+		return false, nil
+	}
+	res, err = r.coll.UpdateOne(ctx, bson.M{"_id": memberID, "mahal_id": mahalID, "last_paid_month": lastMonth},
+		bson.M{"$set": bson.M{"last_paid_month": rollbackTo}})
+	if err != nil {
+		return false, err
+	}
+	return res.MatchedCount == 1, nil
 }
 
 func (r *mongoMemberRepo) GetMemberStats(ctx context.Context, mahalID string) (totalMembers int64, paidCount int64, pendingCount int64, totalPendingAmount float64, err error) {

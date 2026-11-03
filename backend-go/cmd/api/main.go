@@ -34,6 +34,17 @@ func main() {
 
 	log.Info().Str("version", AppVersion).Msg("Starting MahalFlow Live API Server")
 
+	// Fail closed on configuration that would make auth or payments unsafe.
+	if err := api.InitJWT(); err != nil {
+		log.Fatal().Err(err).Msg("Refusing to start: JWT configuration is invalid")
+	}
+	for _, w := range cfg.SafetyWarnings {
+		log.Error().Msg("UNSAFE CONFIGURATION: " + w)
+	}
+	if cfg.PaymentTestMode {
+		log.Warn().Msg("PAYMENT_TEST_MODE is ON: the payment gateway is simulated and payments are confirmed without money moving (development only)")
+	}
+
 	// 1. Connect MongoDB
 	dbClient, err := database.Connect(cfg.MongoURI, cfg.DBName)
 	if err != nil {
@@ -74,6 +85,7 @@ func main() {
 		}
 		idxCancel()
 		paymentService = service.NewPaymentService(dbClient.Client, mahalRepo, memberRepo, txnRepo, receiptRepo)
+		paymentService.SetAllowStandaloneCommit(cfg.AllowStandaloneCommit)
 	}
 
 	// WhatsApp is optional: an unconfigured client reports disabled and every
@@ -175,6 +187,10 @@ func main() {
 	handler.SetPush(deviceTokenRepo, pushService)
 	handler.SetImportBatches(importRepo)
 	handler.SetPublicBaseURL(cfg.PublicBaseURL)
+	if dbClient != nil {
+		// One AutoPay scheduler across all API instances.
+		handler.SetLeaseRepo(repository.NewLeaseRepository(dbClient.DB))
+	}
 
 	// Phone sign-in: /auth/resolve and /auth/register accept only a verified
 	// Firebase ID token. The project comes from FIREBASE_PROJECT_ID or the
@@ -228,23 +244,42 @@ func main() {
 	})
 
 	app.Use(recover.New())
-	app.Use(cors.New(cors.Config{
-		AllowOrigins: "*",
-		AllowMethods: "GET,POST,PUT,DELETE,PATCH,HEAD,OPTIONS",
-		AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-Tenant-ID, X-Correlation-ID, X-Idempotency-Key, X-HTTP-Method-Override",
-	}))
+	// CORS: explicit allowlist from CORS_ORIGINS (never "*"). With none set
+	// (and not development) no CORS headers are sent, so browsers stay
+	// same-origin; the mobile app is unaffected.
+	if cfg.CORSOrigins != "" {
+		app.Use(cors.New(cors.Config{
+			AllowOrigins: cfg.CORSOrigins,
+			AllowMethods: "GET,POST,PUT,DELETE,PATCH,HEAD,OPTIONS",
+			AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-Tenant-ID, X-Correlation-ID, X-Idempotency-Key, X-HTTP-Method-Override",
+		}))
+		log.Info().Str("origins", cfg.CORSOrigins).Msg("CORS allowlist active")
+	} else {
+		log.Warn().Msg("CORS_ORIGINS not set: no CORS headers will be sent (web-admin on another origin will be blocked)")
+	}
 	app.Use(api.CorrelationIDMiddleware())
 	app.Use(api.GlobalRateLimiterMiddleware())
 
-	// Public Health Route
+	// Public health route doubles as readiness: it pings MongoDB and answers
+	// 503 when the database is unreachable, so the platform stops routing here.
 	app.Get("/health", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{
-			"status":      "healthy",
+		body := fiber.Map{
 			"version":     AppVersion,
-			"database":    "connected",
 			"environment": cfg.Environment,
 			"timestamp":   time.Now().UTC(),
-		})
+		}
+		if dbClient == nil {
+			body["status"], body["database"] = "unhealthy", "disconnected"
+			return c.Status(fiber.StatusServiceUnavailable).JSON(body)
+		}
+		pingCtx, cancelPing := context.WithTimeout(c.Context(), 2*time.Second)
+		defer cancelPing()
+		if err := dbClient.Client.Ping(pingCtx, nil); err != nil {
+			body["status"], body["database"] = "unhealthy", "unreachable"
+			return c.Status(fiber.StatusServiceUnavailable).JSON(body)
+		}
+		body["status"], body["database"] = "healthy", "connected"
+		return c.JSON(body)
 	})
 
 	// Public Auth & Webhooks

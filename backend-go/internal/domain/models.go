@@ -3,9 +3,19 @@ package domain
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
 	"time"
+)
+
+// Refund errors.
+var (
+	ErrRefundNotAllowed       = errors.New("transaction cannot be refunded in its current state")
+	ErrRefundAmountInvalid    = errors.New("refund amount must be greater than zero")
+	ErrRefundExceedsRemaining = errors.New("refund amount exceeds the remaining refundable amount")
 )
 
 type SubscriptionStatus string
@@ -25,6 +35,9 @@ const (
 	TxnSuccess     PaymentStatus = "SUCCESS"
 	TxnFailed      PaymentStatus = "FAILED"
 	TxnRefunded    PaymentStatus = "REFUNDED"
+	// TxnPartiallyRefunded: part of the amount has been refunded; more may
+	// still be refunded up to Amount - RefundedAmount.
+	TxnPartiallyRefunded PaymentStatus = "PARTIALLY_REFUNDED"
 )
 
 // Mahal represents a Tenant organization
@@ -120,6 +133,10 @@ type Transaction struct {
 	ReceiptID   string     `bson:"receipt_id,omitempty" json:"receipt_id,omitempty"`
 	CreatedAt   time.Time  `bson:"created_at" json:"created_at"`
 	CompletedAt *time.Time `bson:"completed_at,omitempty" json:"completed_at,omitempty"`
+	// RefundedAmount is the cumulative amount refunded so far. Status is
+	// PARTIALLY_REFUNDED while 0 < RefundedAmount < Amount, REFUNDED once the
+	// whole amount is back.
+	RefundedAmount float64 `bson:"refunded_amount,omitempty" json:"refunded_amount,omitempty"`
 }
 
 // Receipt is the immutable, cryptographically chained receipt
@@ -139,12 +156,21 @@ type Receipt struct {
 	PDFStorageURL       string    `bson:"pdf_storage_url,omitempty" json:"pdf_storage_url,omitempty"`
 	CreatedAt           time.Time `bson:"created_at" json:"created_at"`
 
+	// HashVersion selects the formula behind ReceiptHash. 0 or 1 is the legacy
+	// formula (receipt number, mahal, member, amount, previous hash only);
+	// 2 covers every field listed in CanonicalReceiptPayloadV2. Receipts
+	// issued before this field existed read back as 0 and keep verifying
+	// under the legacy formula. Currency is a v2 hash input; it is empty on
+	// legacy receipts.
+	HashVersion int    `bson:"hash_version,omitempty" json:"hash_version,omitempty"`
+	Currency    string `bson:"currency,omitempty" json:"currency,omitempty"`
+
 	// Descriptive fields, copied from the transaction when the receipt is
 	// issued. They are deliberately NOT part of the hash input
 	// (CalculateReceiptHash), so receipts issued before these existed keep
 	// verifying. Status is SUCCESS at issue; API reads report REFUNDED once
 	// the transaction is refunded (the stored receipt is never modified).
-	Status        string     `bson:"status,omitempty" json:"status,omitempty"`                 // SUCCESS | REFUNDED
+	Status        string     `bson:"status,omitempty" json:"status,omitempty"`                 // SUCCESS | REFUNDED | REFUND (offsetting entry)
 	Gateway       string     `bson:"gateway,omitempty" json:"gateway,omitempty"`               // PAYU | PAYU_SI | CASH
 	PaymentMethod string     `bson:"payment_method,omitempty" json:"payment_method,omitempty"` // UPI | CARD | NETBANKING | WALLET | CASH
 	Fund          string     `bson:"fund,omitempty" json:"fund,omitempty"`
@@ -156,6 +182,9 @@ type Receipt struct {
 const (
 	ReceiptStatusSuccess  = "SUCCESS"
 	ReceiptStatusRefunded = "REFUNDED"
+	// ReceiptStatusPartiallyRefunded is a read-time overlay for receipts whose
+	// transaction has been partly refunded.
+	ReceiptStatusPartiallyRefunded = "PARTIALLY_REFUNDED"
 )
 
 // NormalizePaymentMode maps PayU's `mode` (CC, DC, NB, UPI, PPI, ...) and our
@@ -182,9 +211,12 @@ func NormalizePaymentMode(mode string) string {
 // MoneyPaise represents an integer minor-unit monetary amount (1 INR = 100 Paise) to eliminate floating-point rounding errors
 type MoneyPaise int64
 
-// ToPaise converts a currency amount to integer Paise (e.g. 500.50 -> 50050)
+// ToPaise converts a currency amount to integer Paise (e.g. 500.50 -> 50050).
+// It rounds half away from zero, so negative amounts (refund entries) convert
+// symmetrically; the old int64(x*100+0.5) truncated toward zero and was off
+// by one paisa for every negative value.
 func ToPaise(amount float64) MoneyPaise {
-	return MoneyPaise(int64(amount*100.0 + 0.5))
+	return MoneyPaise(int64(math.Round(amount * 100.0)))
 }
 
 // ToRupees converts integer Paise back to standard currency amount (e.g. 50050 -> 500.50)
@@ -192,12 +224,127 @@ func (p MoneyPaise) ToRupees() float64 {
 	return float64(p) / 100.0
 }
 
-// CalculateReceiptHash computes the SHA-256 hash for blockchain-like integrity using exact minor-unit paise
+// Receipt hash versions.
+const (
+	ReceiptHashV1 = 1 // legacy: receipt number, mahal, member, amount, previous hash
+	ReceiptHashV2 = 2 // canonical serialization of every ledger field
+)
+
+// Receipt payment types beyond the transaction types.
+const ReceiptTypeRefund = "REFUND"
+
+// CalculateReceiptHash is the LEGACY (v1) receipt hash. It is kept unchanged
+// so receipts issued before v2 keep verifying; new receipts use
+// (*Receipt).ComputeHash with HashVersion 2.
+//
+// It computes the SHA-256 hash for blockchain-like integrity using exact minor-unit paise
 func CalculateReceiptHash(receiptNum, mahalID, memberID string, amount float64, prevHash string) string {
 	paise := ToPaise(amount)
 	payload := fmt.Sprintf("%s:%s:%s:%d:%s", receiptNum, mahalID, memberID, paise, prevHash)
 	hash := sha256.Sum256([]byte(payload))
 	return hex.EncodeToString(hash[:])
+}
+
+// CanonicalReceiptPayloadV2 is the exact byte string hashed by v2 receipts.
+// Fields are written in a fixed order as key=value lines; every string is
+// strconv.Quote'd so no value can smuggle in a separator and shift another
+// field. Covered: receipt number, sequence, mahal, member, transaction id,
+// payment type, paid months (in order), amount in minor units, currency,
+// issue time (UTC, millisecond precision), fund and previous hash.
+func CanonicalReceiptPayloadV2(r *Receipt) string {
+	var b strings.Builder
+	b.WriteString("mahalflow.receipt.v2\n")
+	kv := func(k, v string) {
+		b.WriteString(k)
+		b.WriteByte('=')
+		b.WriteString(strconv.Quote(v))
+		b.WriteByte('\n')
+	}
+	kv("receipt_number", r.ReceiptNumber)
+	kv("sequence", strconv.FormatInt(r.SequenceNumber, 10))
+	kv("mahal_id", r.MahalID)
+	kv("member_id", r.MemberID)
+	kv("transaction_id", r.TransactionID)
+	kv("payment_type", r.PaymentType)
+	kv("paid_months", strings.Join(r.PaidMonths, ","))
+	kv("months_count", strconv.Itoa(len(r.PaidMonths)))
+	kv("amount_minor", strconv.FormatInt(int64(ToPaise(r.Amount)), 10))
+	kv("currency", r.Currency)
+	kv("issued_at_ms", strconv.FormatInt(r.CreatedAt.UTC().UnixMilli(), 10))
+	kv("fund", r.Fund)
+	kv("previous_hash", r.PreviousReceiptHash)
+	return b.String()
+}
+
+// ComputeHash recomputes the receipt hash with the formula named by
+// HashVersion (0 and 1 = legacy).
+func (r *Receipt) ComputeHash() string {
+	if r.HashVersion >= ReceiptHashV2 {
+		sum := sha256.Sum256([]byte(CanonicalReceiptPayloadV2(r)))
+		return hex.EncodeToString(sum[:])
+	}
+	return CalculateReceiptHash(r.ReceiptNumber, r.MahalID, r.MemberID, r.Amount, r.PreviousReceiptHash)
+}
+
+// EffectiveHashVersion reports the formula version actually in force.
+func (r *Receipt) EffectiveHashVersion() int {
+	if r.HashVersion >= ReceiptHashV2 {
+		return r.HashVersion
+	}
+	return ReceiptHashV1
+}
+
+// VerifyReceiptHashes walks a mahal's receipts (ordered by sequence number) and
+// counts the broken ones. A receipt is broken when its stored hash differs
+// from the recomputed one (tampered field), or when its previous-hash link
+// does not equal the preceding receipt's stored hash (removed / reordered
+// entry). Each broken receipt is counted once.
+func VerifyReceiptHashes(receipts []Receipt) (total, broken int64) {
+	total = int64(len(receipts))
+	for i := range receipts {
+		bad := receipts[i].ComputeHash() != receipts[i].ReceiptHash
+		if i > 0 && receipts[i].PreviousReceiptHash != receipts[i-1].ReceiptHash {
+			bad = true
+		}
+		if bad {
+			broken++
+		}
+	}
+	return total, broken
+}
+
+// CheckRefund validates a refund of amount against a transaction's state and
+// remaining refundable balance. Only SUCCESS and PARTIALLY_REFUNDED
+// transactions can be refunded.
+func CheckRefund(t *Transaction, amount float64) error {
+	if t.Status != TxnSuccess && t.Status != TxnPartiallyRefunded {
+		return fmt.Errorf("%w: transaction is %s", ErrRefundNotAllowed, t.Status)
+	}
+	if ToPaise(amount) <= 0 {
+		return ErrRefundAmountInvalid
+	}
+	if ToPaise(t.RefundedAmount)+ToPaise(amount) > ToPaise(t.Amount) {
+		return fmt.Errorf("%w: %.2f requested, %.2f refundable", ErrRefundExceedsRemaining, amount, RemainingRefundable(t))
+	}
+	return nil
+}
+
+// RemainingRefundable is Amount minus what has already been refunded.
+func RemainingRefundable(t *Transaction) float64 {
+	return (ToPaise(t.Amount) - ToPaise(t.RefundedAmount)).ToRupees()
+}
+
+// RefundStatusAfter is the status a transaction takes once refunded holds
+// cumulativeRefunded.
+func RefundStatusAfter(t *Transaction, cumulativeRefunded float64) PaymentStatus {
+	switch {
+	case ToPaise(cumulativeRefunded) <= 0:
+		return TxnSuccess
+	case ToPaise(cumulativeRefunded) >= ToPaise(t.Amount):
+		return TxnRefunded
+	default:
+		return TxnPartiallyRefunded
+	}
 }
 
 // AuditLog captures auditable events with cryptographic chain integrity
@@ -345,8 +492,18 @@ type Mandate struct {
 	NextDebit      *time.Time `bson:"next_debit,omitempty" json:"next_debit,omitempty"`
 	LastDebitAt    *time.Time `bson:"last_debit_at,omitempty" json:"last_debit_at,omitempty"`
 	PreDebitSentAt *time.Time `bson:"pre_debit_sent_at,omitempty" json:"pre_debit_sent_at,omitempty"`
-	CreatedAt      time.Time  `bson:"created_at" json:"created_at"`
-	UpdatedAt      time.Time  `bson:"updated_at" json:"updated_at"`
+	// FailureCount is the number of consecutive failed debit attempts for the
+	// current cycle; the scheduler backs off exponentially and marks the
+	// mandate FAILED after the retry cap.
+	FailureCount int `bson:"failure_count,omitempty" json:"failure_count,omitempty"`
+	// NextRetryAt gates the next attempt after a failed debit (exponential
+	// backoff). NextDebit itself stays at the cycle's scheduled date.
+	NextRetryAt *time.Time `bson:"next_retry_at,omitempty" json:"next_retry_at,omitempty"`
+	// GatewayCancelStatus records whether the SI was revoked at PayU when the
+	// mandate was cancelled: CANCELLED | FAILED | SKIPPED | UNVERIFIED.
+	GatewayCancelStatus string    `bson:"gateway_cancel_status,omitempty" json:"gateway_cancel_status,omitempty"`
+	CreatedAt           time.Time `bson:"created_at" json:"created_at"`
+	UpdatedAt           time.Time `bson:"updated_at" json:"updated_at"`
 }
 
 // ImportBatch is a parsed Excel/CSV member import awaiting (or after) commit.
