@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ApiClient, type Gateway } from "@/lib/api-client";
 import { ErrorState, LoadingBlock } from "@/components/ui/States";
@@ -16,11 +17,17 @@ function Field({ label, value, mono }: { label: string; value: React.ReactNode; 
 }
 
 export default function GatewayConfigurationPage() {
+  const router = useRouter();
+  useEffect(() => {
+    if (!ApiClient.isSuperAdmin()) router.replace("/dashboard");
+  }, [router]);
+
   const [gateways, setGateways] = useState<Gateway[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
+    if (!ApiClient.isSuperAdmin()) return;
     setLoading(true);
     setError(null);
     ApiClient.getGateways()

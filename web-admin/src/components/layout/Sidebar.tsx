@@ -23,7 +23,7 @@ function navFor(superAdmin: boolean, tenant: string): NavItem[] {
     { label: "Import Members", icon: "upload_file", href: "/excel-import" },
     { label: "Payments", icon: "payments", href: "/payments" },
     ...(superAdmin ? [{ label: "Subscriptions", icon: "card_membership", href: "/subscriptions" }] : []),
-    { label: "Gateways", icon: "account_balance_wallet", href: "/gateways" },
+    ...(superAdmin ? [{ label: "Gateways", icon: "account_balance_wallet", href: "/gateways" }] : []),
     { label: "Refunds", icon: "undo", href: "/refunds" },
     { label: "Reports", icon: "assessment", href: "/reports" },
     { label: "Audit Logs", icon: "history_edu", href: "/audit-logs" },

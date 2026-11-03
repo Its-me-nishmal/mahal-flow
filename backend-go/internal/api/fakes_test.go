@@ -10,6 +10,7 @@ import (
 	"github.com/mahalflow/backend-go/internal/gateway/firebaseauth"
 	"github.com/mahalflow/backend-go/internal/repository"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 // In-memory repositories for handler tests. Only the behaviour the auth /
@@ -80,6 +81,30 @@ func (f *fakeMembers) ListByMahal(_ contextT, mahalID string, _, _ int64) ([]dom
 	return out, int64(len(out)), nil
 }
 func (f *fakeMembers) ApplyPaidMonths(contextT, string, []string, float64) error { return nil }
+
+// reversals records ReverseDuesPayment calls for assertions.
+var fakeReversals []fakeReversal
+
+type fakeReversal struct {
+	MemberID           string
+	Amount             float64
+	LastMonth, Rollbck string
+}
+
+func (f *fakeMembers) ReverseDuesPayment(_ contextT, mahalID, memberID string, amount float64, lastMonth, rollbackTo string) (bool, error) {
+	m, ok := f.rows[memberID]
+	if !ok || m.MahalID != mahalID {
+		return false, errNoDoc
+	}
+	fakeReversals = append(fakeReversals, fakeReversal{memberID, amount, lastMonth, rollbackTo})
+	m.OutstandingBalance += amount
+	rolled := false
+	if rollbackTo != "" && m.LastPaidMonth == lastMonth {
+		m.LastPaidMonth, rolled = rollbackTo, true
+	}
+	f.rows[memberID] = m
+	return rolled, nil
+}
 func (f *fakeMembers) GetMemberStats(_ contextT, mahalID string) (int64, int64, int64, float64, error) {
 	var total, paid int64
 	var pendingAmt float64
@@ -386,7 +411,13 @@ func (f *fakeTxns) SetPaymentDetails(_ contextT, id, pid, mode string) error {
 func (f *fakeTxns) FindPendingOlderThan(contextT, time.Duration) ([]domain.Transaction, error) {
 	return nil, nil
 }
-func (f *fakeTxns) FindByIDempotencyKey(contextT, string) (*domain.Transaction, error) {
+func (f *fakeTxns) FindByIDempotencyKey(_ contextT, mahalID, key string) (*domain.Transaction, error) {
+	for _, t := range f.rows {
+		if t.MahalID == mahalID && t.IdempotencyKey == key && key != "" {
+			tt := t
+			return &tt, nil
+		}
+	}
 	return nil, nil
 }
 func (f *fakeTxns) CountFailedByIP(contextT, string, time.Duration) (int64, error)     { return 0, nil }
@@ -399,6 +430,46 @@ func (f *fakeTxns) GetTotalCollectionByMahal(contextT, string, time.Time) (float
 }
 func (f *fakeTxns) GetFinancialSummary(contextT, string) (float64, float64, float64, error) {
 	return 0, 0, 0, nil
+}
+
+func (f *fakeTxns) MarkSuccess(_ contextT, id, receipt string) (bool, error) {
+	t, ok := f.rows[id]
+	if !ok || t.Status != domain.TxnPending {
+		return false, nil
+	}
+	now := time.Now().UTC()
+	t.Status, t.ReceiptID, t.CompletedAt = domain.TxnSuccess, receipt, &now
+	f.rows[id] = t
+	return true, nil
+}
+
+func (f *fakeTxns) ReserveRefund(_ contextT, mahalID, id string, amount float64) (*domain.Transaction, error) {
+	t, ok := f.rows[id]
+	if !ok || t.MahalID != mahalID {
+		return nil, mongo.ErrNoDocuments
+	}
+	if err := domain.CheckRefund(&t, amount); err != nil {
+		return nil, err
+	}
+	t.RefundedAmount = (domain.ToPaise(t.RefundedAmount) + domain.ToPaise(amount)).ToRupees()
+	t.Status = domain.RefundStatusAfter(&t, t.RefundedAmount)
+	f.rows[id] = t
+	return &t, nil
+}
+
+func (f *fakeTxns) ReleaseRefund(_ contextT, mahalID, id string, amount float64) error {
+	t, ok := f.rows[id]
+	if !ok || t.MahalID != mahalID {
+		return errNoDoc
+	}
+	left := domain.ToPaise(t.RefundedAmount) - domain.ToPaise(amount)
+	if left < 0 {
+		left = 0
+	}
+	t.RefundedAmount = left.ToRupees()
+	t.Status = domain.RefundStatusAfter(&t, t.RefundedAmount)
+	f.rows[id] = t
+	return nil
 }
 
 type fakeRefunds struct {

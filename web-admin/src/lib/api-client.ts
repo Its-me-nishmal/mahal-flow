@@ -54,8 +54,19 @@ export function getCurrentTenant(): string {
   return typeof user?.mahal_id === "string" ? user.mahal_id : "";
 }
 
+/** Non-sensitive presence flag read by src/middleware.ts to redirect signed-out
+ * visitors. It is NOT authentication: the API still enforces the bearer token. */
+export const SESSION_COOKIE = "mf_session";
+
+function setSessionCookie() {
+  if (typeof document === "undefined") return;
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${SESSION_COOKIE}=1; Path=/; Max-Age=${60 * 60 * 24}; SameSite=Lax${secure}`;
+}
+
 function clearSession() {
   if (typeof window === "undefined") return;
+  document.cookie = `${SESSION_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`;
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
 }
@@ -333,6 +344,7 @@ export const ApiClient = {
     if (typeof window !== "undefined" && data.token) {
       localStorage.setItem(TOKEN_KEY, data.token);
       localStorage.setItem(USER_KEY, JSON.stringify(data));
+      setSessionCookie();
     }
     return data;
   },

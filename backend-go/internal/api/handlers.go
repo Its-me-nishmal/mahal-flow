@@ -2,11 +2,13 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"html"
-	"os"
+	"math"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -14,9 +16,11 @@ import (
 	"github.com/mahalflow/backend-go/internal/domain"
 	"github.com/mahalflow/backend-go/internal/gateway/firebaseauth"
 	"github.com/mahalflow/backend-go/internal/gateway/pg"
+	"github.com/mahalflow/backend-go/internal/logger"
 	"github.com/mahalflow/backend-go/internal/repository"
 	"github.com/mahalflow/backend-go/internal/service"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 type Handler struct {
@@ -47,6 +51,50 @@ type Handler struct {
 	importRepo repository.ImportBatchRepository
 	// publicBaseURL is how browsers reach this API (SetPublicBaseURL).
 	publicBaseURL string
+
+	// leaseRepo makes the in-process AutoPay scheduler single-instance
+	// (SetLeaseRepo). leaseOwner identifies this process.
+	leaseRepo  repository.LeaseRepository
+	leaseOwner string
+
+	// webhookAlerts throttles the "bad webhook signature" alert.
+	webhookAlerts alertThrottle
+}
+
+// alertThrottle lets one alert through per window and counts what it
+// suppressed, so unauthenticated traffic cannot flood the alerts collection.
+type alertThrottle struct {
+	mu         sync.Mutex
+	last       time.Time
+	suppressed int
+}
+
+// allow reports whether an alert may be created now, and how many were
+// suppressed since the previous one.
+func (t *alertThrottle) allow(window time.Duration) (bool, int) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	now := time.Now()
+	if !t.last.IsZero() && now.Sub(t.last) < window {
+		t.suppressed++
+		return false, 0
+	}
+	n := t.suppressed
+	t.suppressed, t.last = 0, now
+	return true, n
+}
+
+// SetLeaseRepo wires the distributed lease used by the AutoPay scheduler.
+func (h *Handler) SetLeaseRepo(r repository.LeaseRepository) {
+	h.leaseRepo = r
+	h.leaseOwner = "api-" + uuid.New().String()[:8]
+}
+
+// simulatedGateway is true only when the payment gateway is explicitly in
+// PAYMENT_TEST_MODE. A missing or unconfigured gateway is NOT simulated: it
+// refuses to confirm payments (see gatewayConfirmsSuccess).
+func (h *Handler) simulatedGateway() bool {
+	return h.pgClient != nil && h.pgClient.TestMode
 }
 
 // SetPush wires device-token storage and FCM delivery. Kept out of NewHandler
@@ -594,28 +642,34 @@ func (h *Handler) InitializeDuesPayment(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	if req.Gateway == "CASH" {
+	if strings.EqualFold(req.Gateway, "CASH") {
 		receipt, commitErr := h.paymentService.CommitSuccessfulPayment(c.Context(), txn.ID)
-		if commitErr == nil && receipt != nil {
-			if h.auditRepo != nil {
-				_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
-					MahalID:  receipt.MahalID,
-					Action:   "CASH_PAYMENT_COMMITTED",
-					Actor:    receipt.MemberName,
-					EntityID: receipt.ReceiptNumber,
-					Details:  "Paid " + strconv.FormatFloat(receipt.Amount, 'f', 2, 64) + " for months: " + strconv.Itoa(len(receipt.PaidMonths)),
-				})
-			}
-			return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-				"transaction_id":   txn.ID,
-				"amount":           txn.Amount,
-				"currency":         txn.Currency,
-				"selected_months":  txn.SelectedMonths,
-				"status":           "SUCCESS",
-				"receipt":          receipt,
-				"gateway_order_id": "order_cash_" + txn.ID[4:12],
+		if commitErr != nil || receipt == nil {
+			logger.Log.Error().Err(commitErr).Str("txn", txn.ID).Msg("Cash payment recorded but receipt commit failed")
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error":          "Could not record the cash payment; nothing was booked. Retry with the same idempotency key.",
+				"transaction_id": txn.ID,
+				"status":         string(txn.Status),
 			})
 		}
+		if h.auditRepo != nil {
+			_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
+				MahalID:  receipt.MahalID,
+				Action:   "CASH_PAYMENT_COMMITTED",
+				Actor:    h.sessionActor(c),
+				EntityID: receipt.ReceiptNumber,
+				Details:  "Cash paid " + strconv.FormatFloat(receipt.Amount, 'f', 2, 64) + " for " + strconv.Itoa(len(receipt.PaidMonths)) + " month(s), member " + receipt.MemberName,
+			})
+		}
+		return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+			"transaction_id":   txn.ID,
+			"amount":           txn.Amount,
+			"currency":         txn.Currency,
+			"selected_months":  txn.SelectedMonths,
+			"status":           "SUCCESS",
+			"receipt":          receipt,
+			"gateway_order_id": "order_cash_" + txn.ID[4:12],
+		})
 	}
 
 	orderID := orderIDForTxn(txn)
@@ -672,7 +726,7 @@ func (h *Handler) ConfirmPayment(c *fiber.Ctx) error {
 			})
 		}
 		// Simulated gateway: nothing to ask, so keep the SDK's mihpayid.
-		if !h.pgClient.Live() && req.GatewayPaymentID != "" && h.txnRepo != nil {
+		if h.simulatedGateway() && req.GatewayPaymentID != "" && h.txnRepo != nil {
 			_ = h.txnRepo.SetPaymentDetails(c.Context(), txn.ID, req.GatewayPaymentID, "")
 		}
 	}
@@ -740,27 +794,40 @@ func (h *Handler) InitializeContribution(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	testMode := os.Getenv("PAYMENT_TEST_MODE")
-	if testMode == "ON" || testMode == "true" || testMode == "1" || testMode == "" {
+	// Commit immediately only for cash recorded by the committee, or when the
+	// gateway is explicitly simulated (PAYMENT_TEST_MODE, development only).
+	// Everything else waits for the gateway to confirm.
+	isCash := strings.EqualFold(req.Gateway, "CASH")
+	if isCash || h.simulatedGateway() {
 		receipt, commitErr := h.paymentService.CommitSuccessfulPayment(c.Context(), txn.ID)
-		if commitErr == nil && receipt != nil {
-			if h.auditRepo != nil {
-				_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
-					MahalID:  receipt.MahalID,
-					Action:   "DONATION_COMMITTED_TEST_MODE",
-					Actor:    receipt.MemberName,
-					EntityID: receipt.ReceiptNumber,
-					Details:  "Donation test payment of ₹" + strconv.FormatFloat(receipt.Amount, 'f', 2, 64),
-				})
-			}
-			return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		if commitErr != nil || receipt == nil {
+			logger.Log.Error().Err(commitErr).Str("txn", txn.ID).Msg("Contribution recorded but receipt commit failed")
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error":          "Could not record the contribution; nothing was booked. Retry with the same idempotency key.",
 				"transaction_id": txn.ID,
-				"amount":         txn.Amount,
-				"currency":       txn.Currency,
-				"status":         "SUCCESS",
-				"receipt":        receipt,
+				"status":         string(txn.Status),
 			})
 		}
+		action, details := "DONATION_COMMITTED_TEST_MODE", "Donation test payment of ₹"
+		if isCash {
+			action, details = "CASH_DONATION_COMMITTED", "Cash donation of ₹"
+		}
+		if h.auditRepo != nil {
+			_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
+				MahalID:  receipt.MahalID,
+				Action:   action,
+				Actor:    h.sessionActor(c),
+				EntityID: receipt.ReceiptNumber,
+				Details:  details + strconv.FormatFloat(receipt.Amount, 'f', 2, 64),
+			})
+		}
+		return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+			"transaction_id": txn.ID,
+			"amount":         txn.Amount,
+			"currency":       txn.Currency,
+			"status":         "SUCCESS",
+			"receipt":        receipt,
+		})
 	}
 
 	resp := fiber.Map{
@@ -819,18 +886,12 @@ func (h *Handler) VerifyReceiptIntegrity(c *fiber.Ctx) error {
 		return aerr.send(c)
 	}
 
-	recomputed := domain.CalculateReceiptHash(
-		receipt.ReceiptNumber,
-		receipt.MahalID,
-		receipt.MemberID,
-		receipt.Amount,
-		receipt.PreviousReceiptHash,
-	)
-
+	// Recompute with the formula the receipt was issued under (hash_version).
+	recomputed := receipt.ComputeHash()
 	isValid := recomputed == receipt.ReceiptHash
 
 	return c.JSON(fiber.Map{
-		"hash_version":          1, // descriptive receipt fields are not hashed
+		"hash_version":          receipt.EffectiveHashVersion(),
 		"receipt_number":        receipt.ReceiptNumber,
 		"sequence_number":       receipt.SequenceNumber,
 		"stored_hash":           receipt.ReceiptHash,
@@ -917,6 +978,11 @@ func (h *Handler) CreateAutoPayMandate(c *fiber.Ctx) error {
 	if debitAmount <= 0 {
 		debitAmount = maxAmount
 	}
+	if aerr := validateMandateAmounts(maxAmount, debitAmount); aerr != nil {
+		return aerr.send(c)
+	}
+	maxAmount = domain.ToPaise(maxAmount).ToRupees()
+	debitAmount = domain.ToPaise(debitAmount).ToRupees()
 	frequency := strings.ToUpper(req.Frequency)
 	if frequency == "" {
 		frequency = "MONTHLY"
@@ -980,6 +1046,28 @@ func (h *Handler) CreateAutoPayMandate(c *fiber.Ctx) error {
 		"mandate_url":   mandateURL,
 		"payu_checkout": checkoutData,
 	})
+}
+
+// validateMandateAmounts enforces the platform ceiling on AutoPay amounts
+// (the same ceiling as a member's monthly dues, mahalMaxMonthlyDues) and that
+// one debit never exceeds the authorised maximum. The SI max is what the
+// member authorises at their bank, so it must be sane before it is signed.
+func validateMandateAmounts(maxAmount, debitAmount float64) *apiError {
+	for _, v := range []float64{maxAmount, debitAmount} {
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return errBadRequest("Amount is not valid")
+		}
+	}
+	if domain.ToPaise(maxAmount) <= 0 || domain.ToPaise(debitAmount) <= 0 {
+		return errBadRequest("max_amount and debit_amount must be greater than zero")
+	}
+	if maxAmount > mahalMaxMonthlyDues || debitAmount > mahalMaxMonthlyDues {
+		return errBadRequest("AutoPay amount is out of range")
+	}
+	if domain.ToPaise(debitAmount) > domain.ToPaise(maxAmount) {
+		return errBadRequest("debit_amount cannot exceed max_amount")
+	}
+	return nil
 }
 
 type ConfirmMandateRequest struct {
@@ -1204,20 +1292,51 @@ func (h *Handler) CancelAutoPayMandate(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Mandate not found"})
 	}
 
-	_ = h.mandateRepo.Update(c.Context(), mandate.ID, bson.M{
+	if mandate.Status == "CANCELLED" {
+		return c.JSON(fiber.Map{"mandate_id": mandate.ID, "status": "CANCELLED", "gateway_cancel_status": mandate.GatewayCancelStatus})
+	}
+	actor := h.sessionActor(c)
+
+	// Stop our own debits first, then revoke the SI at PayU.
+	if err := h.mandateRepo.Update(c.Context(), mandate.ID, bson.M{
 		"status":     "CANCELLED",
 		"next_debit": nil,
-	})
+	}); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not cancel the mandate"})
+	}
+	gatewayStatus := "SKIPPED" // nothing to revoke: not authorised yet, or simulated gateway
+	var warning string
+	if mandate.AuthPayUID != "" && h.pgClient != nil {
+		res, gErr := h.pgClient.CancelStandingInstruction(c.Context(), mandate.AuthPayUID)
+		switch {
+		case gErr != nil:
+			gatewayStatus = "FAILED"
+			warning = "The mandate is cancelled here, but revoking it at PayU failed; it may still be active there. Revoke it from the PayU dashboard."
+			h.criticalAudit(c.Context(), mandate.MahalID, "AUTOPAY_GATEWAY_CANCEL_FAILED", mandate.ID, actor,
+				fmt.Sprintf("Mandate %s cancelled locally but PayU SI revoke failed: %v", mandate.ID, gErr))
+		case res != nil && res.Simulated:
+			gatewayStatus = "SKIPPED"
+		case res != nil && res.Cancelled:
+			gatewayStatus = "CANCELLED"
+		}
+	}
+	if uErr := h.mandateRepo.Update(c.Context(), mandate.ID, bson.M{"gateway_cancel_status": gatewayStatus}); uErr != nil {
+		logger.Log.Error().Err(uErr).Str("mandate", mandate.ID).Msg("could not record gateway_cancel_status")
+	}
 	if h.auditRepo != nil {
 		_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
 			MahalID:  mandate.MahalID,
 			Action:   "AUTOPAY_MANDATE_CANCELLED",
-			Actor:    sessionRole(c),
+			Actor:    actor,
 			EntityID: mandate.ID,
-			Details:  "AutoPay mandate cancelled. Reason: " + req.Reason,
+			Details:  "AutoPay mandate cancelled (gateway: " + gatewayStatus + "). Reason: " + req.Reason,
 		})
 	}
-	return c.JSON(fiber.Map{"mandate_id": mandate.ID, "status": "CANCELLED"})
+	resp := fiber.Map{"mandate_id": mandate.ID, "status": "CANCELLED", "gateway_cancel_status": gatewayStatus}
+	if warning != "" {
+		resp["warning"] = warning
+	}
+	return c.JSON(resp)
 }
 
 // nextMonthlyDebit returns the next occurrence of the given day-of-month, at
@@ -1271,11 +1390,125 @@ func (h *Handler) StartAutoPayScheduler(ctx context.Context, interval time.Durat
 	}
 }
 
+// AutoPay retry policy: after a failed debit the cycle is retried with
+// exponential backoff (30m, 1h, 2h, 4h) and the mandate is marked FAILED after
+// autopayMaxFailures consecutive failures.
+const (
+	autopayMaxFailures  = 5
+	autopayBackoffBase  = 30 * time.Minute
+	autopayBackoffCap   = 24 * time.Hour
+	autopayLeaseName    = "autopay-scheduler"
+	autopayLeaseTTL     = 10 * time.Minute
+	autopayMaxDuesMonth = 12
+)
+
+// autopayBackoff is the wait before retrying after the given number of
+// consecutive failures (1 = first failure).
+func autopayBackoff(failures int) time.Duration {
+	if failures < 1 {
+		failures = 1
+	}
+	d := autopayBackoffBase << uint(failures-1)
+	if d <= 0 || d > autopayBackoffCap {
+		return autopayBackoffCap
+	}
+	return d
+}
+
+// autopayIdempotencyKey identifies one debit attempt: mandate, scheduled
+// cycle date and attempt number. A retry after a failure is a new attempt; a
+// repeat of the same attempt (crash, second instance) hits the same key.
+func autopayIdempotencyKey(m *domain.Mandate) string {
+	return fmt.Sprintf("SI_%s_%s_%d", m.ID, m.NextDebit.Format("20060102150405"), m.FailureCount)
+}
+
+func nextMonthAfter(m string) string {
+	t, err := time.Parse("2006-01", m)
+	if err != nil {
+		return ""
+	}
+	return time.Date(t.Year(), t.Month()+1, 15, 0, 0, 0, 0, time.UTC).Format("2006-01")
+}
+
+// autopayDuesMonths returns the next unpaid months an installment of amount
+// covers, when amount is a whole multiple of the member's monthly dues. nil
+// means the installment is not a dues payment (it is booked as a
+// contribution instead).
+func (h *Handler) autopayDuesMonths(ctx context.Context, member *domain.Member, amount float64) []string {
+	if member == nil {
+		return nil
+	}
+	rate := member.MonthlyDuesCustomAmount
+	if rate <= 0 && h.mahalRepo != nil {
+		if mh, err := h.mahalRepo.GetByID(ctx, member.MahalID); err == nil && mh != nil {
+			rate = mh.Settings.DefaultMonthlyDues
+		}
+	}
+	ratePaise, amtPaise := domain.ToPaise(rate), domain.ToPaise(amount)
+	if ratePaise <= 0 || amtPaise < ratePaise || amtPaise%ratePaise != 0 {
+		return nil
+	}
+	n := int(amtPaise / ratePaise)
+	if n > autopayMaxDuesMonth {
+		return nil
+	}
+	next := member.LastPaidMonth
+	if next == "" {
+		next = previousMonth(time.Now().UTC().Format("2006-01"))
+	}
+	months := make([]string, 0, n)
+	for i := 0; i < n; i++ {
+		next = nextMonthAfter(next)
+		if next == "" {
+			return nil
+		}
+		months = append(months, next)
+	}
+	return months
+}
+
+// autopayPayer picks the payer details sent to PayU from member data, then
+// the Mahal's contact; the last-resort address is syntactically valid but
+// undeliverable on purpose.
+func (h *Handler) autopayPayer(ctx context.Context, member *domain.Member) (name, email string) {
+	name = "Mahal Member"
+	if member != nil {
+		if n := strings.TrimSpace(member.Name); n != "" {
+			name = n
+		}
+		email = strings.TrimSpace(member.Email)
+		if email == "" && h.mahalRepo != nil {
+			if mh, err := h.mahalRepo.GetByID(ctx, member.MahalID); err == nil && mh != nil {
+				email = strings.TrimSpace(mh.Contact.Email)
+			}
+		}
+	}
+	if email == "" {
+		email = "no-reply@mahalflow.invalid"
+	}
+	return name, email
+}
+
 func (h *Handler) runDueAutoPayDebits(ctx context.Context) fiber.Map {
 	result := fiber.Map{"charged": 0, "notified": 0, "failed": 0, "skipped": 0}
-	if h.mandateRepo == nil || h.paymentService == nil || h.pgClient == nil {
+	if h.mandateRepo == nil || h.paymentService == nil || h.pgClient == nil || h.txnRepo == nil {
 		result["error"] = "autopay dependencies unavailable"
 		return result
+	}
+
+	// Only one instance runs the cycle at a time. A lease error fails closed.
+	if h.leaseRepo != nil {
+		ok, err := h.leaseRepo.Acquire(ctx, autopayLeaseName, h.leaseOwner, autopayLeaseTTL)
+		if err != nil {
+			logger.Log.Error().Err(err).Msg("AutoPay lease unavailable; skipping this cycle")
+			result["error"] = "scheduler lease unavailable"
+			return result
+		}
+		if !ok {
+			result["skipped_reason"] = "another instance holds the scheduler lease"
+			return result
+		}
+		defer func() { _ = h.leaseRepo.Release(context.Background(), autopayLeaseName, h.leaseOwner) }()
 	}
 
 	now := time.Now().UTC()
@@ -1286,122 +1519,240 @@ func (h *Handler) runDueAutoPayDebits(ctx context.Context) fiber.Map {
 		return result
 	}
 
-	charged, notified, failed, skipped := 0, 0, 0, 0
+	counts := map[string]int{}
 	for i := range dueOrUpcoming {
-		m := dueOrUpcoming[i]
-		if m.NextDebit == nil || m.AuthPayUID == "" {
-			skipped++
-			continue
-		}
-		amount := m.DebitAmount
-		if amount <= 0 {
-			amount = m.MaxAmount
-		}
-		amountStr := fmt.Sprintf("%.2f", amount)
-		testFreq := isTestFrequency(m.Frequency)
-
-		// Not yet due: for real cadences, pre-notify (>=48h ahead) and wait. For
-		// test cadences (minutely/hourly/daily) there is no notification gate — just
-		// wait until due.
-		if m.NextDebit.After(now) {
-			if !testFreq && m.PreDebitSentAt == nil {
-				txnid := "SIPD" + strings.ReplaceAll(uuid.New().String(), "-", "")[:12]
-				if err := h.pgClient.PreDebitNotify(ctx, m.AuthPayUID, txnid, amountStr); err == nil {
-					sent := now
-					_ = h.mandateRepo.Update(ctx, m.ID, bson.M{"pre_debit_sent_at": sent})
-					notified++
-				} else {
-					failed++
-				}
-			} else {
-				skipped++
-			}
-			continue
-		}
-
-		// Due now. Real cadences enforce the 48h gap between notification and
-		// debit; test cadences skip straight to the charge.
-		if !testFreq && (m.PreDebitSentAt == nil || now.Sub(*m.PreDebitSentAt) < 48*time.Hour) {
-			if m.PreDebitSentAt == nil {
-				txnid := "SIPD" + strings.ReplaceAll(uuid.New().String(), "-", "")[:12]
-				if err := h.pgClient.PreDebitNotify(ctx, m.AuthPayUID, txnid, amountStr); err == nil {
-					sent := now
-					_ = h.mandateRepo.Update(ctx, m.ID, bson.M{"pre_debit_sent_at": sent})
-					notified++
-				} else {
-					failed++
-				}
-			} else {
-				skipped++
-			}
-			continue
-		}
-
-		// Create the installment transaction, then charge it at the gateway.
-		txn, iErr := h.paymentService.InitializeContribution(ctx, m.MahalID, m.MemberID, amount, "PAYU", "SI_"+m.ID+"_"+m.NextDebit.Format("20060102150405"),
-			service.ContributionDetails{Purpose: "AUTOPAY_DUES"})
-		if iErr != nil || txn == nil {
-			failed++
-			continue
-		}
-
-		si, dErr := h.pgClient.RecurringDebit(ctx, m.AuthPayUID, "ORD"+txn.ID, amountStr, "Mahal AutoPay Dues", "Mahal Member", "member@mahalflow.org")
-		if dErr != nil || si == nil || !si.Success {
-			failed++
-			_ = h.txnRepo.UpdateStatus(ctx, txn.ID, domain.TxnFailed, "")
-			mahalID, memberID := m.MahalID, m.MemberID
-			h.pushAsync(func(ctx context.Context, p *service.PushService) {
-				p.SendToMember(ctx, mahalID, memberID, service.PushNotification{
-					Kind:  service.PushKindPaymentFailed,
-					Title: "AutoPay debit failed",
-					Body:  "We could not collect ₹" + amountStr + " via AutoPay. Tap to pay your dues manually.",
-				})
-			})
-			continue
-		}
-
-		_ = h.txnRepo.SetPaymentDetails(ctx, txn.ID, si.MihPayID, domain.NormalizePaymentMode(m.Mode))
-		if _, cErr := h.paymentService.CommitSuccessfulPayment(ctx, txn.ID); cErr != nil {
-			failed++
-			continue
-		}
-
-		// Test mandates follow the scheduler cadence (e.g. every 3 min) when one
-		// is configured; real cadences advance by their frequency.
-		var next time.Time
-		if testFreq && h.autoPayEvery > 0 {
-			next = now.Add(h.autoPayEvery)
-		} else {
-			next = advanceDebit(m.Frequency, *m.NextDebit)
-			// Never schedule the next debit in the past — catch up to just ahead of now.
-			if next.Before(now) {
-				next = advanceDebit(m.Frequency, now)
+		if h.leaseRepo != nil {
+			// Renew; stop if the lease was lost (e.g. a long gateway stall).
+			if ok, err := h.leaseRepo.Acquire(ctx, autopayLeaseName, h.leaseOwner, autopayLeaseTTL); err != nil || !ok {
+				result["error"] = "scheduler lease lost mid-run"
+				break
 			}
 		}
-		last := now
-		_ = h.mandateRepo.Update(ctx, m.ID, bson.M{
-			"last_debit_at":     last,
-			"next_debit":        next,
-			"pre_debit_sent_at": nil,
-		})
-		if h.auditRepo != nil {
-			_ = h.auditRepo.Create(ctx, &domain.AuditLog{
-				MahalID:  m.MahalID,
-				Action:   "AUTOPAY_DEBIT_EXECUTED",
-				Actor:    "SCHEDULER",
-				EntityID: m.ID,
-				Details:  fmt.Sprintf("AutoPay debit ₹%.2f via SI. txn %s, next %s", amount, txn.ID, next.Format("2006-01-02")),
-			})
-		}
-		charged++
+		counts[h.processMandateDebit(ctx, dueOrUpcoming[i], now)]++
 	}
 
-	result["charged"] = charged
-	result["notified"] = notified
-	result["failed"] = failed
-	result["skipped"] = skipped
+	result["charged"] = counts["charged"]
+	result["notified"] = counts["notified"]
+	result["failed"] = counts["failed"]
+	result["skipped"] = counts["skipped"]
 	result["scanned"] = len(dueOrUpcoming)
 	return result
+}
+
+// processMandateDebit runs one mandate through its cycle and returns
+// "charged", "notified", "failed" or "skipped".
+func (h *Handler) processMandateDebit(ctx context.Context, m domain.Mandate, now time.Time) string {
+	if m.NextDebit == nil || m.AuthPayUID == "" {
+		return "skipped"
+	}
+	if m.NextRetryAt != nil && m.NextRetryAt.After(now) {
+		return "skipped" // backing off after a failed attempt
+	}
+	amount := m.DebitAmount
+	if amount <= 0 {
+		amount = m.MaxAmount
+	}
+	amountStr := fmt.Sprintf("%.2f", amount)
+	testFreq := isTestFrequency(m.Frequency)
+
+	preNotify := func() string {
+		txnid := "SIPD" + strings.ReplaceAll(uuid.New().String(), "-", "")[:12]
+		if err := h.pgClient.PreDebitNotify(ctx, m.AuthPayUID, txnid, amountStr); err != nil {
+			return "failed"
+		}
+		if err := h.mandateRepo.Update(ctx, m.ID, bson.M{"pre_debit_sent_at": now}); err != nil {
+			logger.Log.Error().Err(err).Str("mandate", m.ID).Msg("could not record pre-debit notification")
+		}
+		return "notified"
+	}
+
+	// Not yet due: for real cadences, pre-notify (>=48h ahead) and wait. Test
+	// cadences have no notification gate.
+	if m.NextDebit.After(now) {
+		if !testFreq && m.PreDebitSentAt == nil {
+			return preNotify()
+		}
+		return "skipped"
+	}
+	// Due now. Real cadences enforce the 48h gap between notification and debit.
+	if !testFreq && (m.PreDebitSentAt == nil || now.Sub(*m.PreDebitSentAt) < 48*time.Hour) {
+		if m.PreDebitSentAt == nil {
+			return preNotify()
+		}
+		return "skipped"
+	}
+
+	var member *domain.Member
+	if h.memberRepo != nil {
+		member, _ = h.memberRepo.GetByID(ctx, m.MahalID, m.MemberID)
+	}
+	key := autopayIdempotencyKey(&m)
+
+	// A previous run may already have created (or even debited) this attempt.
+	// Never call the gateway again for an attempt that exists.
+	var txn *domain.Transaction
+	if existing, _ := h.txnRepo.FindByIDempotencyKey(ctx, m.MahalID, key); existing != nil {
+		switch existing.Status {
+		case domain.TxnSuccess:
+			h.advanceMandateAfterDebit(ctx, &m, now, existing.ID, amount, false)
+			return "skipped"
+		case domain.TxnFailed:
+			return h.autopayDebitFailed(ctx, &m, existing, now, amountStr, "attempt already failed")
+		case domain.TxnPending:
+			if h.pgClient.Live() {
+				d, vErr := h.pgClient.VerifyPaymentDetail(ctx, "ORD"+existing.ID)
+				if vErr != nil {
+					return "skipped" // cannot tell yet; retry next run
+				}
+				switch strings.ToLower(strings.TrimSpace(d.Status)) {
+				case "success":
+					// The debit went through earlier; book it without debiting again.
+					_ = h.txnRepo.SetPaymentDetails(ctx, existing.ID, d.MihPayID, domain.NormalizePaymentMode(m.Mode))
+					if _, cErr := h.paymentService.CommitSuccessfulPayment(ctx, existing.ID); cErr != nil {
+						h.criticalAudit(ctx, m.MahalID, "AUTOPAY_COMMIT_FAILED", existing.ID, "SCHEDULER",
+							fmt.Sprintf("Mandate %s debit succeeded at PayU but the receipt could not be committed: %v", m.ID, cErr))
+						return "failed"
+					}
+					h.advanceMandateAfterDebit(ctx, &m, now, existing.ID, amount, true)
+					return "charged"
+				case "not found", "":
+					// PayU never saw it: safe to debit this same attempt.
+				case "pending", "in progress", "initiated":
+					return "skipped"
+				default:
+					return h.autopayDebitFailed(ctx, &m, existing, now, amountStr, "gateway status "+d.Status)
+				}
+			}
+			txn = existing
+		default:
+			return "skipped"
+		}
+	}
+	if txn == nil {
+		var iErr error
+		txn, iErr = h.createAutopayTxn(ctx, &m, member, amount, key)
+		if iErr != nil || txn == nil {
+			logger.Log.Error().Err(iErr).Str("mandate", m.ID).Msg("AutoPay: could not create installment transaction")
+			return h.autopayDebitFailed(ctx, &m, nil, now, amountStr, "could not create transaction")
+		}
+	}
+
+	payerName, payerEmail := h.autopayPayer(ctx, member)
+	si, dErr := h.pgClient.RecurringDebit(ctx, m.AuthPayUID, "ORD"+txn.ID, amountStr, "Mahal AutoPay Dues", payerName, payerEmail)
+	if dErr != nil || si == nil || !si.Success {
+		return h.autopayDebitFailed(ctx, &m, txn, now, amountStr, "gateway debit failed")
+	}
+
+	_ = h.txnRepo.SetPaymentDetails(ctx, txn.ID, si.MihPayID, domain.NormalizePaymentMode(m.Mode))
+	if _, cErr := h.paymentService.CommitSuccessfulPayment(ctx, txn.ID); cErr != nil {
+		// Money was debited but not booked. The transaction stays PENDING with
+		// this attempt's key, so the next run reconciles it via verify_payment
+		// instead of debiting again.
+		h.criticalAudit(ctx, m.MahalID, "AUTOPAY_COMMIT_FAILED", txn.ID, "SCHEDULER",
+			fmt.Sprintf("Mandate %s debited at PayU (mihpayid %s) but the receipt could not be committed: %v", m.ID, si.MihPayID, cErr))
+		return "failed"
+	}
+	h.advanceMandateAfterDebit(ctx, &m, now, txn.ID, amount, true)
+	return "charged"
+}
+
+// createAutopayTxn books the installment as dues for the next unpaid months
+// when the amount is a whole number of months (so last_paid_month and the
+// balance advance), else as a contribution.
+func (h *Handler) createAutopayTxn(ctx context.Context, m *domain.Mandate, member *domain.Member, amount float64, key string) (*domain.Transaction, error) {
+	if months := h.autopayDuesMonths(ctx, member, amount); len(months) > 0 {
+		txn, err := h.paymentService.InitializeDuesPayment(ctx, m.MahalID, m.MemberID, months, "PAYU", key)
+		if err == nil && txn != nil {
+			return txn, nil
+		}
+		logger.Log.Warn().Err(err).Str("mandate", m.ID).Msg("AutoPay: dues booking not possible, falling back to contribution")
+	}
+	return h.paymentService.InitializeContribution(ctx, m.MahalID, m.MemberID, amount, "PAYU", key,
+		service.ContributionDetails{Purpose: "AUTOPAY_DUES"})
+}
+
+// advanceMandateAfterDebit moves the mandate to its next cycle.
+func (h *Handler) advanceMandateAfterDebit(ctx context.Context, m *domain.Mandate, now time.Time, txnID string, amount float64, audit bool) {
+	// Test mandates follow the scheduler cadence (e.g. every 3 min) when one
+	// is configured; real cadences advance by their frequency.
+	var next time.Time
+	if isTestFrequency(m.Frequency) && h.autoPayEvery > 0 {
+		next = now.Add(h.autoPayEvery)
+	} else {
+		next = advanceDebit(m.Frequency, *m.NextDebit)
+		// Never schedule the next debit in the past; catch up to just ahead of now.
+		if next.Before(now) {
+			next = advanceDebit(m.Frequency, now)
+		}
+	}
+	if err := h.mandateRepo.Update(ctx, m.ID, bson.M{
+		"last_debit_at":     now,
+		"next_debit":        next,
+		"pre_debit_sent_at": nil,
+		"failure_count":     0,
+		"next_retry_at":     nil,
+	}); err != nil {
+		// Without this the same cycle would be picked up again; its
+		// idempotency key makes that harmless, but it must be visible.
+		h.criticalAudit(ctx, m.MahalID, "AUTOPAY_ADVANCE_FAILED", m.ID, "SCHEDULER",
+			fmt.Sprintf("Mandate %s debit %s booked but next_debit could not be advanced: %v", m.ID, txnID, err))
+		return
+	}
+	if audit && h.auditRepo != nil {
+		_ = h.auditRepo.Create(ctx, &domain.AuditLog{
+			MahalID:  m.MahalID,
+			Action:   "AUTOPAY_DEBIT_EXECUTED",
+			Actor:    "SCHEDULER",
+			EntityID: m.ID,
+			Details:  fmt.Sprintf("AutoPay debit ₹%.2f via SI. txn %s, next %s", amount, txnID, next.Format("2006-01-02")),
+		})
+	}
+}
+
+// autopayDebitFailed records a failed attempt: the transaction is FAILED, the
+// next attempt waits an exponentially growing backoff, and after
+// autopayMaxFailures the mandate is marked FAILED instead of retrying forever.
+func (h *Handler) autopayDebitFailed(ctx context.Context, m *domain.Mandate, txn *domain.Transaction, now time.Time, amountStr, why string) string {
+	if txn != nil && txn.Status != domain.TxnFailed {
+		if err := h.txnRepo.UpdateStatus(ctx, txn.ID, domain.TxnFailed, ""); err != nil {
+			logger.Log.Error().Err(err).Str("txn", txn.ID).Msg("could not mark AutoPay transaction FAILED")
+		}
+	}
+	failures := m.FailureCount + 1
+	fields := bson.M{"failure_count": failures}
+	final := failures >= autopayMaxFailures
+	if final {
+		fields["status"] = "FAILED"
+		fields["next_debit"] = nil
+		fields["next_retry_at"] = nil
+	} else {
+		fields["next_retry_at"] = now.Add(autopayBackoff(failures))
+	}
+	if err := h.mandateRepo.Update(ctx, m.ID, fields); err != nil {
+		logger.Log.Error().Err(err).Str("mandate", m.ID).Msg("could not record AutoPay failure state")
+	}
+	if h.auditRepo != nil {
+		details := fmt.Sprintf("AutoPay debit attempt %d/%d failed (%s)", failures, autopayMaxFailures, why)
+		if final {
+			details += "; mandate marked FAILED, no further retries"
+		}
+		_ = h.auditRepo.Create(ctx, &domain.AuditLog{
+			MahalID: m.MahalID, Action: "AUTOPAY_DEBIT_FAILED", Actor: "SCHEDULER", EntityID: m.ID, Details: details,
+		})
+	}
+	if failures == 1 || final {
+		mahalID, memberID := m.MahalID, m.MemberID
+		body := "We could not collect ₹" + amountStr + " via AutoPay. We will retry shortly; you can also pay your dues manually."
+		if final {
+			body = "AutoPay stopped after repeated failures (₹" + amountStr + "). Please pay your dues manually or set up AutoPay again."
+		}
+		h.pushAsync(func(ctx context.Context, p *service.PushService) {
+			p.SendToMember(ctx, mahalID, memberID, service.PushNotification{
+				Kind: service.PushKindPaymentFailed, Title: "AutoPay debit failed", Body: body,
+			})
+		})
+	}
+	return "failed"
 }
 
 // -------------------------------------------------------------
@@ -1600,9 +1951,43 @@ type RefundActionRequest struct {
 	Reason string  `json:"reason,omitempty"`
 }
 
+// criticalAudit records a money-affecting failure that needs a human: it is
+// logged at error level with a CRITICAL marker and written to the audit log.
+func (h *Handler) criticalAudit(ctx context.Context, mahalID, action, entityID, actor, details string) {
+	logger.Log.Error().Str("severity", "CRITICAL").Str("action", action).
+		Str("entity", entityID).Str("mahal", mahalID).Msg(details)
+	if h.auditRepo == nil {
+		return
+	}
+	if err := h.auditRepo.Create(ctx, &domain.AuditLog{
+		MahalID: mahalID, Action: action, Actor: actor, EntityID: entityID, Details: "CRITICAL: " + details,
+	}); err != nil {
+		logger.Log.Error().Err(err).Str("action", action).Str("entity", entityID).Msg("CRITICAL audit entry could not be written")
+	}
+}
+
+// previousMonth returns the YYYY-MM before m ("" when m is not a month).
+func previousMonth(m string) string {
+	t, err := time.Parse("2006-01", m)
+	if err != nil {
+		return ""
+	}
+	return t.AddDate(0, -1, 0).Format("2006-01")
+}
+
+// ProcessRefund approves or rejects a refund.
+//
+// Approval is a state machine on the transaction: only SUCCESS and
+// PARTIALLY_REFUNDED can be refunded, the amount is required and capped at the
+// remaining refundable balance, and refunded_amount accumulates (status
+// PARTIALLY_REFUNDED until the whole amount is back, then REFUNDED). The
+// refund is reserved on the transaction first (atomic), then sent to the
+// gateway, and released again if the gateway refuses, so two concurrent
+// approvals can never refund the same money twice.
 func (h *Handler) ProcessRefund(c *fiber.Ctx) error {
 	tenantID, _ := c.Locals("tenant_id").(string)
 	refundID := c.Params("id")
+	actor := h.sessionActor(c)
 	var req RefundActionRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
@@ -1620,6 +2005,9 @@ func (h *Handler) ProcessRefund(c *fiber.Ctx) error {
 		if rErr != nil || r == nil || r.MahalID != tenantID {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Refund request not found"})
 		}
+		if r.Status != "PENDING" {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Refund request is already " + r.Status})
+		}
 		if err := h.refundRepo.UpdateStatus(c.Context(), refundID, "REJECTED"); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
@@ -1627,7 +2015,7 @@ func (h *Handler) ProcessRefund(c *fiber.Ctx) error {
 			_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
 				MahalID:  tenantID,
 				Action:   "REFUND_REJECTED",
-				Actor:    "ADMIN",
+				Actor:    actor,
 				EntityID: refundID,
 				Details:  "Refund request rejected. Reason: " + req.Reason,
 			})
@@ -1635,20 +2023,23 @@ func (h *Handler) ProcessRefund(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "REJECTED", "refund_id": refundID})
 	}
 
-	// APPROVE: Trigger real programmatic refund via Payment Gateway (Spec Section 7.1)
-	// refundID may be either a RefundRequest id or, for a 1-click refund, the
-	// transaction id itself.
+	// APPROVE. refundID may be either a RefundRequest id or, for a 1-click
+	// refund, the transaction id itself.
+	if h.txnRepo == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Transaction service offline"})
+	}
 	txnID := refundID
 	amount := req.Amount
-	if amount <= 0 {
-		amount = 500.0 // Default fallback
-	}
-
+	var pending *domain.RefundRequest
 	if h.refundRepo != nil {
 		if r, rErr := h.refundRepo.GetByID(c.Context(), refundID); rErr == nil && r != nil {
 			if r.MahalID != tenantID {
 				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Refund request not found", "status": "FAILED"})
 			}
+			if r.Status != "PENDING" {
+				return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Refund request is already " + r.Status, "status": "FAILED"})
+			}
+			pending = r
 			if r.TransactionID != "" {
 				txnID = r.TransactionID
 			}
@@ -1657,102 +2048,171 @@ func (h *Handler) ProcessRefund(c *fiber.Ctx) error {
 			}
 		}
 	}
-
-	// Load the transaction to resolve mihpayid, the order id and member details.
-	var txn *domain.Transaction
-	if h.txnRepo != nil {
-		txn, _ = h.txnRepo.GetByID(c.Context(), txnID)
-	}
+	txn, _ := h.txnRepo.GetByID(c.Context(), txnID)
 	if txn == nil || txn.MahalID != tenantID {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error":  "Transaction not found for refund",
 			"status": "FAILED",
 		})
 	}
-	if req.Amount <= 0 {
-		amount = txn.Amount
-	}
 
-	orderID := txn.GatewayOrderID
-	if orderID == "" {
-		orderID = "ORD" + txn.ID
+	// There is no default amount: the caller (or the member's request) states it.
+	if domain.ToPaise(amount) <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "A refund amount greater than zero is required", "status": "FAILED"})
 	}
+	amount = domain.ToPaise(amount).ToRupees()
 
-	// Resolve PayU's mihpayid: persisted at capture, else ask the gateway now.
-	mihpayid := txn.GatewayPaymentID
-	if mihpayid == "" && h.pgClient != nil {
-		if mp, _, vErr := h.pgClient.VerifyPayment(c.Context(), orderID); vErr == nil {
-			mihpayid = mp
-			_ = h.txnRepo.SetGatewayPaymentID(c.Context(), txn.ID, mihpayid)
-		}
+	// 1. Reserve the refund on the transaction (state machine + cap, atomic).
+	updated, err := h.txnRepo.ReserveRefund(c.Context(), tenantID, txn.ID, amount)
+	switch {
+	case err == nil:
+	case errors.Is(err, domain.ErrRefundNotAllowed):
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": err.Error(), "status": "FAILED"})
+	case errors.Is(err, domain.ErrRefundExceedsRemaining), errors.Is(err, domain.ErrRefundAmountInvalid):
+		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": err.Error(), "status": "FAILED"})
+	case errors.Is(err, mongo.ErrNoDocuments):
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Transaction not found for refund", "status": "FAILED"})
+	default:
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not reserve the refund: " + err.Error(), "status": "FAILED"})
 	}
+	fullRefund := updated.Status == domain.TxnRefunded
+	// One merchant refund token per cumulative total: a retry of the same step
+	// reuses it (the gateway dedupes), the next partial refund gets a new one.
+	merchantRefundID := fmt.Sprintf("MREF_%s_%d", txn.ID, int64(domain.ToPaise(updated.RefundedAmount)))
 
+	// 2. Gateway. Cash was never collected through it, so it is refunded by hand.
+	refNo := "N/A"
 	var pgRefund *pg.RefundResponse
-	if h.pgClient != nil {
-		var err error
+	if strings.EqualFold(txn.Gateway, "CASH") {
+		refNo = "CASH_MANUAL"
+	} else if h.pgClient != nil {
+		orderID := txn.GatewayOrderID
+		if orderID == "" {
+			orderID = "ORD" + txn.ID
+		}
+		// PayU's mihpayid: persisted at capture, else ask the gateway now.
+		mihpayid := txn.GatewayPaymentID
+		if mihpayid == "" {
+			if mp, _, vErr := h.pgClient.VerifyPayment(c.Context(), orderID); vErr == nil {
+				mihpayid = mp
+				_ = h.txnRepo.SetGatewayPaymentID(c.Context(), txn.ID, mihpayid)
+			}
+		}
 		pgRefund, err = h.pgClient.RequestRefund(c.Context(), pg.RefundParams{
 			TransactionID:    orderID,
 			MihPayID:         mihpayid,
-			MerchantRefundID: "MREF_" + txn.ID,
+			MerchantRefundID: merchantRefundID,
 			Amount:           fmt.Sprintf("%.2f", amount),
-			Description:      "MahalFlow 1-Click Instant Refund: " + req.Reason,
+			Description:      "MahalFlow refund: " + req.Reason,
 		})
 		if err != nil {
+			// Gateway refused: give the reserved amount back.
+			if rErr := h.txnRepo.ReleaseRefund(c.Context(), tenantID, txn.ID, amount); rErr != nil {
+				h.criticalAudit(c.Context(), tenantID, "REFUND_RELEASE_FAILED", txn.ID, actor,
+					fmt.Sprintf("Gateway refund of %.2f failed (%v) and the reservation could not be released (%v); transaction %s is stuck in %s", amount, err, rErr, txn.ID, updated.Status))
+			}
 			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
 				"error":   "Payment Gateway Refund Failed: " + err.Error(),
 				"status":  "FAILED",
 				"details": "Gateway rejected refund request",
 			})
 		}
+		if pgRefund != nil && pgRefund.RefundRefNo != nil {
+			refNo = *pgRefund.RefundRefNo
+		}
 	}
 
-	refNo := "N/A"
-	if pgRefund != nil && pgRefund.RefundRefNo != nil {
-		refNo = *pgRefund.RefundRefNo
-	}
+	// From here the money has moved: nothing below may fail the response, but
+	// every failure is logged CRITICAL and audited so it can be repaired.
+	warnings := []string{}
 
-	// Record the refund as an immutable ledger document (invariant #4: corrections
-	// are new REFUND records, not edits to the original transaction/receipt).
+	// 3. Immutable refund record (invariant #4: corrections are new records).
 	if h.refundRepo != nil {
 		now := time.Now().UTC()
-		_ = h.refundRepo.Create(c.Context(), &domain.RefundRequest{
-			ID:            "RFD_" + refNo,
+		if cErr := h.refundRepo.Create(c.Context(), &domain.RefundRequest{
+			ID:            "RFD_" + strings.ReplaceAll(uuid.New().String(), "-", "")[:16],
 			MahalID:       txn.MahalID,
 			TransactionID: txn.ID,
+			ReceiptNumber: txn.ReceiptID,
 			MemberID:      txn.MemberID,
 			Amount:        amount,
 			Reason:        req.Reason,
 			Status:        "PROCESSED",
 			RequestedAt:   now,
 			ProcessedAt:   &now,
-		})
-		// If refundID referenced an existing pending request, close it too.
-		if refundID != txn.ID {
-			_ = h.refundRepo.UpdateStatus(c.Context(), refundID, "APPROVED")
+		}); cErr != nil {
+			warnings = append(warnings, "refund record not saved")
+			h.criticalAudit(c.Context(), tenantID, "REFUND_RECORD_FAILED", txn.ID, actor,
+				fmt.Sprintf("Gateway refund %s of %.2f succeeded but the refund record could not be saved: %v", refNo, amount, cErr))
+		}
+		if pending != nil {
+			if uErr := h.refundRepo.UpdateStatus(c.Context(), pending.ID, "APPROVED"); uErr != nil {
+				warnings = append(warnings, "refund request status not updated")
+				h.criticalAudit(c.Context(), tenantID, "REFUND_REQUEST_STATUS_FAILED", pending.ID, actor,
+					fmt.Sprintf("Refund %s processed but request %s could not be marked APPROVED: %v", refNo, pending.ID, uErr))
+			}
 		}
 	}
-	if h.txnRepo != nil {
-		_ = h.txnRepo.UpdateStatus(c.Context(), txn.ID, domain.TxnRefunded, refNo)
+
+	// 4. Give the member their dues back. A full refund also rolls
+	// last_paid_month back, unless a later payment already depends on it.
+	if txn.Type == "MONTHLY_DUES" && len(txn.SelectedMonths) > 0 && h.memberRepo != nil {
+		lastMonth, rollbackTo := "", ""
+		if fullRefund {
+			lastMonth = txn.SelectedMonths[len(txn.SelectedMonths)-1]
+			rollbackTo = previousMonth(txn.SelectedMonths[0])
+		}
+		rolled, rErr := h.memberRepo.ReverseDuesPayment(c.Context(), tenantID, txn.MemberID, amount, lastMonth, rollbackTo)
+		if rErr != nil {
+			warnings = append(warnings, "member dues not reversed")
+			h.criticalAudit(c.Context(), tenantID, "REFUND_DUES_REVERSAL_FAILED", txn.ID, actor,
+				fmt.Sprintf("Refund %s of %.2f succeeded but member %s dues could not be restored: %v", refNo, amount, txn.MemberID, rErr))
+		} else if fullRefund && !rolled && h.auditRepo != nil {
+			_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
+				MahalID: tenantID, Action: "REFUND_MONTHS_NOT_ROLLED_BACK", Actor: actor, EntityID: txn.ID,
+				Details: "Balance restored, but last_paid_month was left as is (a later payment depends on it)",
+			})
+		}
+	}
+
+	// 5. Offsetting entry on the hash chain.
+	ledgerRef := ""
+	if h.paymentService != nil {
+		if entry, lErr := h.paymentService.AppendRefundEntry(c.Context(), updated, amount, refNo); lErr != nil {
+			warnings = append(warnings, "ledger entry not appended")
+			h.criticalAudit(c.Context(), tenantID, "REFUND_LEDGER_ENTRY_FAILED", txn.ID, actor,
+				fmt.Sprintf("Refund %s of %.2f succeeded but the offsetting ledger entry could not be appended: %v", refNo, amount, lErr))
+		} else if entry != nil {
+			ledgerRef = entry.ReceiptNumber
+		}
 	}
 
 	if h.auditRepo != nil {
-		_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
+		if aErr := h.auditRepo.Create(c.Context(), &domain.AuditLog{
 			MahalID:  tenantID,
 			Action:   "INSTANT_REFUND_EXECUTED",
-			Actor:    "ADMIN",
+			Actor:    actor,
 			EntityID: refundID,
-			Details:  fmt.Sprintf("Refund of ₹%.2f processed via PG. Gateway Ref: %s, Txn: %s", amount, refNo, txnID),
-		})
+			Details: fmt.Sprintf("Refund of ₹%.2f (%s) processed. Gateway Ref: %s, Txn: %s, ledger entry: %s, total refunded ₹%.2f of ₹%.2f",
+				amount, updated.Status, refNo, txn.ID, ledgerRef, updated.RefundedAmount, updated.Amount),
+		}); aErr != nil {
+			logger.Log.Error().Err(aErr).Str("txn", txn.ID).Msg("CRITICAL: refund audit entry could not be written")
+		}
 	}
 
 	return c.JSON(fiber.Map{
-		"status":            "APPROVED",
-		"refund_id":         refundID,
-		"transaction_id":    txnID,
-		"amount":            amount,
-		"gateway_refund_id": pgRefund,
-		"bank_reference_no": refNo,
-		"message":           "Instant refund processed successfully via Payment Gateway",
+		"status":             "APPROVED",
+		"refund_id":          refundID,
+		"transaction_id":     txn.ID,
+		"amount":             amount,
+		"refunded_amount":    updated.RefundedAmount,
+		"remaining":          domain.RemainingRefundable(updated),
+		"transaction_status": updated.Status,
+		"ledger_entry":       ledgerRef,
+		"gateway_refund_id":  pgRefund,
+		"bank_reference_no":  refNo,
+		"warnings":           warnings,
+		"message":            "Refund processed",
 	})
 }
 
@@ -2371,16 +2831,25 @@ func (h *Handler) HandlePGWebhook(c *fiber.Ctx) error {
 	hashVerified := false
 	if h.pgClient != nil && h.pgClient.Salt != "" && receivedHash != "" {
 		if !pg.VerifyResponseHash(params, h.pgClient.Salt, receivedHash) {
+			// Unauthenticated traffic: log every hit, but raise at most one
+			// CRITICAL alert per window (and say how many were suppressed).
+			logger.Log.Warn().Str("ip", c.IP()).Str("order", orderID).Msg("PG webhook rejected: invalid signature hash")
 			if h.alertRepo != nil {
-				_ = h.alertRepo.Create(c.Context(), &domain.SystemAlert{
-					ID:          "ALT_" + uuid.New().String()[:8],
-					MahalID:     "SYSTEM",
-					Severity:    "CRITICAL",
-					Title:       "PG Webhook Hash Mismatch Detected",
-					Description: fmt.Sprintf("Invalid signature for Order: %s, Txn: %s", orderID, transactionID),
-					Status:      "ACTIVE",
-					CreatedAt:   time.Now().UTC(),
-				})
+				if ok, suppressed := h.webhookAlerts.allow(10 * time.Minute); ok {
+					desc := "A PG webhook arrived with an invalid signature hash. Further bad signatures in the next 10 minutes are logged only."
+					if suppressed > 0 {
+						desc += fmt.Sprintf(" %d more were seen since the previous alert.", suppressed)
+					}
+					_ = h.alertRepo.Create(c.Context(), &domain.SystemAlert{
+						ID:          "ALT_" + uuid.New().String()[:8],
+						MahalID:     "SYSTEM",
+						Severity:    "CRITICAL",
+						Title:       "PG Webhook Hash Mismatch Detected",
+						Description: desc,
+						Status:      "ACTIVE",
+						CreatedAt:   time.Now().UTC(),
+					})
+				}
 			}
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid signature hash"})
 		}
@@ -2395,6 +2864,21 @@ func (h *Handler) HandlePGWebhook(c *fiber.Ctx) error {
 		webhookTxn, _ = h.txnRepo.GetByID(c.Context(), txnID)
 	}
 	gatewayOK := false
+	if webhookTxn != nil {
+		// The signed callback must describe the payment we stored: same amount
+		// and (when sent) currency. A mismatch is never booked.
+		if a := params["amount"]; a != "" && !gatewayAmountMatches(a, webhookTxn.Amount) {
+			logger.Log.Error().Str("txn", webhookTxn.ID).Str("gateway_amount", a).Float64("stored_amount", webhookTxn.Amount).
+				Msg("PG webhook amount differs from stored transaction; not committing")
+			h.auditWebhookMismatch(c, webhookTxn, "amount", a)
+			webhookTxn = nil
+		} else if cur := params["currency"]; cur != "" && !strings.EqualFold(cur, storedCurrency(webhookTxn)) {
+			logger.Log.Error().Str("txn", webhookTxn.ID).Str("gateway_currency", cur).Str("stored_currency", storedCurrency(webhookTxn)).
+				Msg("PG webhook currency differs from stored transaction; not committing")
+			h.auditWebhookMismatch(c, webhookTxn, "currency", cur)
+			webhookTxn = nil
+		}
+	}
 	if webhookTxn != nil {
 		if webhookTxn.Status == domain.TxnSuccess {
 			gatewayOK = true
@@ -2465,6 +2949,38 @@ func (h *Handler) HandlePGWebhook(c *fiber.Ctx) error {
 	})
 }
 
+// storedCurrency is the transaction's currency; rows written before the field
+// was always set are INR.
+func storedCurrency(t *domain.Transaction) string {
+	if t.Currency == "" {
+		return "INR"
+	}
+	return t.Currency
+}
+
+// gatewayAmountMatches compares a gateway-reported amount string with the
+// stored amount in minor units.
+func gatewayAmountMatches(gateway string, stored float64) bool {
+	g, err := strconv.ParseFloat(strings.TrimSpace(gateway), 64)
+	if err != nil {
+		return false
+	}
+	return domain.ToPaise(g) == domain.ToPaise(stored)
+}
+
+func (h *Handler) auditWebhookMismatch(c *fiber.Ctx, txn *domain.Transaction, field, gatewayValue string) {
+	if h.auditRepo == nil {
+		return
+	}
+	_ = h.auditRepo.Create(c.Context(), &domain.AuditLog{
+		MahalID:  txn.MahalID,
+		Action:   "PG_WEBHOOK_MISMATCH",
+		Actor:    "PG_GATEWAY_WEBHOOK",
+		EntityID: txn.ID,
+		Details:  fmt.Sprintf("Gateway %s %q differs from stored transaction (amount %.2f %s)", field, gatewayValue, txn.Amount, txn.Currency),
+	})
+}
+
 // VerifyPGPaymentStatus reconciles one transaction with PayU (verify_payment)
 // and commits it when PayU reports success. :id is the transaction id or its
 // PayU order id ("ORD"/"ORD_" prefixed).
@@ -2488,6 +3004,9 @@ func (h *Handler) VerifyPGPaymentStatus(c *fiber.Ctx) error {
 	case domain.TxnRefunded:
 		resp["status"], resp["gateway_status"] = "REFUNDED", "refunded"
 		return c.JSON(resp)
+	case domain.TxnPartiallyRefunded:
+		resp["status"], resp["gateway_status"] = "PARTIALLY_REFUNDED", "partially_refunded"
+		return c.JSON(resp)
 	}
 	if h.pgClient == nil || h.paymentService == nil {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Payment gateway client unavailable"})
@@ -2497,13 +3016,22 @@ func (h *Handler) VerifyPGPaymentStatus(c *fiber.Ctx) error {
 		return c.JSON(resp)
 	}
 
-	gatewayStatus := "success" // simulated gateway: nothing to ask
-	if h.pgClient.Live() {
+	gatewayStatus := "pending"
+	if h.simulatedGateway() {
+		gatewayStatus = "success" // explicit PAYMENT_TEST_MODE: nothing to ask
+	} else if !h.pgClient.Live() {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Payment gateway is not configured", "status": "PENDING"})
+	} else {
 		d, err := h.pgClient.VerifyPaymentDetail(c.Context(), orderIDForTxn(txn))
 		if err != nil {
 			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": "Could not reach the payment gateway", "status": "PENDING"})
 		}
 		gatewayStatus = strings.ToLower(strings.TrimSpace(d.Status))
+		if gatewayStatus == "success" && d.Amount != "" && !gatewayAmountMatches(d.Amount, txn.Amount) {
+			logger.Log.Error().Str("txn", txn.ID).Str("gateway_amount", d.Amount).Float64("stored_amount", txn.Amount).
+				Msg("Gateway amount differs from stored transaction; not committing")
+			gatewayStatus = "amount_mismatch"
+		}
 		if gatewayStatus == "success" && h.txnRepo != nil {
 			_ = h.txnRepo.SetPaymentDetails(c.Context(), txn.ID, d.MihPayID, domain.NormalizePaymentMode(d.Mode))
 			resp["pg_transaction_id"] = d.MihPayID
@@ -2703,8 +3231,13 @@ func (h *Handler) loadOwnReceipt(c *fiber.Ctx, number string) (*domain.Receipt, 
 // PAYMENT_TEST_MODE) there is nothing to ask and the existing test behaviour
 // is kept.
 func (h *Handler) gatewayConfirmsSuccess(ctx context.Context, txn *domain.Transaction) (bool, string) {
+	if h.simulatedGateway() {
+		return true, "" // explicit PAYMENT_TEST_MODE (development only)
+	}
+	// Not simulated and not live (no credentials) means there is nothing that
+	// can prove payment, so nothing is confirmed. This must stay fail-closed.
 	if !h.pgClient.Live() {
-		return true, ""
+		return false, "payment gateway is not configured"
 	}
 	if strings.EqualFold(txn.Gateway, "CASH") {
 		return false, "cash payments are committed by the committee"
@@ -2715,6 +3248,11 @@ func (h *Handler) gatewayConfirmsSuccess(ctx context.Context, txn *domain.Transa
 	}
 	if !strings.EqualFold(d.Status, "success") {
 		return false, "gateway status " + d.Status
+	}
+	if d.Amount != "" && !gatewayAmountMatches(d.Amount, txn.Amount) {
+		logger.Log.Error().Str("txn", txn.ID).Str("gateway_amount", d.Amount).Float64("stored_amount", txn.Amount).
+			Msg("Gateway amount differs from stored transaction; refusing to confirm")
+		return false, "gateway amount does not match the transaction"
 	}
 	if h.txnRepo != nil {
 		_ = h.txnRepo.SetPaymentDetails(ctx, txn.ID, d.MihPayID, domain.NormalizePaymentMode(d.Mode))

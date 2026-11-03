@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/mahalflow/backend-go/internal/domain"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -59,11 +60,9 @@ func (r *mongoReceiptRepo) AllocateAtomicReceiptSequence(ctx context.Context, ma
 	}
 	err := r.counters.FindOneAndUpdate(ctx, filter, update, opts).Decode(&doc)
 	if err != nil {
-		latest, lErr := r.GetLatestReceipt(ctx, mahalID)
-		if lErr == nil && latest != nil {
-			return latest.SequenceNumber + 1, latest.ReceiptHash, nil
-		}
-		return 1, "0000000000000000000000000000000000000000000000000000000000000000", nil
+		// Fail closed. Guessing seq/prev-hash from the latest receipt (or
+		// genesis) here could fork the chain or reuse a sequence number.
+		return 0, "", fmt.Errorf("allocate receipt sequence: %w", err)
 	}
 
 	prevHash := doc.LastHash
@@ -175,17 +174,14 @@ func (r *mongoReceiptRepo) GetAllByMahal(ctx context.Context, mahalID string, li
 	return receipts, nil
 }
 
+// VerifyReceiptChain recomputes every receipt hash (using the formula named by
+// the receipt's own hash_version) and checks each previous-hash link. It
+// returns the number of receipts and how many are broken.
 func (r *mongoReceiptRepo) VerifyReceiptChain(ctx context.Context, mahalID string) (total int64, broken int64, err error) {
 	receipts, err := r.GetAllByMahal(ctx, mahalID, 0)
 	if err != nil {
 		return 0, 0, err
 	}
-	total = int64(len(receipts))
-	for i := 1; i < len(receipts); i++ {
-		expectedPrev := receipts[i-1].ReceiptHash
-		if receipts[i].PreviousReceiptHash != expectedPrev {
-			broken++
-		}
-	}
+	total, broken = domain.VerifyReceiptHashes(receipts)
 	return total, broken, nil
 }

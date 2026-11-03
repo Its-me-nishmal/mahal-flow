@@ -48,9 +48,15 @@ func applyReceiptOverlay(r *domain.Receipt, txns map[string]domain.Transaction) 
 	if !ok {
 		return
 	}
-	if t.Status == domain.TxnRefunded {
-		r.Status = domain.ReceiptStatusRefunded
-		r.RefundedAt = t.CompletedAt
+	// An offsetting refund entry keeps its own REFUND status.
+	if r.PaymentType != domain.ReceiptTypeRefund {
+		switch t.Status {
+		case domain.TxnRefunded:
+			r.Status = domain.ReceiptStatusRefunded
+			r.RefundedAt = t.CompletedAt
+		case domain.TxnPartiallyRefunded:
+			r.Status = domain.ReceiptStatusPartiallyRefunded
+		}
 	}
 	if r.Gateway == "" {
 		r.Gateway = service.ReceiptGateway(&t)

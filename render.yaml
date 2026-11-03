@@ -16,9 +16,44 @@ services:
         sync: false # Set your MongoDB Atlas SRV URI in Render Dashboard
       - key: JWT_SECRET
         generateValue: true
+      # Never ON in production: the server ignores it outside dev envs anyway.
       - key: PAYMENT_TEST_MODE
-        value: "ON"
+        value: "OFF"
+      - key: CORS_ORIGINS
+        value: https://mahal-flow.vercel.app
+      - key: PUBLIC_BASE_URL
+        value: https://mahalflow-api.onrender.com
+      - key: PG_RETURN_URL
+        value: https://mahalflow-api.onrender.com/api/v1/webhooks/pg
       - key: WHATSAPP_DRY_RUN
         value: "true"
       - key: FCM_DRY_RUN
         value: "true"
+      - key: PG_API_URL
+        sync: false # set in Render Dashboard
+      - key: PG_INFO_API_URL
+        sync: false # set in Render Dashboard
+      - key: PG_API_KEY
+        sync: false # set in Render Dashboard
+      - key: PG_SALT
+        sync: false # set in Render Dashboard
+      - key: PG_CLIENT_ID
+        sync: false # set in Render Dashboard
+      - key: PG_CLIENT_SECRET
+        sync: false # set in Render Dashboard
+      - key: FIREBASE_PROJECT_ID
+        sync: false # set in Render Dashboard
+      - key: FCM_SERVICE_ACCOUNT_JSON
+        sync: false # set in Render Dashboard
+      - key: WHATSAPP_API_URL
+        sync: false # set in Render Dashboard
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false # set in Render Dashboard
+      - key: WHATSAPP_BUSINESS_ACCOUNT_ID
+        sync: false # set in Render Dashboard
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false # set in Render Dashboard
+      - key: WHATSAPP_WEBHOOK_VERIFY_TOKEN
+        sync: false # set in Render Dashboard
+      - key: WHATSAPP_APP_SECRET
+        sync: false # set in Render Dashboard

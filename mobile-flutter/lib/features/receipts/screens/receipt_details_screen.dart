@@ -13,6 +13,7 @@ import '../../../core/widgets/app_buttons.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_page_scaffold.dart';
 import '../../../l10n/l10n.dart';
+import '../../admin/widgets/receipt_sheet.dart';
 import '../receipt_view.dart';
 
 /// The proof of a payment. Styled as a ticket — a floating card with a dashed
@@ -338,6 +339,13 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
                     color: context.colors.primary,
                   ),
                 ),
+                if (_r.receiptNumber != '—')
+                  TextButton.icon(
+                    onPressed: () =>
+                        ReceiptSheet.show(context, _r.receiptNumber),
+                    icon: const Icon(Icons.verified_outlined),
+                    label: Text(l10n.receiptSheetVerify),
+                  ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   l10n.receiptFooter,

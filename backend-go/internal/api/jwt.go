@@ -2,14 +2,15 @@ package api
 
 import (
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -29,30 +30,56 @@ type JWTClaims struct {
 	ExpiresAt int64  `json:"exp"`
 }
 
-func getJWTSecret() ([]byte, error) {
-	secret := os.Getenv("JWT_SECRET")
-	env := strings.ToLower(os.Getenv("ENV"))
-	if env == "" {
-		env = strings.ToLower(os.Getenv("ENVIRONMENT"))
-	}
+const (
+	jwtIssuer   = "mahalflow-core"
+	jwtAudience = "mahalflow-clients"
+	// minJWTSecretLen is the minimum HS256 key length accepted in every
+	// environment.
+	minJWTSecretLen = 32
+)
 
-	if env == "production" || env == "prod" {
-		if secret == "" {
-			log.Fatalf("FATAL SECURITY ERROR: JWT_SECRET environment variable is required in production environment.")
-			return nil, errors.New("missing JWT_SECRET in production")
-		}
-		if len(secret) < 32 {
-			log.Fatalf("FATAL SECURITY ERROR: JWT_SECRET must be at least 32 characters (256-bit entropy) in production.")
-			return nil, errors.New("insecure JWT_SECRET in production")
-		}
-		return []byte(secret), nil
-	}
+var (
+	jwtSecretOnce sync.Once
+	jwtSecretKey  []byte
+	jwtSecretErr  error
+)
 
-	// Safe development default key
+// resolveJWTSecret picks the signing key from raw env values. There is no
+// public default: an empty JWT_SECRET is an error, whatever ENV says. The one
+// escape hatch is ENV exactly "development" together with AUTH_DEV_BYPASS=true,
+// which yields a random per-process key (tokens do not survive a restart and
+// nobody can forge one).
+func resolveJWTSecret(secret, env, devBypass string) ([]byte, error) {
 	if secret == "" {
-		secret = "mahalflow_super_secret_fintech_key_2026_live_hmac256"
+		if strings.ToLower(strings.TrimSpace(env)) == "development" && devBypass == "true" {
+			key := make([]byte, 32)
+			if _, err := rand.Read(key); err != nil {
+				return nil, err
+			}
+			return key, nil
+		}
+		return nil, errors.New("JWT_SECRET is required (set a random value of at least 32 characters)")
+	}
+	if len(secret) < minJWTSecretLen {
+		return nil, fmt.Errorf("JWT_SECRET must be at least %d characters", minJWTSecretLen)
 	}
 	return []byte(secret), nil
+}
+
+// InitJWT loads the signing key once. Call it at startup and treat an error as
+// fatal; GenerateJWT/ValidateJWT also use it lazily so the key is read from
+// the environment exactly once per process.
+func InitJWT() error {
+	_, err := getJWTSecret()
+	return err
+}
+
+func getJWTSecret() ([]byte, error) {
+	jwtSecretOnce.Do(func() {
+		jwtSecretKey, jwtSecretErr = resolveJWTSecret(
+			os.Getenv("JWT_SECRET"), os.Getenv("ENV"), os.Getenv("AUTH_DEV_BYPASS"))
+	})
+	return jwtSecretKey, jwtSecretErr
 }
 
 func GenerateJWT(userID, phone, role, mahalID string, duration time.Duration) (string, error) {
@@ -69,8 +96,8 @@ func GenerateJWT(userID, phone, role, mahalID string, duration time.Duration) (s
 
 	now := time.Now().UTC()
 	claims := JWTClaims{
-		Issuer:    "mahalflow-core",
-		Audience:  "mahalflow-clients",
+		Issuer:    jwtIssuer,
+		Audience:  jwtAudience,
 		Subject:   userID,
 		Phone:     phone,
 		Role:      role,
@@ -122,6 +149,10 @@ func ValidateJWT(tokenStr string) (*JWTClaims, error) {
 
 	var claims JWTClaims
 	if err := json.Unmarshal(claimsBytes, &claims); err != nil {
+		return nil, ErrInvalidToken
+	}
+
+	if claims.Issuer != jwtIssuer || claims.Audience != jwtAudience {
 		return nil, ErrInvalidToken
 	}
 

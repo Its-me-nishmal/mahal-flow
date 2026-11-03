@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -9,11 +10,17 @@ import { ApiClient } from "@/lib/api-client";
 import { errorMessage, formatDate, formatINR, humanize } from "@/lib/format";
 
 export default function SubscriptionManagementPage() {
+  const router = useRouter();
+  useEffect(() => {
+    if (!ApiClient.isSuperAdmin()) router.replace("/dashboard");
+  }, [router]);
+
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
+    if (!ApiClient.isSuperAdmin()) return;
     setLoading(true);
     setError(null);
     ApiClient.getSubscriptions()
